@@ -1,5 +1,48 @@
 # Progress
 
+## 2026-08-15 — main — fix the pane at 2.00 x 1.50 m, derive the footprint
+
+User wants the window to be exactly 2.0 x 1.5 m, 30 panes on the wide face,
+piers widened from 4 m to 8 m, and the footprint widened to suit in both
+directions. So the dependency is inverted: the pane is now the fixed module and
+W/D are computed from it.
+
+Changes:
+- `build_house.py` — `W`/`D` are no longer inputs. Added `PANE_W = 2.00`,
+  `WINDOWS_LONG = 30`, `WINDOWS_SHORT = 7`, `CORNER_PIER` 4.0 -> 8.0, and
+  `opening_for(n) = n * PANE_W + (n + 1) * MULLION_W`. Footprint follows:
+  W = 62.79 + 16 = 78.79 m, D = 14.72 + 16 = 30.72 m. Pane pitch is a single
+  2.09 m on all four facades (previously the short face had its own stretched
+  pitch). Two asserts confirm panes + mullions sum to each opening exactly.
+  Chose 7 panes for the short face as the value nearest the old 30 m depth.
+- `verify_house.py` — same inversion; W/D derived from the module, not literals.
+  51 -> 54 checks: added exact 2.00 x 1.50 m pane size, short-face panes also
+  exactly 2.00 m, identical pitch on long and short facades, and piers measuring
+  8 m. Footprint checks now state the derivation in their labels.
+- `render_views.py` — W/D updated to 78.79/30.72 (used to place the detail
+  camera) and the overview cameras pulled back for the larger footprint.
+- `README.md` — rewrote the pane section as "the window is the module"; noted
+  the column grid is now 9 x 4 (was 8 x 4), which followed automatically.
+
+One assertion was relaxed rather than the design changed: "window is the majority
+of each facade" now reads "openings are a meaningful share". With 8 m piers the
+30.72 m short face is 16 m of wall against a 14.72 m opening, i.e. 47.9% open —
+mostly wall. That is the direct consequence of the requested 8 m piers, so the
+check was made to state it instead of failing on it. Flagging in case the short
+face reads too closed.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 8 objects, 36144 vertices.
+- `verify_house.py`: 54/54 passed — footprint 78.790 x 30.720 m, 31 mullions ->
+  30 panes long / 8 -> 7 short, measured clear glass exactly 2.0000 x 1.50 m on
+  both faces, pitch 2.0900 m identical both ways, piers 8.00 m all round, opening
+  62.7900 m = 30 x 2.0 + 31 x 0.09. Earlier invariants hold (window centred at
+  2.00 m, 0.30 m vents flush, blank base floor, 8 m blank top band).
+- 4 views re-rendered; framing re-checked by camera projection, all in frame.
+
+Remaining issues:
+- Images still not viewable in-session; verified geometrically, not by eye.
+
 ## 2026-08-15 — main — 30 panes per long facade
 
 User asked for 30 windows across the wide facade and what that makes each pane.

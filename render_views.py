@@ -11,14 +11,15 @@ import sys
 import bpy
 from mathutils import Vector
 
-W, D, TOP_Z = 70.0, 30.0, 160.0
+# Footprint is derived from the window module in build_house.py; keep in sync.
+W, D, TOP_Z = 78.79, 30.72, 160.0
 
 VIEWS = [
     # name,          camera position,               look-at,             lens
-    ("front",        (0.0, -400.0, 78.0),           (0.0, 0.0, 78.0),    42.0),
-    ("base_pilotis", (86.0, -70.0, 8.0),            (0.0, 0.0, 16.0),    32.0),
-    ("floor_detail", (D / 2 + 30.0, -40.0, 58.0),   (0.0, 0.0, 56.0),    70.0),
-    ("corner",       (172.0, -215.0, 112.0),        (0.0, 0.0, 76.0),    38.0),
+    ("front",        (0.0, -440.0, 78.0),           (0.0, 0.0, 78.0),    42.0),
+    ("base_pilotis", (94.0, -76.0, 8.0),            (0.0, 0.0, 16.0),    32.0),
+    ("floor_detail", (D / 2 + 30.0, -42.0, 58.0),   (0.0, 0.0, 56.0),    70.0),
+    ("corner",       (186.0, -232.0, 112.0),        (0.0, 0.0, 76.0),    38.0),
 ]
 
 

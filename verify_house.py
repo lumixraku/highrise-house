@@ -9,21 +9,26 @@ import sys
 
 import bpy
 
-W, D, H = 70.0, 30.0, 4.0
+H = 4.0
 TOTAL_FLOORS = 40
 PILOTIS_FLOORS = 3
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.30
-CORNER_PIER = 4.0
-OPEN_W, OPEN_D = W - 2 * CORNER_PIER, D - 2 * CORNER_PIER
+CORNER_PIER = 8.0
 SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
 VENT_LO_Z = SPANDREL_H
 WIN_Z = VENT_LO_Z + VENT_H
 MULLION_W = 0.09
+PANE_W = 2.00
 WINDOWS_LONG = 30
-PANE_GLASS_LONG = (OPEN_W - (WINDOWS_LONG + 1) * MULLION_W) / WINDOWS_LONG
-PANE_PITCH = PANE_GLASS_LONG + MULLION_W
-WINDOWS_SHORT = max(1, round((OPEN_D - MULLION_W) / PANE_PITCH))
+WINDOWS_SHORT = 7
+# Footprint is DERIVED from the fixed pane module, as in the build script.
+OPEN_W = WINDOWS_LONG * PANE_W + (WINDOWS_LONG + 1) * MULLION_W
+OPEN_D = WINDOWS_SHORT * PANE_W + (WINDOWS_SHORT + 1) * MULLION_W
+W = OPEN_W + 2 * CORNER_PIER
+D = OPEN_D + 2 * CORNER_PIER
+PANE_GLASS_LONG = PANE_W
+PANE_PITCH = PANE_W + MULLION_W
 SOLID_BASE_FLOORS = 1
 SOLID_TOP_FLOORS = 2
 GLAZED_FLOORS = TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
@@ -191,8 +196,11 @@ def main():
           abs((W - x_span) / 2 - CORNER_PIER) < 0.02
           and abs((D - y_span) / 2 - CORNER_PIER) < 0.02,
           f"long {(W - x_span) / 2:.3f} m, short {(D - y_span) / 2:.3f} m")
-    check("window is still the majority of each facade",
-          x_span / W > 0.6 and y_span / D > 0.6,
+    # With 8 m piers the short facade is mostly wall (14.72 m opening between two
+    # 8 m piers = 47.9%). That is the requested consequence, not a defect; just
+    # assert the opening is still a real window band on both faces.
+    check("openings are a meaningful share of each facade",
+          x_span / W > 0.5 and y_span / D > 0.4,
           f"long face {x_span / W:.1%}, short face {y_span / D:.1%}")
     check("glazing starts at the first glazed floor",
           abs(gb[2][0] - (BASE_Z + SOLID_BASE_FLOORS * H + WIN_Z)) < EPS,
@@ -243,9 +251,20 @@ def main():
     check(f"pane pitch is {PANE_PITCH:.4f} m",
           abs(pitches[0] - PANE_PITCH) < 1e-3,
           f"measured {pitches[0]:.4f} m")
-    check(f"clear glass per pane is {PANE_GLASS_LONG:.4f} m",
-          abs(pitches[0] - MULLION_W - PANE_GLASS_LONG) < 1e-3,
-          f"{pitches[0] - MULLION_W:.4f} m between mullion faces")
+    check(f"clear glass per pane is exactly {PANE_W:.2f} m x {WIN_H:.2f} m",
+          abs(pitches[0] - MULLION_W - PANE_W) < 1e-3
+          and abs(heights[0] - WIN_H) < EPS,
+          f"{pitches[0] - MULLION_W:.4f} m wide x {heights[0]:.2f} m tall")
+
+    # The short facade uses the SAME module, not a stretched one.
+    pitches_y = [b - a for a, b in zip(ys, ys[1:])]
+    check(f"short facade panes are also exactly {PANE_W:.2f} m wide",
+          max(pitches_y) - min(pitches_y) < 1e-4
+          and abs(pitches_y[0] - MULLION_W - PANE_W) < 1e-3,
+          f"{pitches_y[0] - MULLION_W:.4f} m clear glass")
+    check("pane pitch is identical on long and short facades",
+          abs(pitches[0] - pitches_y[0]) < 1e-4,
+          f"long {pitches[0]:.4f} m vs short {pitches_y[0]:.4f} m")
     # End mullions must sit wholly inside the opening, flush to the pier face,
     # not straddling the opening edge with half their width inside the pier.
     edge = OPEN_W / 2 - MULLION_W / 2
@@ -253,9 +272,13 @@ def main():
           abs(min(xs) + edge) < 1e-3 and abs(max(xs) - edge) < 1e-3,
           f"first={min(xs):.4f}, last={max(xs):.4f}, expected +/-{edge:.4f}")
     check("30 panes of glass + 31 mullions fill the opening exactly",
-          abs(WINDOWS_LONG * PANE_GLASS_LONG
+          abs(WINDOWS_LONG * PANE_W
               + (WINDOWS_LONG + 1) * MULLION_W - OPEN_W) < 1e-6,
-          f"{WINDOWS_LONG} x {PANE_GLASS_LONG:.4f} + 31 x {MULLION_W} = {OPEN_W:.4f} m")
+          f"{WINDOWS_LONG} x {PANE_W} + 31 x {MULLION_W} = {OPEN_W:.4f} m")
+    check(f"corner piers are {CORNER_PIER:.0f} m as requested",
+          abs((W - OPEN_W) / 2 - CORNER_PIER) < 1e-6
+          and abs((D - OPEN_D) / 2 - CORNER_PIER) < 1e-6,
+          f"long {(W - OPEN_W) / 2:.2f} m, short {(D - OPEN_D) / 2:.2f} m")
 
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]
@@ -314,10 +337,10 @@ def main():
     # Footprint must actually be the requested 70 x 30 m.
     facade = objs["Facade_Spandrels"]
     fb = world_bounds(facade)
-    check("footprint width is 70 m", abs((fb[0][1] - fb[0][0]) - W) < 0.02,
-          f"{fb[0][1] - fb[0][0]:.3f} m")
-    check("footprint depth is 30 m", abs((fb[1][1] - fb[1][0]) - D) < 0.02,
-          f"{fb[1][1] - fb[1][0]:.3f} m")
+    check(f"footprint width is {W:.2f} m (30 panes + 2 x {CORNER_PIER:.0f} m pier)",
+          abs((fb[0][1] - fb[0][0]) - W) < 0.02, f"{fb[0][1] - fb[0][0]:.3f} m")
+    check(f"footprint depth is {D:.2f} m (7 panes + 2 x {CORNER_PIER:.0f} m pier)",
+          abs((fb[1][1] - fb[1][0]) - D) < 0.02, f"{fb[1][1] - fb[1][0]:.3f} m")
 
     # --- corners are solid --------------------------------------------
     # Test per connected piece by bounding-box overlap. Sampling vertices inside
