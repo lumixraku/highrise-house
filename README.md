@@ -149,6 +149,28 @@ added each mullion's width to the facade, which pushed the dimensions to
 `WINDOWS_LONG` / `WINDOWS_SHORT` (or the pier widths) — never `W`/`D`, which are
 derived. Adding one pane to a facade widens the building by exactly 2 m.
 
+## Viewing it in Blender
+
+```bash
+./view.sh
+```
+
+Opening the `.blend` by hand shows a **flat grey-white building** — that is not the
+materials failing. Blender starts every 3D viewport in `SOLID` shading, which
+ignores materials entirely. To see the real look, put the cursor in the 3D view and
+press `Z`, then pick:
+
+* **Material Preview** — EEVEE, fast, approximate glass
+* **Rendered** — the scene engine (Cycles), the only mode where the glass refracts
+  correctly
+
+or click the fourth (rightmost) of the four sphere icons at the top right of the
+viewport. `./view.sh` just does this for you at startup via `open_in_blender.py`.
+
+This cannot be baked into the `.blend` from a `--background` build: viewport state
+is only written back to file when a real UI exists, so setting it headlessly is
+silently discarded.
+
 ## Materials
 
 All materials live in `materials.py`, separate from the geometry, so the look can

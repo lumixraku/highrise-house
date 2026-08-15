@@ -1,5 +1,36 @@
 # Progress
 
+## 2026-08-15 — main — make the materials actually visible on open
+
+User reported the model still looked flat grey-white. Cause was not the
+materials: Blender opens every 3D viewport in SOLID shading, which ignores
+materials and draws a flat default grey. Confirmed by reading the saved file —
+all viewports were SOLID except the Shading workspace.
+
+First attempt was to set `space.shading.type = 'RENDERED'` inside the
+`--background` build and save. That silently does nothing: viewport state is only
+written back when a real UI exists, and it also reset the Shading workspace's
+own MATERIAL mode to SOLID. Reverted it.
+
+Changes:
+- new `open_in_blender.py` — runs inside a GUI session, sets every 3D viewport to
+  RENDERED with scene world and lights, extends clip_end to 4000 (a 160 m tower
+  clips at the default), and frames the building. Falls back to a timer retry if
+  no UI exists yet.
+- new `view.sh` — one-line wrapper: `./view.sh`.
+- `README.md` — a "Viewing it in Blender" section explaining the Z-key shading
+  menu and why this cannot be baked into the .blend headlessly.
+
+Verification:
+- `sh -n view.sh` and an ast parse of open_in_blender.py both clean.
+- Ran `blender --background out/highrise_house.blend --python open_in_blender.py`:
+  reports "set 1 viewport(s) to RENDERED", no errors — so the script is safe in
+  both GUI and headless contexts.
+- Could not verify the GUI appearance itself; that needs the user to look.
+
+Remaining issues:
+- Whether the materials look right on screen is still unconfirmed by me.
+
 ## 2026-08-15 — main — materials: warm stone walls, green transmissive glass
 
 User asked how to give the glass a real glass feel, with pale grey / beige walls
