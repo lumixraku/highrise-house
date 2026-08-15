@@ -276,7 +276,7 @@ facade and drowns the panes out):
 
 | surface | R | G | B | mean luminance | local stdev |
 | --- | --- | --- | --- | --- | --- |
-| glass | 0.496 | 0.550 | 0.534 | 0.537 | 0.079 |
+| glass | 0.500 | 0.554 | 0.539 | 0.541 | 0.080 |
 | wall | 0.598 | 0.592 | 0.574 | 0.592 | 0.020 |
 
 The **stdev** column is the frosted test, and the only one that catches it

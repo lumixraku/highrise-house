@@ -34,23 +34,25 @@ so brightness and the non-frosted character are preserved.
 The general rule, recorded because I got it wrong twice: one number cannot
 describe a colour. G highest by a clear margin, R lowest, B in between.
 
-Verification:
-- Values above measured on real renders during the sweep (`/tmp/cool_sweep.py`,
-  same ray-cast isolation as `measure_glass.py`).
-- **Not yet rebuilt.** The rebuild was declined, so `out/` still contains the old
-  yellow-green build. Source and artifacts are intentionally out of step; this
-  commit is source + docs only.
-- `verify_house.py` last ran 71/71 against the previous build. Its assertions
-  cover geometry and the four anti-frosting settings, none of which this change
-  touches (colour only), but it has not been re-run against a new build.
+Verification (rebuilt after the source-only commit `9d454a9`):
+- Build clean under Blender 5.2.0 LTS; 9 objects, 38832 vertices. `preview.png`
+  plus all 4 extra views re-rendered, so `out/` now matches the source again.
+- `verify_house.py`: **71/71 passed**, including the four anti-frosting
+  assertions (transmission 1.0, roughness 0.0, no glass emission, Filter Glossy
+  off) and the lining's alignment, height, 0.825 m setback and 60 × 24 m coverage.
+- `measure_glass.py` as built: glass R 0.500 / G 0.554 / B 0.539, luminance 0.541,
+  green bias **+0.034**, warm bias **−0.039** — G leads both channels and R sits
+  under B, so the yellow is gone without tipping into cyan. Within 0.004 of the
+  sweep's prediction on every channel.
+- Not frosted: local stdev 0.080 = **3.92× the matte wall's**, dynamic range
+  0.515, brightness 0.92× the wall.
 
 Remaining issues:
-- `out/` artifacts are stale relative to `materials.py`. Rebuild with
-  `blender --background --factory-startup --python build_house.py`, then re-run
-  `verify_house.py` and `measure_glass.py`, before trusting anything in `out/`.
-- Images cannot be viewed in this session, so the colour is predicted from
-  measurements, not seen. Levers if it is still off: raise all three channels for
-  paler, lower red for greener, raise blue if yellow, lower blue if cyan.
+- Images cannot be viewed in this session, so the colour is confirmed by
+  measurement, not seen. The numbers say pale cool green (G highest, R lowest,
+  B between); whether it reads that way needs a look.
+- Levers if it is still off: raise all three channels for paler, lower red for
+  greener, raise blue if it looks yellow, lower blue if it looks cyan.
 
 ## 2026-08-16 — main — pale green glass, and more visibly transparent
 (superseded by the entry above — this tuning produced the yellow-olive glass)
