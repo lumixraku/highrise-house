@@ -55,7 +55,10 @@ GLASS_INSET = 0.09    # from the outer wall face
 VENT_INSET = 0.13     # louvres sit deeper than the glass
 
 MULLION_W = 0.09
-MULLION_SPACING = 2.6
+
+# Number of window panes across the long facade. The short facade takes as many
+# panes as fit the same rhythm, so the mullion pitch matches on all four sides.
+WINDOWS_LONG = 30
 
 # Solid wall kept at both ends of every facade, so the ribbon stops short of the
 # corners instead of wrapping them. Measured along the facade from the corner.
@@ -73,6 +76,17 @@ SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 OPEN_W = W - 2 * CORNER_PIER    # long faces (N/S)
 OPEN_D = D - 2 * CORNER_PIER    # short faces (E/W)
 assert OPEN_W > 0 and OPEN_D > 0, "CORNER_PIER too wide for this footprint"
+
+# Pane layout. N panes take N+1 mullions, all sitting fully inside the opening
+# (the end ones are inset by half a width so they do not run into the pier).
+# So the opening is N panes of glass plus N+1 mullion widths.
+PANE_GLASS_LONG = (OPEN_W - (WINDOWS_LONG + 1) * MULLION_W) / WINDOWS_LONG
+PANE_PITCH = PANE_GLASS_LONG + MULLION_W        # mullion centre to centre
+
+# The short facade takes as many panes as fit that rhythm.
+WINDOWS_SHORT = max(1, round((OPEN_D - MULLION_W) / PANE_PITCH))
+PANE_GLASS_SHORT = (OPEN_D - (WINDOWS_SHORT + 1) * MULLION_W) / WINDOWS_SHORT
+assert PANE_GLASS_LONG > 0 and PANE_GLASS_SHORT > 0, "too many panes to fit"
 
 COL_SIZE = 1.60       # pilotis column footprint (sized for a 40-storey load)
 COL_SPACING = 9.0     # target column grid spacing
@@ -248,20 +262,21 @@ def mullions(name, z0, height, mat):
     depth = 0.14
 
     # Mullions divide the clear opening only; the corner piers are solid.
-    n_x = max(1, int(OPEN_W // MULLION_SPACING))
-    step_x = OPEN_W / n_x
-    for i in range(0, n_x + 1):
-        x = -OPEN_W / 2 + i * step_x
+    # N panes need N+1 mullions. The end mullions are inset by half a width so
+    # every mullion sits wholly inside the opening, not half-buried in the pier.
+    first_x = -OPEN_W / 2 + MULLION_W / 2
+    for i in range(WINDOWS_LONG + 1):
+        x = first_x + i * PANE_PITCH
         for sy in (-1, 1):
             parts.append(box(
                 f"{name}_ns_{i}_{sy}",
                 (x, sy * (D / 2 - off), zc),
                 (MULLION_W, depth, height), mat))
 
-    n_y = max(1, int(OPEN_D // MULLION_SPACING))
-    step_y = OPEN_D / n_y
-    for i in range(0, n_y + 1):
-        y = -OPEN_D / 2 + i * step_y
+    first_y = -OPEN_D / 2 + MULLION_W / 2
+    pitch_y = PANE_GLASS_SHORT + MULLION_W
+    for i in range(WINDOWS_SHORT + 1):
+        y = first_y + i * pitch_y
         for sx in (-1, 1):
             parts.append(box(
                 f"{name}_ew_{i}_{sx}",
@@ -471,6 +486,11 @@ def report(objects):
     print(f"glazed floors        : {TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS}")
     print(f"corner piers         : {CORNER_PIER:.1f} m solid at each facade end")
     print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
+    print(f"panes per floor      : {WINDOWS_LONG} long face / {WINDOWS_SHORT} short face")
+    print(f"pane pitch           : {PANE_PITCH:.4f} m (mullion centres)")
+    print(f"clear glass per pane : {PANE_GLASS_LONG:.4f} m (long) / "
+          f"{PANE_GLASS_SHORT:.4f} m (short), x {WIN_H:.2f} m tall")
+    print(f"panes per floor total: {2 * (WINDOWS_LONG + WINDOWS_SHORT)} around the building")
     print("per-floor bands      : "
           f"{SPANDREL_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "
           f"{VENT_H:.2f} vent / {SPANDREL_H:.2f} solid")

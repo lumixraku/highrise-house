@@ -30,9 +30,9 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-44 geometry assertions over the saved `.blend` — footprint, band heights, window
-centring, per-facade opening widths, solid corners, blank base/top bands, vent
-adjacency, pilotis clearance:
+51 geometry assertions over the saved `.blend` — footprint, band heights, window
+centring, per-facade opening widths, pane count and pitch, solid corners, blank
+base/top bands, vent adjacency, pilotis clearance:
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -53,6 +53,9 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 | blank base floor | 1 (12.0 → 16.0 m) |
 | blank top band | 2 floors = 8.0 m (152.0 → 160.0 m) |
 | glazed floors | 34 |
+| panes per floor | 30 long face / 11 short face (82 around) |
+| pane pitch | 2.0637 m mullion centres |
+| clear glass per pane | 1.9737 m × 1.50 m |
 
 ### Bottom three floors
 
@@ -105,8 +108,25 @@ vent + window + vent zone. Clear openings are 62.0 m on the long faces and
 
 Glazing is inset 0.09 m from the
 outer wall face; the louvres sit deeper at 0.13 m, tilted 30°, over a dark
-shadowbox so the openings read as depth rather than holes. Mullions divide the
-glass at roughly 2.6 m centres.
+shadowbox so the openings read as depth rather than holes.
+
+### Pane division
+
+`WINDOWS_LONG = 30` sets the number of panes on each long facade, and everything
+else follows from it. 30 panes need 31 mullions, all sitting wholly inside the
+opening (the end ones inset half a width so they meet the pier face rather than
+disappearing into it), so the 62.0 m opening is 30 panes of glass plus 31 × 0.09 m
+of mullion:
+
+```
+clear glass per pane = (62.0 - 31 x 0.09) / 30 = 1.9737 m
+pane pitch           = 1.9737 + 0.09        = 2.0637 m
+```
+
+Each pane is therefore about **1.97 m wide × 1.50 m tall**. The short facade
+rounds to the nearest whole number of panes at that same pitch — 11 panes of
+1.9018 m — so the mullion rhythm reads consistently around all four sides.
+82 panes per floor in total, on 34 glazed floors.
 
 ## Geometry organisation
 

@@ -19,6 +19,11 @@ OPEN_W, OPEN_D = W - 2 * CORNER_PIER, D - 2 * CORNER_PIER
 SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
 VENT_LO_Z = SPANDREL_H
 WIN_Z = VENT_LO_Z + VENT_H
+MULLION_W = 0.09
+WINDOWS_LONG = 30
+PANE_GLASS_LONG = (OPEN_W - (WINDOWS_LONG + 1) * MULLION_W) / WINDOWS_LONG
+PANE_PITCH = PANE_GLASS_LONG + MULLION_W
+WINDOWS_SHORT = max(1, round((OPEN_D - MULLION_W) / PANE_PITCH))
 SOLID_BASE_FLOORS = 1
 SOLID_TOP_FLOORS = 2
 GLAZED_FLOORS = TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
@@ -193,6 +198,64 @@ def main():
           abs(gb[2][0] - (BASE_Z + SOLID_BASE_FLOORS * H + WIN_Z)) < EPS,
           f"lowest glass z={gb[2][0]:.3f}, expected "
           f"{BASE_Z + SOLID_BASE_FLOORS * H + WIN_Z:.3f}")
+
+    # --- pane count ----------------------------------------------------
+    # Count mullions on one facade at one floor: N panes need N+1 mullions.
+    mull = objs["Window_Mullions"]
+    zw = BASE_Z + (SOLID_BASE_FLOORS + 4) * H + WIN_Z
+    raw_x, raw_y = [], []
+    for lo, hi in piece_bounds(mull):
+        if not (zw - 0.05 < (lo[2] + hi[2]) / 2 < zw + WIN_H + 0.05):
+            continue
+        cx, cy = (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2
+        if abs(cy + D / 2) < 1.0:          # south facade
+            raw_x.append(cx)
+        if abs(cx + W / 2) < 1.0:          # west facade
+            raw_y.append(cy)
+
+    def dedupe(vals, tol=1e-6):
+        """Merge coincident centres without quantising the spacing itself.
+
+        Rounding to a fixed number of decimals here introduces an apparent
+        pitch variation equal to the rounding step, which is not in the model.
+        """
+        out = []
+        for v in sorted(vals):
+            if not out or v - out[-1] > tol:
+                out.append(v)
+        return out
+
+    xs, ys = dedupe(raw_x), dedupe(raw_y)
+
+    check(f"long facade has {WINDOWS_LONG} window panes",
+          len(xs) - 1 == WINDOWS_LONG,
+          f"{len(xs)} mullions -> {len(xs) - 1} panes")
+    check(f"short facade has {WINDOWS_SHORT} window panes",
+          len(ys) - 1 == WINDOWS_SHORT,
+          f"{len(ys)} mullions -> {len(ys) - 1} panes")
+
+    # Centres were rounded to mm when collected, so compare with a 1 mm
+    # tolerance rather than requiring bit-identical spacings.
+    pitches = [b - a for a, b in zip(sorted(xs), sorted(xs)[1:])]
+    check("panes are evenly spaced on the long facade",
+          max(pitches) - min(pitches) < 1e-4,
+          f"spread={max(pitches) - min(pitches):.6f} m over {len(pitches)} bays")
+    check(f"pane pitch is {PANE_PITCH:.4f} m",
+          abs(pitches[0] - PANE_PITCH) < 1e-3,
+          f"measured {pitches[0]:.4f} m")
+    check(f"clear glass per pane is {PANE_GLASS_LONG:.4f} m",
+          abs(pitches[0] - MULLION_W - PANE_GLASS_LONG) < 1e-3,
+          f"{pitches[0] - MULLION_W:.4f} m between mullion faces")
+    # End mullions must sit wholly inside the opening, flush to the pier face,
+    # not straddling the opening edge with half their width inside the pier.
+    edge = OPEN_W / 2 - MULLION_W / 2
+    check("end mullions sit flush inside the opening, not inside the pier",
+          abs(min(xs) + edge) < 1e-3 and abs(max(xs) - edge) < 1e-3,
+          f"first={min(xs):.4f}, last={max(xs):.4f}, expected +/-{edge:.4f}")
+    check("30 panes of glass + 31 mullions fill the opening exactly",
+          abs(WINDOWS_LONG * PANE_GLASS_LONG
+              + (WINDOWS_LONG + 1) * MULLION_W - OPEN_W) < 1e-6,
+          f"{WINDOWS_LONG} x {PANE_GLASS_LONG:.4f} + 31 x {MULLION_W} = {OPEN_W:.4f} m")
 
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]

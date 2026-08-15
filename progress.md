@@ -1,5 +1,44 @@
 # Progress
 
+## 2026-08-15 — main — 30 panes per long facade
+
+User asked for 30 windows across the wide facade and what that makes each pane.
+Answer: 1.9737 m clear glass, on a 2.0637 m mullion pitch.
+
+Changes:
+- `build_house.py` — replaced `MULLION_SPACING` (a target spacing) with
+  `WINDOWS_LONG = 30` (an exact count). Derived `PANE_GLASS_LONG`,
+  `PANE_PITCH`, and `WINDOWS_SHORT` (11 panes at the same pitch) with an assert
+  guarding against a count too high to fit. `mullions()` now places
+  `WINDOWS_LONG + 1` mullions from the derived pitch. Report prints pane counts,
+  pitch and clear glass width.
+- Fixed a real geometry bug found by the new checks: the end mullions were
+  centred on the opening edge, so half of each was buried in the corner pier.
+  They are now inset half a mullion width, and the opening resolves exactly as
+  30 x 1.9737 + 31 x 0.09 = 62.000 m.
+- `verify_house.py` — 44 → 51 checks. Counts mullions per facade at one floor and
+  derives the pane count from them, asserting 30 / 11 panes, even spacing, the
+  2.0637 m pitch, 1.9737 m clear glass, end mullions flush inside the opening,
+  and that panes + mullions sum to the opening exactly.
+- `README.md` gained a "Pane division" section with the arithmetic.
+
+Note on a false failure chased during this: "panes are evenly spaced" kept failing
+with a spread exactly equal to whatever rounding I applied when collecting mullion
+centres (1 mm, then 0.1 mm). The model was uniform throughout; the check was
+quantising its own input. Fixed by deduping coincident centres by proximity
+instead of rounding. Real spread is 0.000004 m.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 8 objects, 38272 vertices.
+- `verify_house.py`: 51/51 passed — 31 mullions -> 30 panes on the long face,
+  12 -> 11 on the short, pitch 2.0637 m measured, clear glass 1.9737 m measured,
+  end mullions at +/-30.9550 m as expected, spacing spread 4 microns. All earlier
+  invariants hold.
+- 4 views re-rendered.
+
+Remaining issues:
+- Images still not viewable in-session; verified geometrically, not by eye.
+
 ## 2026-08-15 — main — blank base floor and 8 m blank top band
 
 User wanted no windows on the floor meeting the pilotis zone (looked
