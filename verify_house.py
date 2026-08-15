@@ -16,6 +16,14 @@ TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.30
 CORNER_PIER = 4.0
 OPEN_W, OPEN_D = W - 2 * CORNER_PIER, D - 2 * CORNER_PIER
+SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
+VENT_LO_Z = SPANDREL_H
+WIN_Z = VENT_LO_Z + VENT_H
+SOLID_BASE_FLOORS = 1
+SOLID_TOP_FLOORS = 2
+GLAZED_FLOORS = TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
+FIRST_GLAZED = SOLID_BASE_FLOORS
+LAST_GLAZED = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
 BASE_Z = PILOTIS_FLOORS * H
 TOP_Z = BASE_Z + TOWER_FLOORS * H
 EPS = 1e-4
@@ -40,6 +48,14 @@ def world_bounds(obj):
         (min(p.y for p in pts), max(p.y for p in pts)),
         (min(p.z for p in pts), max(p.z for p in pts)),
     )
+
+
+def gb_low(obj):
+    return world_bounds(obj)[2][0]
+
+
+def gb_high(obj):
+    return world_bounds(obj)[2][1]
 
 
 def piece_bounds(obj):
@@ -115,8 +131,8 @@ def main():
     # --- windows -------------------------------------------------------
     glass = objs["Windows_Glass"]
     gz = z_clusters(glass)
-    check("glass forms 2 Z levels per floor", len(gz) == TOWER_FLOORS * 2,
-          f"{len(gz)} levels")
+    check("glass forms 2 Z levels per glazed floor", len(gz) == GLAZED_FLOORS * 2,
+          f"{len(gz)} levels for {GLAZED_FLOORS} glazed floors")
 
     bands = list(zip(gz[0::2], gz[1::2]))
     heights = [round(hi - lo, 5) for lo, hi in bands]
@@ -129,8 +145,31 @@ def main():
           f"centre offsets={set(centres_rel)}")
 
     floors_seen = sorted({int(((lo + hi) / 2 - BASE_Z) // H) for lo, hi in bands})
-    check("one window band per occupied floor",
-          floors_seen == list(range(TOWER_FLOORS)), f"floors={floors_seen}")
+    check("one window band per glazed floor, none on the blank floors",
+          floors_seen == list(range(FIRST_GLAZED, LAST_GLAZED + 1)),
+          f"glazed floors={floors_seen[0]}..{floors_seen[-1]} ({len(floors_seen)})")
+
+    # --- blank bands ---------------------------------------------------
+    check("the floor above the pilotis has no window",
+          all(int(((lo + hi) / 2 - BASE_Z) // H) >= SOLID_BASE_FLOORS
+              for lo, hi in bands),
+          f"lowest glazed floor index={floors_seen[0]} (expect {SOLID_BASE_FLOORS})")
+    check("bottom blank band is fully solid",
+          gb_low(glass) >= BASE_Z + SOLID_BASE_FLOORS * H - EPS,
+          f"lowest glass z={gb_low(glass):.3f}, blank up to "
+          f"{BASE_Z + SOLID_BASE_FLOORS * H:.1f} m")
+
+    top_blank_z = TOP_Z - SOLID_TOP_FLOORS * H
+    check(f"top {SOLID_TOP_FLOORS * H:.0f} m is blank (no glass above "
+          f"{top_blank_z:.0f} m)",
+          gb_high(glass) <= top_blank_z + EPS,
+          f"highest glass z={gb_high(glass):.3f}, blank from {top_blank_z:.1f} m")
+    check("top blank band measures 8 m", abs(SOLID_TOP_FLOORS * H - 8.0) < EPS,
+          f"{SOLID_TOP_FLOORS} floors x {H} m = {SOLID_TOP_FLOORS * H:.1f} m")
+    check("blank bands land on floor lines",
+          abs((gb_low(glass) - BASE_Z) % H - WIN_Z) < EPS
+          and abs((TOP_Z - gb_high(glass)) % H) < EPS + WIN_Z,
+          "window bands stay aligned to the storey grid")
 
     # The ribbon stops CORNER_PIER short of every corner. The joined object's
     # overall bbox cannot show this (the E/W panes fix the X extent at ~W), so
@@ -150,8 +189,10 @@ def main():
     check("window is still the majority of each facade",
           x_span / W > 0.6 and y_span / D > 0.6,
           f"long face {x_span / W:.1%}, short face {y_span / D:.1%}")
-    check("glazing starts at the first occupied floor",
-          abs(gb[2][0] - (BASE_Z + 1.25)) < EPS, f"lowest glass z={gb[2][0]:.3f}")
+    check("glazing starts at the first glazed floor",
+          abs(gb[2][0] - (BASE_Z + SOLID_BASE_FLOORS * H + WIN_Z)) < EPS,
+          f"lowest glass z={gb[2][0]:.3f}, expected "
+          f"{BASE_Z + SOLID_BASE_FLOORS * H + WIN_Z:.3f}")
 
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]
@@ -166,8 +207,8 @@ def main():
 
     shadow = objs["Vent_Shadowboxes"]
     sz = z_clusters(shadow)
-    check("vent bands: 2 per floor -> 4 Z levels per floor",
-          len(sz) == TOWER_FLOORS * 4, f"{len(sz)} levels")
+    check("vent bands: 2 per glazed floor -> 4 Z levels each",
+          len(sz) == GLAZED_FLOORS * 4, f"{len(sz)} levels")
 
     vbands = list(zip(sz[0::2], sz[1::2]))
     vheights = [round(hi - lo, 5) for lo, hi in vbands]
@@ -199,8 +240,8 @@ def main():
     # --- floor plates --------------------------------------------------
     plates = objs["Floor_Plates"]
     pz = z_clusters(plates)
-    check("one floor plate per occupied floor", len(pz) == TOWER_FLOORS * 2,
-          f"{len(pz)} levels")
+    check("one floor plate per occupied floor, blank ones included",
+          len(pz) == TOWER_FLOORS * 2, f"{len(pz)} levels")
 
     # --- overall envelope ----------------------------------------------
     all_z = max(world_bounds(o)[2][1] for o in objs.values())
@@ -229,12 +270,15 @@ def main():
                 hits += 1
         return hits
 
-    # A representative floor, inside the window band.
-    zwin_lo = BASE_Z + 5 * H + 1.25
+    # A representative GLAZED floor, inside the window band.
+    sample_floor = FIRST_GLAZED + 4
+    assert FIRST_GLAZED <= sample_floor <= LAST_GLAZED
+    zwin_lo = BASE_Z + sample_floor * H + WIN_Z
     zlo, zhi = zwin_lo + 0.2, zwin_lo + WIN_H - 0.2
 
     n_glass = pieces_overlapping_corner(glass, zlo, zhi)
-    n_louv = pieces_overlapping_corner(louv, BASE_Z + 5 * H + 1.0, BASE_Z + 5 * H + 1.2)
+    zvent = BASE_Z + sample_floor * H + VENT_LO_Z
+    n_louv = pieces_overlapping_corner(louv, zvent + 0.05, zvent + VENT_H - 0.05)
     n_mull = pieces_overlapping_corner(objs["Window_Mullions"], zlo, zhi)
     n_wall = pieces_overlapping_corner(facade, zlo, zhi)
 

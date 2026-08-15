@@ -30,9 +30,9 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-39 geometry assertions over the saved `.blend` — footprint, band heights, window
-centring, per-facade opening widths, solid corners, vent adjacency, pilotis
-clearance:
+44 geometry assertions over the saved `.blend` — footprint, band heights, window
+centring, per-facade opening widths, solid corners, blank base/top bands, vent
+adjacency, pilotis clearance:
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -50,6 +50,9 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 | total height | 161.32 m to top of parapet |
 | corner piers | 4.0 m solid at each facade end |
 | clear window opening | 62.0 m long face / 22.0 m short face |
+| blank base floor | 1 (12.0 → 16.0 m) |
+| blank top band | 2 floors = 8.0 m (152.0 → 160.0 m) |
+| glazed floors | 34 |
 
 ### Bottom three floors
 
@@ -59,9 +62,21 @@ the void and a landing at each of the three levels. Columns that would clash wit
 the core are omitted. The tower's underside slab oversails the footprint by 0.25 m
 per side as a drip edge.
 
+### Blank bands
+
+Three of the 37 occupied floors carry no openings at all:
+
+* the first floor above the pilotis (12.0 → 16.0 m), so the tower meets the open
+  base against solid wall rather than glass;
+* the top two floors (152.0 → 160.0 m), giving an 8 m blank band under the roof.
+
+The top band is specified as a target height (`SOLID_TOP_TARGET = 8.0`) and
+rounded to whole floors, so the break always lands on a floor line instead of
+cutting a window in half. At a 4 m floor height that is exactly 2 floors.
+
 ### Facade band layout
 
-Each occupied floor repeats the same section, measured up from its floor level:
+Each *glazed* floor repeats the same section, measured up from its floor level:
 
 ```
 4.00 ┬───────────────────────────────  next floor

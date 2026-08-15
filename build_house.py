@@ -61,6 +61,14 @@ MULLION_SPACING = 2.6
 # corners instead of wrapping them. Measured along the facade from the corner.
 CORNER_PIER = 4.0
 
+# Blank (windowless) bands of the tower.
+# Bottom: the transition floor sitting directly on the pilotis zone.
+# Top: a band of blank wall, rounded to whole floors so the break lands on a
+# floor line rather than cutting a window in half.
+SOLID_BASE_FLOORS = 1
+SOLID_TOP_TARGET = 8.0
+SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
+
 # Resulting clear opening on each facade.
 OPEN_W = W - 2 * CORNER_PIER    # long faces (N/S)
 OPEN_D = D - 2 * CORNER_PIER    # short faces (E/W)
@@ -346,9 +354,21 @@ def build():
                          (W + 0.5, D + 0.5, SLAB_T), concrete))
 
     # --- tower: the solid core of the building -------------------------
+    # Windowless floors: the transition floor above the pilotis, and a blank
+    # band at the top.
+    blank_floors = set(range(SOLID_BASE_FLOORS)) | set(
+        range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS))
+
     for f in range(TOWER_FLOORS):
         z0 = BASE_Z + f * H
         tag = f"F{f + 1:02d}"
+
+        if f in blank_floors:
+            # Blank floor: solid wall the whole storey height, no openings.
+            walls += ring(f"{tag}_Blank", z0, H, WALL_T, spandrel)
+            slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
+                             (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
+            continue
 
         walls += ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
         walls += ring(f"{tag}_SpandrelHi", z0 + SPANDREL_HI_Z, H - SPANDREL_HI_Z,
@@ -443,6 +463,12 @@ def report(objects):
     print(f"columns at pilotis   : {len(col_grid(W))} x {len(col_grid(D))} grid, "
           f"{COL_SIZE:.2f} m square")
     print(f"total height         : {TOP_Z + PARAPET_H + 0.22:.2f} m incl. parapet")
+    print(f"blank base floor(s)  : {SOLID_BASE_FLOORS} "
+          f"({BASE_Z:.1f} -> {BASE_Z + SOLID_BASE_FLOORS * H:.1f} m)")
+    print(f"blank top band       : {SOLID_TOP_FLOORS} floors = "
+          f"{SOLID_TOP_FLOORS * H:.1f} m "
+          f"({TOP_Z - SOLID_TOP_FLOORS * H:.1f} -> {TOP_Z:.1f} m)")
+    print(f"glazed floors        : {TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS}")
     print(f"corner piers         : {CORNER_PIER:.1f} m solid at each facade end")
     print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
     print("per-floor bands      : "

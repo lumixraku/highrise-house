@@ -1,5 +1,39 @@
 # Progress
 
+## 2026-08-15 — main — blank base floor and 8 m blank top band
+
+User wanted no windows on the floor meeting the pilotis zone (looked
+uncoordinated), plus roughly 8 m of blank wall at the top.
+
+Changes:
+- `build_house.py` — added `SOLID_BASE_FLOORS = 1` and `SOLID_TOP_TARGET = 8.0`
+  with `SOLID_TOP_FLOORS = round(target / H)` = 2 floors. Rounding to whole
+  floors keeps the break on a floor line instead of cutting a window in half.
+  The per-floor loop now takes a `blank_floors` set; those floors get a
+  full-storey-height solid `ring()` and a floor plate, and skip the window,
+  vents, mullions and corner piers. Report prints both bands and the glazed count.
+- `verify_house.py` — 39 → 44 checks. Counts that assumed every occupied floor
+  is glazed now use `GLAZED_FLOORS` (glass Z levels, vent Z levels, glazing start
+  height); floor plates still expect all 37, since blank floors keep theirs. New
+  assertions: no window on the transition floor, bottom band solid up to 16 m, no
+  glass above 152 m, top band measures exactly 8 m, blank bands aligned to the
+  storey grid. The corner-zone sample floor is now derived from `FIRST_GLAZED`
+  with an assert, rather than a hardcoded index that could land on a blank floor.
+- `README.md` updated with a "Blank bands" section.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 8 objects, 32832 vertices (down from
+  35568 — three floors' worth of openings replaced by plain wall).
+- `verify_house.py`: 44/44 passed — glazed floors are indices 1..34 (34 of 37),
+  lowest glass at 17.250 m (above the 16.0 m blank base), highest at 150.750 m
+  (below the 152.0 m blank top), top band exactly 2 x 4.0 = 8.0 m. All earlier
+  invariants hold: window 1.50 m centred at 2.00 m, 0.30 m vents flush, 4.000 m
+  corner piers on all four faces, 0 glass/louvre/mullion pieces in corner zones.
+- 4 views re-rendered; floor_detail targets z=58 m, which is still a glazed floor.
+
+Remaining issues:
+- Images still not viewable in-session; verified geometrically, not by eye.
+
 ## 2026-08-15 — main — stop the ribbon short of the corners
 
 User wanted the window to not wrap the corners: 4 m of solid wall at both ends
