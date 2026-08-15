@@ -54,14 +54,19 @@ GLASS_T = 0.03
 GLASS_INSET = 0.09    # from the outer wall face
 VENT_INSET = 0.13     # louvres sit deeper than the glass
 
-MULLION_W = 0.09
-
 # The window pane is the fixed module: exactly PANE_W x WIN_H of clear glass.
-# Pane counts then set the footprint, rather than the footprint setting the
-# pane size.
+# EVERYTHING outside is derived from the pane counts — never the other way round.
 PANE_W = 2.00
 WINDOWS_LONG = 30      # panes across each long facade  (X)
-WINDOWS_SHORT = 7      # panes across each short facade (Y)
+WINDOWS_SHORT = 12     # panes across each short facade (Y)
+
+# The mullion is a cover cap centred on each pane joint: it sits proud of the
+# glass line and overlaps the two panes it joins, so it costs NO facade length.
+# That keeps the arithmetic clean — an opening is exactly N x PANE_W, so the
+# footprint comes out on whole metres:
+#   W = 30 x 2.00 + 2 x 8.00 = 76.00 m
+#   D = 12 x 2.00 + 2 x 4.00 = 32.00 m
+MULLION_W = 0.09
 
 # Solid wall kept at both ends of every facade, so the ribbon stops short of the
 # corners instead of wrapping them. Measured along the facade from the corner.
@@ -82,11 +87,10 @@ SOLID_TOP_TARGET = 8.0
 SOLID_BASE_FLOORS = max(1, round(SOLID_BASE_TARGET / H))
 SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 
-# N panes take N+1 mullions, all sitting fully inside the opening (the end ones
-# inset half a width so they meet the pier face instead of running into it).
-# So an opening is N panes of glass plus N+1 mullion widths.
+# An opening is exactly N panes wide; the mullions cap the joints without
+# consuming any of it.
 def opening_for(n_panes):
-    return n_panes * PANE_W + (n_panes + 1) * MULLION_W
+    return n_panes * PANE_W
 
 
 OPEN_W = opening_for(WINDOWS_LONG)      # long faces (N/S)
@@ -99,9 +103,11 @@ D = OPEN_D + 2 * PIER_SHORT
 # Every pane is the same fixed module, so pitch is uniform on all four facades.
 PANE_GLASS_LONG = PANE_W
 PANE_GLASS_SHORT = PANE_W
-PANE_PITCH = PANE_W + MULLION_W         # mullion centre to centre
-assert abs(WINDOWS_LONG * PANE_W + (WINDOWS_LONG + 1) * MULLION_W - OPEN_W) < 1e-9
-assert abs(WINDOWS_SHORT * PANE_W + (WINDOWS_SHORT + 1) * MULLION_W - OPEN_D) < 1e-9
+PANE_PITCH = PANE_W                     # mullion centre to centre = pane width
+assert abs(WINDOWS_LONG * PANE_W - OPEN_W) < 1e-9
+assert abs(WINDOWS_SHORT * PANE_W - OPEN_D) < 1e-9
+assert abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9, \
+    "footprint should land on whole metres"
 
 COL_SIZE = 1.60       # pilotis column footprint (sized for a 40-storey load)
 COL_SPACING = 9.0     # target column grid spacing
@@ -279,10 +285,11 @@ def mullions(name, z0, height, mat):
     off = GLASS_INSET + GLASS_T / 2.0
     depth = 0.14
 
-    # Mullions divide the clear opening only; the corner piers are solid.
-    # N panes need N+1 mullions. The end mullions are inset by half a width so
-    # every mullion sits wholly inside the opening, not half-buried in the pier.
-    first_x = -OPEN_W / 2 + MULLION_W / 2
+    # Cover caps centred on each pane joint, plus one at each end against the
+    # pier. N panes therefore take N+1 caps, at exact multiples of the pane
+    # width from the opening edge — they overlap the glass rather than
+    # displacing it, so they cost no facade length.
+    first_x = -OPEN_W / 2
     for i in range(WINDOWS_LONG + 1):
         x = first_x + i * PANE_PITCH
         for sy in (-1, 1):
@@ -291,7 +298,7 @@ def mullions(name, z0, height, mat):
                 (x, sy * (D / 2 - off), zc),
                 (MULLION_W, depth, height), mat))
 
-    first_y = -OPEN_D / 2 + MULLION_W / 2
+    first_y = -OPEN_D / 2
     for i in range(WINDOWS_SHORT + 1):
         y = first_y + i * PANE_PITCH
         for sx in (-1, 1):
@@ -507,7 +514,12 @@ def report(objects):
           f"{SOLID_BASE_FLOORS * H:.1f} m below, {SOLID_TOP_FLOORS * H:.1f} m above")
     print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
     print(f"panes per floor      : {WINDOWS_LONG} long face / {WINDOWS_SHORT} short face")
-    print(f"pane pitch           : {PANE_PITCH:.4f} m (mullion centres)")
+    print(f"pane pitch           : {PANE_PITCH:.2f} m (= pane width; mullions are "
+          f"{MULLION_W:.2f} m caps over the joints)")
+    print(f"clear internal depth : {D - 2 * WALL_T:.2f} m (inside face to inside face)")
+    print(f"derivation           : W = {WINDOWS_LONG} x {PANE_W:.0f} + 2 x "
+          f"{PIER_LONG:.0f} = {W:.0f} m,  D = {WINDOWS_SHORT} x {PANE_W:.0f} + 2 x "
+          f"{PIER_SHORT:.0f} = {D:.0f} m")
     print(f"clear glass per pane : {PANE_W:.2f} m x {WIN_H:.2f} m (fixed module, "
           "same on all facades)")
     print(f"panes per floor total: {2 * (WINDOWS_LONG + WINDOWS_SHORT)} around the building")

@@ -30,7 +30,7 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-55 geometry assertions over the saved `.blend` — derived footprint, band heights,
+59 geometry assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the even 8 m long-facade margin, solid corners,
 blank base/top bands, vent adjacency, pilotis clearance:
@@ -43,24 +43,25 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 
 | | |
 | --- | --- |
-| footprint | 78.79 × 22.72 m (derived, see below) |
+| footprint | 76 × 32 m (derived, see below) |
+| clear internal depth | 31.40 m |
 | floor-to-floor height | 4.0 m |
 | storeys | 40 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
 | occupied floors | 37 (12.0 → 160.0 m) |
 | total height | 161.32 m to top of parapet |
 | corner piers | 8.0 m on long faces / 4.0 m on short faces |
-| clear window opening | 62.79 m long face / 14.72 m short face |
+| clear window opening | 60 m long face / 24 m short face |
 | blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
 | blank top band | 2 floors = 8.0 m (152.0 → 160.0 m) |
 | glazed floors | 33 |
-| panes per floor | 30 long face / 7 short face (74 around) |
-| pane pitch | 2.09 m mullion centres |
+| panes per floor | 30 long face / 12 short face (84 around) |
+| pane pitch | 2.00 m mullion centres |
 | clear glass per pane | **2.00 m × 1.50 m, fixed** |
 
 ### Bottom three floors
 
-Open and raised. A 9 × 3 grid of 1.60 m square concrete columns on ~9 m bays
+Open and raised. A 9 × 4 grid of 1.60 m square concrete columns on ~9 m bays
 carries the tower, with a 14.0 × 9.0 m service core (stairs/lifts) rising through
 the void and a landing at each of the three levels. Columns that would clash with
 the core are omitted. The tower's underside slab oversails the footprint by 0.25 m
@@ -87,8 +88,8 @@ Both bands are specified as target heights (`SOLID_BASE_TARGET`,
 floor line instead of cutting a window in half. At a 4 m floor height each is
 exactly 2 floors.
 
-The short facade uses a narrower 4.0 m pier (`PIER_SHORT`). At 8 m it would leave
-only 14.72 m of window in a 30.72 m face — mostly wall.
+The short facade uses a narrower 4.0 m pier (`PIER_SHORT`), leaving 24 m of window
+in a 32 m face. At 8 m it would be mostly wall.
 
 ### Facade band layout
 
@@ -117,8 +118,8 @@ The window and both vent strips run the width of every facade but stop short of
 each corner, so all four corners stay solid wall: 8.0 m on the long faces
 (`PIER_LONG`) and 4.0 m on the short ones (`PIER_SHORT`). The piers are L-shaped
 in plan — a long leg along the wide facade, a shorter one along the narrow — and
-fill the whole vent + window + vent zone. Clear openings are 62.79 m on the long
-faces and 14.72 m on the short ones.
+fill the whole vent + window + vent zone. Clear openings are 60 m on the long
+faces and 24 m on the short ones.
 
 Glazing is inset 0.09 m from the
 outer wall face; the louvres sit deeper at 0.13 m, tilted 30°, over a dark
@@ -127,20 +128,24 @@ shadowbox so the openings read as depth rather than holes.
 ### The window is the module — the footprint follows from it
 
 The pane is fixed at exactly **2.00 m × 1.50 m** of clear glass, on every facade.
-The footprint is not an input: it is whatever fits a whole number of those panes
-plus the corner piers. N panes need N+1 mullions (the end ones inset half a width
-so they meet the pier face instead of vanishing into it):
+The footprint is not an input — it is the pane count plus the piers, nothing else:
 
 ```
-opening   = N x 2.00 + (N + 1) x 0.09
-long  (N=30): 60.00 + 2.79 = 62.79 m  ->  W = 62.79 + 2 x 8.0 = 78.79 m
-short (N=7) : 14.00 + 0.72 = 14.72 m  ->  D = 14.72 + 2 x 4.0 = 22.72 m
-pane pitch  = 2.00 + 0.09  =  2.09 m  (identical on all four facades)
+W = 30 panes x 2.00 + 2 x 8.00 pier = 76 m
+D = 12 panes x 2.00 + 2 x 4.00 pier = 32 m
+pane pitch = 2.00 m (identical on all four facades)
 ```
 
-74 panes per floor, on 33 glazed floors. To resize the building, change
+Mullions are 0.09 m **cover caps centred on each pane joint**: they overlap the
+two panes they join and sit proud of the glass line, so they consume no facade
+length. That is what keeps the arithmetic clean — 30 panes of 2 m is exactly
+60 m of opening, and the footprint lands on whole metres. (An earlier version
+added each mullion's width to the facade, which pushed the dimensions to
+78.79 × 30.72 m; the caps fixed that.)
+
+84 panes per floor, on 33 glazed floors. To resize the building, change
 `WINDOWS_LONG` / `WINDOWS_SHORT` (or the pier widths) — never `W`/`D`, which are
-derived. Adding one pane to a facade widens the building by exactly 2.09 m.
+derived. Adding one pane to a facade widens the building by exactly 2 m.
 
 ## Geometry organisation
 

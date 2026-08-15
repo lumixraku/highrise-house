@@ -1,5 +1,41 @@
 # Progress
 
+## 2026-08-15 — main — whole-metre footprint: 76 x 32 m
+
+User asked why the dimensions had decimals, pointing out that 30 panes x 2 m plus
+two 8 m piers should simply be 76 m, and restated that W/D must be derived from
+the pane counts rather than the other way round. They were right: the decimals
+were mine. The old code added each mullion's width to the facade length
+(N panes + (N+1) x 0.09), injecting 2.79 m into the width and 0.72 m into the
+depth. Depth had also dropped to 22.72 m, below the 30 m minimum they wanted.
+
+Changes:
+- `build_house.py` — mullions are now cover caps centred on each pane joint:
+  they overlap the panes they join and add NO facade length. `opening_for(n)` is
+  simply `n * PANE_W`, `PANE_PITCH` is `PANE_W`, and the caps are placed at exact
+  multiples of the pane width from the opening edge (including one on each edge,
+  against the pier). Short facade 7 -> 12 panes. Result: W = 30 x 2 + 2 x 8 = 76 m,
+  D = 12 x 2 + 2 x 4 = 32 m, both exact. Added an assert that the footprint lands
+  on whole metres. Removed the DEPTH_TARGET / derived-MULLION_W approach tried
+  first, which hit 31 m depth but left the width at 78.5833 m.
+- `verify_house.py` — 55 -> 59 checks. Mullion-length assumptions removed; added
+  whole-metre footprint, footprint == panes + piers with no leftover, depth >= 30 m,
+  and clear internal depth >= 30 m.
+- `render_views.py` — W/D updated to 76/32.
+- `README.md` — pane section rewritten around the cap detail, with a note on why
+  the earlier version produced 78.79 x 30.72 m.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 8 objects, 37776 vertices.
+- `verify_house.py`: 59/59 passed — W=76.0000, D=32.0000 m exactly, clear internal
+  depth 31.40 m, 31 caps -> 30 panes long / 13 -> 12 short, measured pane
+  2.0000 x 1.50 m and pitch 2.0000 m on both faces, piers 8/4 m, long-facade
+  margins all 8.00 m, blank bands unchanged.
+- 4 views re-rendered.
+
+Remaining issues:
+- Images still not viewable in-session; verified geometrically, not by eye.
+
 ## 2026-08-15 — main — even 8 m frame on the long facade, 4 m piers on the short
 
 User wanted the long (wide) facade to read with a uniform 8 m blank margin on all

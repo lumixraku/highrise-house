@@ -22,14 +22,16 @@ WIN_Z = VENT_LO_Z + VENT_H
 MULLION_W = 0.09
 PANE_W = 2.00
 WINDOWS_LONG = 30
-WINDOWS_SHORT = 7
-# Footprint is DERIVED from the fixed pane module, as in the build script.
-OPEN_W = WINDOWS_LONG * PANE_W + (WINDOWS_LONG + 1) * MULLION_W
-OPEN_D = WINDOWS_SHORT * PANE_W + (WINDOWS_SHORT + 1) * MULLION_W
+WINDOWS_SHORT = 12
+# Footprint is DERIVED from the pane counts, as in the build script. Mullions are
+# cover caps over the pane joints, so they add no facade length: an opening is
+# exactly N x PANE_W and the footprint lands on whole metres.
+OPEN_W = WINDOWS_LONG * PANE_W
+OPEN_D = WINDOWS_SHORT * PANE_W
 W = OPEN_W + 2 * PIER_LONG
 D = OPEN_D + 2 * PIER_SHORT
 PANE_GLASS_LONG = PANE_W
-PANE_PITCH = PANE_W + MULLION_W
+PANE_PITCH = PANE_W
 SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
 GLAZED_FLOORS = TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
@@ -253,29 +255,38 @@ def main():
           abs(pitches[0] - PANE_PITCH) < 1e-3,
           f"measured {pitches[0]:.4f} m")
     check(f"clear glass per pane is exactly {PANE_W:.2f} m x {WIN_H:.2f} m",
-          abs(pitches[0] - MULLION_W - PANE_W) < 1e-3
-          and abs(heights[0] - WIN_H) < EPS,
-          f"{pitches[0] - MULLION_W:.4f} m wide x {heights[0]:.2f} m tall")
+          abs(pitches[0] - PANE_W) < 1e-3 and abs(heights[0] - WIN_H) < EPS,
+          f"{pitches[0]:.4f} m wide x {heights[0]:.2f} m tall")
 
     # The short facade uses the SAME module, not a stretched one.
     pitches_y = [b - a for a, b in zip(ys, ys[1:])]
     check(f"short facade panes are also exactly {PANE_W:.2f} m wide",
           max(pitches_y) - min(pitches_y) < 1e-4
-          and abs(pitches_y[0] - MULLION_W - PANE_W) < 1e-3,
-          f"{pitches_y[0] - MULLION_W:.4f} m clear glass")
+          and abs(pitches_y[0] - PANE_W) < 1e-3,
+          f"{pitches_y[0]:.4f} m clear glass")
     check("pane pitch is identical on long and short facades",
           abs(pitches[0] - pitches_y[0]) < 1e-4,
           f"long {pitches[0]:.4f} m vs short {pitches_y[0]:.4f} m")
-    # End mullions must sit wholly inside the opening, flush to the pier face,
-    # not straddling the opening edge with half their width inside the pier.
-    edge = OPEN_W / 2 - MULLION_W / 2
-    check("end mullions sit flush inside the opening, not inside the pier",
+    # Mullions cap the joints, so the end ones sit ON the opening edges.
+    edge = OPEN_W / 2
+    check("end mullions sit on the opening edges, against the piers",
           abs(min(xs) + edge) < 1e-3 and abs(max(xs) - edge) < 1e-3,
           f"first={min(xs):.4f}, last={max(xs):.4f}, expected +/-{edge:.4f}")
-    check("30 panes of glass + 31 mullions fill the opening exactly",
-          abs(WINDOWS_LONG * PANE_W
-              + (WINDOWS_LONG + 1) * MULLION_W - OPEN_W) < 1e-6,
-          f"{WINDOWS_LONG} x {PANE_W} + 31 x {MULLION_W} = {OPEN_W:.4f} m")
+    check("30 panes of 2 m fill the opening exactly (mullions add no length)",
+          abs(WINDOWS_LONG * PANE_W - OPEN_W) < 1e-9,
+          f"{WINDOWS_LONG} x {PANE_W} = {OPEN_W:.4f} m")
+
+    # The whole point of capping: the footprint is whole metres.
+    check("footprint lands on whole metres",
+          abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9,
+          f"W={W:.4f} m, D={D:.4f} m")
+    check("footprint is exactly panes + piers, no leftover",
+          abs(W - (WINDOWS_LONG * PANE_W + 2 * PIER_LONG)) < 1e-9
+          and abs(D - (WINDOWS_SHORT * PANE_W + 2 * PIER_SHORT)) < 1e-9,
+          f"{WINDOWS_LONG}x2+2x8={W:.0f} m, {WINDOWS_SHORT}x2+2x4={D:.0f} m")
+    check("depth is at least 30 m", D >= 30.0 - 1e-9, f"D={D:.2f} m")
+    check("clear internal depth is at least 30 m",
+          D - 2 * 0.30 >= 30.0 - 1e-9, f"{D - 0.60:.2f} m inside face to face")
     check(f"piers are {PIER_LONG:.0f} m (long) and {PIER_SHORT:.0f} m (short)",
           abs((W - OPEN_W) / 2 - PIER_LONG) < 1e-6
           and abs((D - OPEN_D) / 2 - PIER_SHORT) < 1e-6,
@@ -350,7 +361,8 @@ def main():
     fb = world_bounds(facade)
     check(f"footprint width is {W:.2f} m (30 panes + 2 x {PIER_LONG:.0f} m pier)",
           abs((fb[0][1] - fb[0][0]) - W) < 0.02, f"{fb[0][1] - fb[0][0]:.3f} m")
-    check(f"footprint depth is {D:.2f} m (7 panes + 2 x {PIER_SHORT:.0f} m pier)",
+    check(f"footprint depth is {D:.2f} m ({WINDOWS_SHORT} panes + 2 x "
+          f"{PIER_SHORT:.0f} m pier)",
           abs((fb[1][1] - fb[1][0]) - D) < 0.02, f"{fb[1][1] - fb[1][0]:.3f} m")
 
     # --- corners are solid --------------------------------------------
