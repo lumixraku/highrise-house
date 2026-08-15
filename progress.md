@@ -1,5 +1,62 @@
 # Progress
 
+## 2026-08-15 — main — materials: warm stone walls, green transmissive glass
+
+User asked how to give the glass a real glass feel, with pale grey / beige walls
+and a faint green transmissive glass.
+
+Engine: Cycles. Blender 5.2 does NOT list CYCLES in the engine enum (only
+BLENDER_EEVEE) but assigning it works and renders correctly — verified with a
+test render before committing to it. Cycles is what gives real refraction.
+
+Changes:
+- new `materials.py` — palette in linear RGB (sRGB values in a colour socket
+  render washed out), wall / concrete / metal / dark / ground / glass builders, a
+  sky world, and one shared sun direction so the lamp and sky cannot drift apart.
+- `build_house.py` — imports materials, replaces the six inline `make_material`
+  calls, `RENDER_ENGINE`/`WALL_COLOR`/`GLASS_TINT`/`CYCLES_SAMPLES` knobs at the
+  top, Cycles bounce settings (transmission 12 — the default 4 clips overlapping
+  panes to black), AgX view transform.
+- `render_views.py` — optional samples override argument.
+- `README.md` — a Materials section documenting the three findings below.
+
+Since images cannot be viewed in-session, the look was tuned by measuring
+rendered pixels. Three real problems were found this way, none of which were
+material-parameter issues:
+
+1. The sun lit the wrong side. Rotation Z=-120 deg put the light coming from
+   (-0.62, +0.36) — north-west — while every camera sits at +X/-Y looking at the
+   south and east facades. The whole visible building was in shade under blue
+   skylight, so the warm wall measured r-b = -0.106. Measured the emission vector
+   for candidate azimuths rather than guessing; 38 deg puts the sun at
+   (+0.44, -0.57, +0.69), the south-east. Wall brightness went 0.248 -> 0.529.
+2. The Nishita sky was too blue. Isolated the material on a bare plane: warm
+   under a neutral world (r-b = +0.081), cold under the sky (-0.162). So the wall
+   colour was right and the lighting was wrong. Desaturated the skylight to 0.28
+   and mixed 35% warm; wall now measures +0.020 on the real building.
+3. Glass at transmission 1.0 rendered near-black — 0.101 brightness against a
+   0.59 wall, i.e. a smoked panel. Found by ray-casting per pixel to mask only
+   glass-hit pixels; a whole-frame average had hidden it, since it was dominated
+   by spandrel. Transmission 0.75 + specular 0.75 + 0.06 emission brings glass to
+   0.512 with green bias +0.108.
+
+Verification:
+- Build clean; per-surface measured values glass 0.404/0.512/0.470 (g-r +0.108),
+  wall 0.601/0.594/0.577 (warm +0.020), metal and concrete plausible.
+- Material properties read back from the saved .blend: engine CYCLES, 128 samples,
+  transmission_bounces 12, AgX, sky world with TEX_SKY, glass trans 1.00->0.75
+  IOR 1.52, spandrel base (0.635,0.590,0.500).
+- `verify_house.py`: 59/59 still passing — geometry untouched by this change.
+- 4 views re-rendered in Cycles, 48 s total.
+
+Remaining issues:
+- The look is verified numerically, never visually. The measurements say warm
+  walls and bright green-tinted glass, but whether it looks good is the user's
+  call.
+- Glass brightness partly comes from a 0.06 emission standing in for lit
+  interiors. If the user wants strict physical accuracy, model lit floor plates
+  behind the glazing instead.
+
 ## 2026-08-15 — main — whole-metre footprint: 76 x 32 m
 
 User asked why the dimensions had decimals, pointing out that 30 panes x 2 m plus

@@ -33,6 +33,9 @@ import sys
 import bpy
 from mathutils import Matrix, Vector
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import materials     # noqa: E402  (needs the path set up first)
+
 # ---------------------------------------------------------------------------
 # Parameters
 # ---------------------------------------------------------------------------
@@ -40,6 +43,13 @@ from mathutils import Matrix, Vector
 H = 4.0           # floor-to-floor height
 # Footprint W (X) and D (Y) are DERIVED from the window module further down:
 # the pane size is fixed, so the building widens to fit a whole number of panes.
+
+# Look. CYCLES gives real refraction through the glass and is the reason it reads
+# as glass rather than tinted plastic; BLENDER_EEVEE is much faster but fakes it.
+RENDER_ENGINE = "CYCLES"
+WALL_COLOR = materials.WARM_STONE     # or materials.COOL_STONE for pale grey
+GLASS_TINT = materials.GLASS_GREEN
+CYCLES_SAMPLES = 128
 
 TOTAL_FLOORS = 40      # storeys counted from the ground
 PILOTIS_FLOORS = 3     # of which these are open and raised
@@ -357,13 +367,14 @@ def vent_strip(name, z0, louver_mat, back_mat):
 def build():
     reset_scene()
 
-    concrete = make_material("Concrete", (0.72, 0.71, 0.68), roughness=0.65)
-    spandrel = make_material("Spandrel", (0.80, 0.79, 0.76), roughness=0.5)
-    glass = make_material("Glass", (0.55, 0.68, 0.72), roughness=0.05,
-                          transmission=0.9, ior=1.5)
-    metal = make_material("LouvreMetal", (0.38, 0.39, 0.40), roughness=0.35, metallic=0.85)
-    dark = make_material("Shadowbox", (0.05, 0.05, 0.06), roughness=0.9)
-    ground_mat = make_material("Ground", (0.30, 0.31, 0.29), roughness=0.9)
+    mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
+                               glass_tint=GLASS_TINT)
+    concrete = mats["concrete"]
+    spandrel = mats["spandrel"]
+    glass = mats["glass"]
+    metal = mats["metal"]
+    dark = mats["dark"]
+    ground_mat = mats["ground"]
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
 
@@ -453,27 +464,51 @@ def build():
 
 def setup_render():
     scene = bpy.context.scene
-    scene.render.engine = "BLENDER_EEVEE"
+    scene.render.engine = RENDER_ENGINE
     scene.render.resolution_x = 1280
     scene.render.resolution_y = 960
     scene.render.film_transparent = False
-    if hasattr(scene, "eevee"):
-        for attr, value in (("taa_render_samples", 64), ("use_gtao", True),
+
+    if RENDER_ENGINE == "CYCLES":
+        scene.cycles.samples = CYCLES_SAMPLES
+        scene.cycles.use_denoising = True
+        # Glass needs enough bounces to pass through two faces and still pick up
+        # the interior behind it; the default 4 transmission bounces clips panes
+        # to black where they overlap.
+        scene.cycles.max_bounces = 12
+        scene.cycles.transmission_bounces = 12
+        scene.cycles.transparent_max_bounces = 12
+        scene.cycles.glossy_bounces = 6
+        if hasattr(scene.cycles, "blur_glossy"):
+            scene.cycles.blur_glossy = 1.0
+    elif hasattr(scene, "eevee"):
+        for attr, value in (("taa_render_samples", 128), ("use_gtao", True),
                             ("use_raytracing", True)):
             if hasattr(scene.eevee, attr):
                 setattr(scene.eevee, attr, value)
 
-    world = bpy.data.worlds.new("Sky")
-    world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs[0].default_value = (0.55, 0.68, 0.85, 1.0)
-    world.node_tree.nodes["Background"].inputs[1].default_value = 1.2
-    scene.world = world
+    # Filmic-style view transform: raw sRGB blows out the sunlit walls and
+    # flattens the glass highlights.
+    if hasattr(scene, "view_settings"):
+        try:
+            scene.view_settings.view_transform = "AgX"
+            scene.view_settings.look = "AgX - Punchy"
+        except TypeError:
+            pass
 
+    scene.world = materials.make_sky_world()
+
+    # The sun MUST light the faces the cameras look at. All views sit at +X/-Y,
+    # so they see the south and east facades; the sun therefore has to come from
+    # the south-east. With Z rotation -120 deg it came from the north-west and
+    # every visible surface sat in shade, lit only by blue skylight — which
+    # turned the warm walls cold and killed the glass highlights.
     sun_data = bpy.data.lights.new("Sun", type="SUN")
-    sun_data.energy = 4.0
-    sun_data.angle = math.radians(2.0)
+    sun_data.energy = 3.5
+    sun_data.angle = math.radians(1.5)      # a tight disc = crisp glass glints
     sun = bpy.data.objects.new("Sun", sun_data)
-    sun.rotation_euler = (math.radians(52.0), 0.0, math.radians(-125.0))
+    sun.rotation_euler = (math.radians(materials.SUN_ELEV_DEG), 0.0,
+                          math.radians(materials.SUN_AZIM_DEG))
     bpy.context.collection.objects.link(sun)
 
     cam_data = bpy.data.cameras.new("Camera")

@@ -5,7 +5,9 @@ ground on three open pilotis floors.
 
 ## Build
 
-Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS).
+Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). Renders
+with Cycles — note that Blender 5.2 does not list `CYCLES` in the engine enum but
+does render with it when set, so `RENDER_ENGINE = "CYCLES"` works.
 
 ```bash
 blender --background --factory-startup --python build_house.py
@@ -146,6 +148,51 @@ added each mullion's width to the facade, which pushed the dimensions to
 84 panes per floor, on 33 glazed floors. To resize the building, change
 `WINDOWS_LONG` / `WINDOWS_SHORT` (or the pier widths) — never `W`/`D`, which are
 derived. Adding one pane to a facade widens the building by exactly 2 m.
+
+## Materials
+
+All materials live in `materials.py`, separate from the geometry, so the look can
+be tuned without rebuilding the model logic. Colours are **linear RGB**, not sRGB —
+putting sRGB values straight into a Blender colour socket renders washed out.
+
+| | |
+| --- | --- |
+| walls | warm pale stone, matte (roughness 0.72), `WALL_COLOR` |
+| glass | faint green, transmission 0.75, IOR 1.52, roughness 0.02 |
+| mullions / louvres | dark anodised metal, roughness 0.38 |
+| structure | grey concrete, roughness 0.85 |
+
+Three things mattered more than the material parameters, each found by measuring
+rendered pixels rather than by eye:
+
+**The sun has to light the faces the camera sees.** All cameras sit at +X/−Y
+looking at the south and east facades, so the sun must come from the south-east.
+An earlier azimuth put it north-west, leaving every visible surface in shade lit
+only by blue skylight — the warm walls rendered cold and the glass had no glints.
+`SUN_ELEV_DEG` / `SUN_AZIM_DEG` in `materials.py` are the measured-correct values.
+
+**A physical sky is too blue for a matte wall.** A raw Nishita sky dragged the
+beige wall from `r−b = +0.08` under neutral light to `−0.16` — cold, regardless of
+its own colour, because a diffuse surface integrates skylight over the whole
+hemisphere. The world shader desaturates the sky to 0.28 and mixes 35% warm tone,
+which keeps a readable sky in the glass reflections while letting surfaces show
+their real colour.
+
+**Fully transmissive glass over an unlit interior renders black.** At
+transmission 1.0 the panes measured 0.10 brightness against a 0.59 wall — a smoked
+panel, not glazing. Holding transmission at 0.75, raising specular to 0.75 and
+adding a 0.06 emission (standing in for lit floors) brings the panes to 0.51 with
+a clear green bias, which is what makes real curtain wall look bright.
+
+Measured on the final build, per surface:
+
+| surface | R | G | B | green bias |
+| --- | --- | --- | --- | --- |
+| glass | 0.404 | 0.512 | 0.470 | +0.108 |
+| wall | 0.601 | 0.594 | 0.577 | −0.006 (warm) |
+
+To try the pale grey wall instead of beige, set
+`WALL_COLOR = materials.COOL_STONE` in `build_house.py`.
 
 ## Geometry organisation
 
