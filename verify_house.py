@@ -136,10 +136,34 @@ def main():
     print(f"\nloaded {blend}: {len(objs)} mesh objects\n")
 
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
-                 "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates", "Structure"):
+                 "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
+                 "Interior_Lining", "Structure"):
         check(f"object present: {name}", name in objs)
     if failures:
         sys.exit(1)
+
+    # --- glass must stay clear, not frosted ----------------------------
+    # Each of these three, on its own, turns smooth glass into ground glass, and
+    # every one was present in an earlier version. Cheap to assert, easy to
+    # reintroduce by accident while tuning.
+    gmat = bpy.data.materials.get("Glass")
+    check("glass material exists", gmat is not None)
+    if gmat:
+        gb_ = gmat.node_tree.nodes["Principled BSDF"].inputs
+        rough = gb_["Roughness"].default_value
+        trans = gb_["Transmission Weight"].default_value
+        emit = gb_["Emission Strength"].default_value
+        check("glass roughness is ~0 (rough glass reads as frosted)",
+              rough <= 0.01, f"roughness={rough:.3f}")
+        check("glass transmission is 1.0 (the remainder is a diffuse, i.e. "
+              "frosted, lobe)", trans >= 0.99, f"transmission={trans:.3f}")
+        check("glass does not self-illuminate (a glow flattens it to a milky "
+              "film)", emit <= 1e-6, f"emission strength={emit:.3f}")
+
+    cyc = getattr(bpy.context.scene, "cycles", None)
+    if cyc and hasattr(cyc, "blur_glossy"):
+        check("Filter Glossy is off (it blurs refraction and frosts the panes)",
+              cyc.blur_glossy <= 1e-6, f"blur_glossy={cyc.blur_glossy:.2f}")
 
     # --- windows -------------------------------------------------------
     glass = objs["Windows_Glass"]
@@ -302,6 +326,33 @@ def main():
           and abs(margin_hi - 8.0) < 1e-6,
           f"left/right {margin_lr:.2f} m, below {margin_lo:.2f} m, above {margin_hi:.2f} m")
 
+    # --- interior lining behind the glazing ----------------------------
+    # Clear glass shows whatever is behind it; without a lining the panes look
+    # through the tower to the sky and stop reading as windows.
+    lining = objs["Interior_Lining"]
+    lz = z_clusters(lining)
+    check("lining matches the glazing, one band per glazed floor",
+          len(lz) == GLAZED_FLOORS * 2, f"{len(lz)} levels")
+    lbands = list(zip(lz[0::2], lz[1::2]))
+    check("lining is exactly as tall as the window",
+          all(abs(hi - lo - WIN_H) < EPS for lo, hi in lbands),
+          f"heights={ {round(hi - lo, 4) for lo, hi in lbands} }")
+    check("lining occupies the same Z bands as the glass",
+          [round(z, 4) for z in lz] == [round(z, 4) for z in gz])
+
+    # It has to sit BEHIND the glass — deeper in on every facade.
+    lining_x = max(abs(p) for piece in piece_bounds(lining)
+                   for p in (piece[0][0], piece[1][0]))
+    glass_x = max(abs(p) for piece in piece_bounds(glass)
+                  for p in (piece[0][0], piece[1][0]))
+    check("lining is set back behind the glazing", lining_x < glass_x - 0.3,
+          f"lining reaches x={lining_x:.3f}, glass x={glass_x:.3f} "
+          f"(setback {glass_x - lining_x:.3f} m)")
+    check("lining spans the full window opening",
+          abs(facade_span(lining, "S") - OPEN_W) < 0.05
+          and abs(facade_span(lining, "E") - OPEN_D) < 0.05,
+          f"{facade_span(lining, 'S'):.2f} x {facade_span(lining, 'E'):.2f} m")
+
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]
     lx, ly = facade_span(louv, "S"), facade_span(louv, "E")
@@ -333,7 +384,8 @@ def main():
 
     # --- pilotis -------------------------------------------------------
     struct = objs["Structure"]
-    for name in ("Facade_Spandrels", "Windows_Glass", "Vent_Louvres", "Floor_Plates"):
+    for name in ("Facade_Spandrels", "Windows_Glass", "Vent_Louvres",
+                 "Interior_Lining", "Floor_Plates"):
         zmin = world_bounds(objs[name])[2][0]
         check(f"{name} stays above the pilotis zone", zmin >= BASE_Z - EPS,
               f"zmin={zmin:.3f} >= {BASE_Z}")

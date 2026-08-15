@@ -1,5 +1,168 @@
 # Progress
 
+## 2026-08-16 — main — fix the glass reading yellow-olive, not pale green
+
+User: "怎么感觉窗子是黄的？土黄色。我要淡淡的浅绿色呀。" Correct, and it was a
+direct consequence of the previous entry's tuning: I optimised a single metric
+(green bias) and picked red-high + blue-low, which **is** yellow. A green bias of
++0.025 is far too weak to mask it. The signal was already in my own numbers —
+R 0.533 > B 0.521 is a warm cast — I just wasn't looking at the red/blue relation.
+
+Two causes, both fixed:
+
+1. `GLASS_GREEN` was (0.880, 0.965, 0.700) — that low blue is what made it olive.
+2. `INTERIOR_LINING` was (0.660, 0.650, 0.620), a *warm* grey. At emission 0.75 the
+   lining is plainly visible through clear glass, so its cast lands on every pane
+   and yellowed the glazing on its own. This was half the problem and I had missed
+   it entirely: I treated the lining as a brightness control only.
+
+Now tracking two metrics instead of one — green bias = G − (R+B)/2, and warm bias
+= R − B. Swept eight combinations:
+
+    (0.88, 0.965, 0.92)  green +0.010  warm -0.008   blue-grey (B beat G)
+    (0.88, 0.965, 0.70)  green +0.025  warm +0.012   YELLOW-green (shipped, wrong)
+    (0.74, 0.965, 0.86)  green +0.026  warm -0.056   cyan (B caught up with G)
+    (0.72, 0.965, 0.76)  green +0.035  warm -0.039   <- chosen
+    (0.70, 0.960, 0.74)  green +0.038  warm -0.039   slightly greener, dimmer
+
+Chose `GLASS_GREEN = (0.720, 0.965, 0.760)` with
+`INTERIOR_LINING = (0.630, 0.650, 0.655)` (neutral-to-cool). Predicted panes:
+R 0.496 / G 0.550 / B 0.534 — G clearly leads, R sits *under* B so there is no
+yellow, but warm −0.039 stays short of cyan. Luminance 0.537, local stdev 0.079,
+so brightness and the non-frosted character are preserved.
+
+The general rule, recorded because I got it wrong twice: one number cannot
+describe a colour. G highest by a clear margin, R lowest, B in between.
+
+Verification:
+- Values above measured on real renders during the sweep (`/tmp/cool_sweep.py`,
+  same ray-cast isolation as `measure_glass.py`).
+- **Not yet rebuilt.** The rebuild was declined, so `out/` still contains the old
+  yellow-green build. Source and artifacts are intentionally out of step; this
+  commit is source + docs only.
+- `verify_house.py` last ran 71/71 against the previous build. Its assertions
+  cover geometry and the four anti-frosting settings, none of which this change
+  touches (colour only), but it has not been re-run against a new build.
+
+Remaining issues:
+- `out/` artifacts are stale relative to `materials.py`. Rebuild with
+  `blender --background --factory-startup --python build_house.py`, then re-run
+  `verify_house.py` and `measure_glass.py`, before trusting anything in `out/`.
+- Images cannot be viewed in this session, so the colour is predicted from
+  measurements, not seen. Levers if it is still off: raise all three channels for
+  paler, lower red for greener, raise blue if yellow, lower blue if cyan.
+
+## 2026-08-16 — main — pale green glass, and more visibly transparent
+(superseded by the entry above — this tuning produced the yellow-olive glass)
+
+User wanted the green much lighter than the (0.30, 0.94, 0.62) set earlier, with
+the emphasis on transparency rather than colour. Those two goals turn out to
+agree: the paler the tint, the more legible what is behind it.
+
+Swept the pale range and hit a trap — at (0.88, 0.965, 0.92) the panes measure
+B 0.456 against G 0.448, i.e. a pale "green" tint renders blue-**grey**. Because
+only what passes through the pane is tinted while the sky reflection is not, and
+the reflection is blue and carries most of the brightness. The fix is which
+channel to move: hold red high, suppress blue.
+
+    (0.88, 0.965, 0.92)   green bias +0.010   lum 0.443   blue-grey
+    (0.88, 0.965, 0.70)   green bias +0.025   lum 0.438   <- chosen
+    (0.30, 0.940, 0.62)   green bias +0.080   lum 0.410   previous, too deep
+
+So `GLASS_GREEN = (0.880, 0.965, 0.700)`: pale, and brighter than the deep green
+it replaces. Darkening everything is the expensive way to get green; dropping
+blue is the cheap way.
+
+For transparency there was nothing left in the material — transmission is already
+1.0 and roughness 0.0. The remaining lever is the lining, since glass only reads
+as see-through if the far side is legible; where the lining fell dark the pane
+went opaque regardless. Swept it and measured the share of glass pixels below
+0.25 luminance:
+
+    (0.52,0.50,0.47) emit 0.35   3.6% dark   lum 0.438   sd 0.080
+    (0.66,0.65,0.62) emit 0.75   0.8% dark   lum 0.542   sd 0.079   <- chosen
+    (0.70,0.69,0.67) emit 1.00   0.5% dark   lum 0.582   sd 0.088
+
+Stopped at 0.75 on purpose: at 1.00 the local contrast rises because the emission
+begins to overpower the sky reflection, which drifts from "glass with lit rooms
+behind it" toward "glowing panel".
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 9 objects, 38832 vertices. 4 extra views
+  re-rendered.
+- `verify_house.py`: 71/71 passed — the four anti-frosting assertions still hold
+  (transmission 1.0, roughness 0.0, no glass emission, Filter Glossy off).
+- `measure_glass.py`: glass R 0.533 / G 0.553 / B 0.521, luminance 0.546,
+  green bias +0.026 with G above both R and B, local stdev 0.081 = **3.96× the
+  matte wall**, dynamic range 0.516, and 0.92× the wall's brightness (was 0.70×).
+  Brighter, paler, still clearly green, still not frosted.
+- Geometry untouched.
+
+Remaining issues:
+- Images remain unviewable in this session, so "pale green" and "looks
+  transparent" rest on the measurements above, not on my eyes. G is measurably
+  above R and B while luminance is high, which is what a pale tint should do.
+- Tuning levers if it is still off: raise the red in `GLASS_GREEN` for paler,
+  lower the blue for greener; `INTERIOR_LINING` + its emission control how much
+  you see through.
+
+## 2026-08-16 — main — clear, smooth glass instead of frosted
+
+User reported the glazing had a strong frosted/sandblasted look and wanted it
+clear, smooth and bright. Three independent causes, all present at once, and each
+one enough on its own:
+
+- `Transmission Weight = 0.75` — the remaining 0.25 is a *diffuse* lobe on the
+  base colour, and a diffuse lobe on a window is what frosted glass is. Now 1.0.
+- `Roughness = 0.02` — float glass is optically flat; 0.02 already scatters
+  visibly at 100 m. Now 0.0.
+- `Emission Strength = 0.06` on the glass — uniform across the pane, so it washed
+  out the reflections into a milky film. Now 0.
+- Plus `blur_glossy = 1.0` (Cycles Filter Glossy), which is not a material
+  setting at all: it blurs refractive rays to cut noise and frosts smooth glass
+  by itself. Now 0.
+
+The first three were all workarounds I had added for "clear glass over an unlit
+interior renders black". That was the wrong fix. The right one is geometric:
+`interior_ring()` adds an `Interior_Lining` object 0.85 m behind the glazing
+(`INTERIOR_SETBACK`), matte and faintly self-illuminated, standing in for lit
+floors. Because it sits behind the pane it shifts against the sky reflection as
+the view moves, which is the cue that reads as glass — the emission on the glass
+gave brightness but no depth.
+
+Also retuned the tint. Only what passes *through* the pane is tinted; the sky
+reflection is not, and at these angles the reflection carries most of the
+brightness. Measured across four candidates: deepening `GLASS_GREEN` from
+(0.82, 0.94, 0.88) to (0.30, 0.94, 0.62) took the green bias +0.014 → +0.080
+while brightness moved only 0.437 → 0.410. My earlier "keep the tint near white
+or the pane goes dark" reasoning was wrong — a deep tint is nearly free here.
+
+New `measure_glass.py` measures glass pixels only, isolated by ray-casting the
+camera through each pixel. Whole-frame averages cannot see this: spandrel covers
+most of the facade and drowns the panes out. The frosted test is **local
+contrast** — a rough or partly-diffuse pane averages its surroundings, so
+neighbouring pixels converge and stdev collapses toward the matte wall's.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 9 objects, 38832 vertices.
+- `verify_house.py`: **71/71 passed** (was 59). Added 12 checks — the four
+  frosting causes above, so they cannot be reintroduced silently, plus the
+  lining's band alignment, height, 0.825 m setback behind the glass, and full
+  60 × 24 m opening coverage.
+- `measure_glass.py` on the final build: glass R 0.314 / G 0.439 / B 0.405,
+  luminance 0.410, local stdev 0.086 vs the wall's 0.020 — **4.21× the matte
+  wall's local contrast** over a 0.471 dynamic range. Frosted glass compresses
+  both. Green bias +0.080.
+- Geometry untouched: still 76 × 32 m, 31.40 m clear depth, 2.00 × 1.50 m panes.
+
+Remaining issues:
+- Images still cannot be viewed in this session, so "not frosted" rests on the
+  contrast measurement, not on my eyes. The numbers say clear, smooth, tinted
+  glass; whether the green reads at the right strength needs a look.
+- `render_views.py` hardcodes `W`, `D`, `TOP_Z`, and `verify_house.py` keeps its
+  own copy of the dimension constants. Unchanged here (no dimensions moved), but
+  both still need manual syncing if the pane counts change.
+
 ## 2026-08-15 — main — make the materials actually visible on open
 
 User reported the model still looked flat grey-white. Cause was not the

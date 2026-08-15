@@ -63,6 +63,10 @@ VENT_H = 0.30     # ventilation strip height
 GLASS_T = 0.03
 GLASS_INSET = 0.09    # from the outer wall face
 VENT_INSET = 0.13     # louvres sit deeper than the glass
+# The glass is fully clear, so it needs something behind it or it reads as a gap.
+# This lining stands in for lit floors; set back far enough that pane and lining
+# move against each other as the view shifts, which is what reads as glass.
+INTERIOR_SETBACK = 0.85
 
 # The window pane is the fixed module: exactly PANE_W x WIN_H of clear glass.
 # EVERYTHING outside is derived from the pane counts — never the other way round.
@@ -262,6 +266,26 @@ def glass_ring(name, z0, height, mat):
     return parts
 
 
+def interior_ring(name, z0, height, mat):
+    """Lining set back behind the glazing, on all four facades.
+
+    Clear glass needs something behind it. Without this the panes look straight
+    through the tower to the far facade and the sky, and the glazing reads as a
+    gap rather than a window. Set back INTERIOR_SETBACK so there is visible depth
+    between pane and lining — that parallax against the sky reflection is what
+    makes it read as glass.
+    """
+    zc = z0 + height / 2.0
+    off = GLASS_INSET + INTERIOR_SETBACK
+    t = 0.05
+    return [
+        box(f"{name}_W", (-(W / 2 - off), 0.0, zc), (t, OPEN_D, height), mat),
+        box(f"{name}_E", (+(W / 2 - off), 0.0, zc), (t, OPEN_D, height), mat),
+        box(f"{name}_S", (0.0, -(D / 2 - off), zc), (OPEN_W, t, height), mat),
+        box(f"{name}_N", (0.0, +(D / 2 - off), zc), (OPEN_W, t, height), mat),
+    ]
+
+
 def corner_piers(name, z0, height, mat):
     """L-shaped solid wall at each corner, filling the window and vent bands.
 
@@ -375,8 +399,10 @@ def build():
     metal = mats["metal"]
     dark = mats["dark"]
     ground_mat = mats["ground"]
+    interior = mats["interior"]
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
+    linings = []
 
     # --- pilotis: open, raised base ------------------------------------
     structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 14.0, D + 14.0, 0.30), concrete)]
@@ -435,6 +461,8 @@ def build():
 
         glazing += glass_ring(f"{tag}_Glass", z0 + WIN_Z, WIN_H, glass)
         frames += mullions(f"{tag}_Mullion", z0 + WIN_Z, WIN_H, metal)
+        # Behind the glass, so the clear panes have something to show.
+        linings += interior_ring(f"{tag}_Interior", z0 + WIN_Z, WIN_H, interior)
 
         # Floor plate for the level above, visible behind the glazing.
         slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
@@ -452,6 +480,7 @@ def build():
     merged = {
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),
         "Windows_Glass": join(glazing, "Windows_Glass"),
+        "Interior_Lining": join(linings, "Interior_Lining"),
         "Window_Mullions": join(frames, "Window_Mullions"),
         "Vent_Louvres": join(louvres, "Vent_Louvres"),
         "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
@@ -479,8 +508,11 @@ def setup_render():
         scene.cycles.transmission_bounces = 12
         scene.cycles.transparent_max_bounces = 12
         scene.cycles.glossy_bounces = 6
+        # Filter Glossy blurs glossy and refractive rays to reduce noise. At 1.0
+        # it frosts perfectly smooth glass all by itself, whatever the material
+        # says — so keep it off and pay for the noise in samples instead.
         if hasattr(scene.cycles, "blur_glossy"):
-            scene.cycles.blur_glossy = 1.0
+            scene.cycles.blur_glossy = 0.0
     elif hasattr(scene, "eevee"):
         for attr, value in (("taa_render_samples", 128), ("use_gtao", True),
                             ("use_raytracing", True)):

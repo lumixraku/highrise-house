@@ -25,10 +25,34 @@ import bpy
 WARM_STONE = (0.635, 0.590, 0.500)      # pale sand / beige, the default wall
 COOL_STONE = (0.610, 0.615, 0.600)      # pale grey alternative
 CONCRETE_GREY = (0.430, 0.430, 0.415)   # structure, slightly darker
-# Architectural glass tint. Kept bright — a dark base colour on a transmissive
-# pane reads as a smoked panel, not glazing. The green has to be clearly above
-# red and blue to survive the sky's blue reflection.
-GLASS_GREEN = (0.560, 0.880, 0.700)
+# Architectural glass tint: a PALE, slightly COOL green.
+#
+# Getting here took three wrong turns, and the lesson each time was that one
+# number cannot describe a colour. Watch TWO measurements on the rendered panes:
+#   green bias = G - (R+B)/2   how green
+#   warm bias  = R - B         green vs yellow-green vs cyan
+#
+#   (0.88, 0.965, 0.92)  green +0.010  warm -0.008   too weak: reads blue-grey,
+#                                                    since B (0.456) beat G (0.448)
+#   (0.88, 0.965, 0.70)  green +0.025  warm +0.012   YELLOW-green: red high plus
+#                                                    blue low IS yellow, and a weak
+#                                                    green bias cannot mask it
+#   (0.74, 0.965, 0.86)  green +0.026  warm -0.056   cyan: B caught up with G
+#   (0.72, 0.965, 0.76)  green +0.035  warm -0.039   <- this. G clearly leads both,
+#                                                    R stays under B, no yellow
+#
+# So all three channels matter: G highest by a clear margin, R lowest, B in
+# between. Only what passes THROUGH the pane is tinted — the sky reflection is
+# not, and it is blue and carries most of the brightness — which is why the tint
+# has to fight the sky rather than just be "a light green".
+#
+# To adjust: raise all three together for paler; lower red for greener; if it
+# looks yellow raise blue, if it looks cyan lower blue.
+GLASS_GREEN = (0.720, 0.965, 0.760)
+# Lit floors, seen through the glazing. Deliberately NEUTRAL-to-cool: the lining
+# is bright and clearly visible through clear glass, so a warm grey here tints
+# every pane yellow on its own — it was half of why the windows read as olive.
+INTERIOR_LINING = (0.630, 0.650, 0.655)
 MULLION_METAL = (0.155, 0.160, 0.165)   # dark anodised
 GROUND_GREY = (0.115, 0.120, 0.110)
 
@@ -113,42 +137,59 @@ def make_ground(name="Ground", color=GROUND_GREY):
 # ---------------------------------------------------------------------------
 
 def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
-    """Tinted architectural glazing.
+    """Clear tinted architectural glazing — smooth, fully transmissive.
 
-    Cycles: transmission 1.0 with IOR 1.52 (soda-lime glass) and roughness 0.02
-    — not 0.0, since a dead-flat pane reflects the sky as a hard mirror and reads
-    as plastic. Thin-walled is left OFF because the panes are modelled with real
-    thickness (GLASS_T), so light should refract through both faces.
+    Everything here is aimed at ONE thing: no frosted look. Three separate
+    settings can each make glass read as ground/etched glass, and the earlier
+    version had all three:
 
-    EEVEE: same tint, but transmission there is a screen-space approximation.
-    Raised specular compensates so the pane still reflects the sky.
+    * Transmission below 1.0. The leftover weight is a *diffuse* lobe using the
+      base colour, and a diffuse lobe on a window IS frosted glass. Anything
+      under ~0.98 shows it. Held at 1.0.
+    * Roughness above ~0.01. Real architectural glass is float glass, optically
+      flat; 0.02 already scatters visibly at 100 m. Held at 0.0.
+    * Emission. A glow is uniform across the pane, so it flattens out the
+      reflections and reads as a milky film. Removed — the interior lining
+      (make_interior) supplies the brightness instead, and it does so with
+      depth, since it sits behind the glass rather than on it.
+
+    Also note Cycles' Filter Glossy: it deliberately blurs glossy/refractive
+    rays to cut noise, and at 1.0 it frosts the panes on its own. build_house.py
+    keeps it at 0.
+
+    Thin-walled stays OFF: the panes have real thickness (GLASS_T) and should
+    refract through both faces.
+
+    EEVEE: transmission there is a screen-space approximation, so raytraced
+    refraction is requested where available.
     """
     mat = _new(name)
     b = _bsdf(mat)
 
     _set(b, "Base Color", (*tint, 1.0))
     _set(b, "Metallic", 0.0)
-    _set(b, "IOR", 1.52)
+    _set(b, "IOR", 1.52)                    # soda-lime float glass
+    _set(b, "Alpha", 1.0)
 
     if engine == "CYCLES":
-        # Partial transmission, not 1.0. A fully transmissive pane over an unlit
-        # interior renders near-black (measured 0.10 against a 0.59 wall), which
-        # reads as a smoked panel. Holding some of the weight back leaves a
-        # reflective sky component, which is what makes real curtain wall bright.
-        _set(b, "Transmission Weight", 0.75)
-        _set(b, "Roughness", 0.02)
-        # In Blender 5.x the Principled BSDF has no separate transmission colour
-        # socket: Base Color tints both the reflection and what passes through.
-        # Raising the specular level strengthens the sky reflection further.
-        _set(b, "Specular IOR Level", 0.75)
-        # A faint glow stands in for lit floors behind the glass, so the panes
-        # never fall to pure black in shadow.
-        _set(b, "Emission Color", (*tint, 1.0))
-        _set(b, "Emission Strength", 0.06)
+        _set(b, "Transmission Weight", 1.0)
+        _set(b, "Roughness", 0.0)
+        # Neutral: at 0.5 the reflection strength comes purely from the IOR
+        # above. Pushing it higher adds non-physical mirror on top, which reads
+        # as a hard reflective skin rather than something you can see through.
+        _set(b, "Specular IOR Level", 0.5)
+        _set(b, "Emission Strength", 0.0)
+        # Blender 5.x has no separate transmission-colour socket: Base Color
+        # tints both the reflection and what passes through, once per surface
+        # crossing. A pane is two surfaces, and looking through the building
+        # crosses two panes — so the tint is applied up to four times and must
+        # stay close to white. This is what made the old 0.56 red render at
+        # 0.56**4 = 0.10, i.e. the "black glass" that the partial transmission
+        # was working around.
     else:
-        _set(b, "Transmission Weight", 0.92)
-        _set(b, "Roughness", 0.04)
-        _set(b, "Specular IOR Level", 0.6)
+        _set(b, "Transmission Weight", 1.0)
+        _set(b, "Roughness", 0.0)
+        _set(b, "Specular IOR Level", 0.5)
         mat.blend_method = "BLEND"
         mat.use_backface_culling = False
         if hasattr(mat, "use_screen_refraction"):
@@ -156,6 +197,49 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
         if hasattr(mat, "use_raytrace_refraction"):
             mat.use_raytrace_refraction = True
 
+    return mat
+
+
+def make_interior(name="Interior", color=INTERIOR_LINING):
+    """What you see THROUGH the glass.
+
+    Clear glass over an empty tower shows whatever is behind it — which, at
+    window height, is the far facade and then the sky, so the panes lose all
+    depth. A lining set back from the glazing gives the light something to land
+    on: it reads as lit floors, and because it sits behind the pane it moves
+    against the sky reflection as the view changes, which is exactly the cue
+    that says "glass" rather than "tinted panel".
+
+    Matte, and slightly darker than the facade so the glazing still registers as
+    an opening.
+
+    Brightness here is what "transparent" actually looks like. Glass reads as see-
+    through only if there is something legible on the far side; where the lining
+    falls dark the pane goes opaque and heavy no matter how clear the material is.
+    Measured share of glass pixels below 0.25 luminance as the lining was lifted:
+
+        (0.52,0.50,0.47) emit 0.35   3.6% dark   luminance 0.438
+        (0.66,0.65,0.62) emit 0.75   0.8% dark   luminance 0.542   <- brightness
+        (0.70,0.69,0.67) emit 1.00   0.5% dark   luminance 0.582
+
+    Its COLOUR matters as much as its brightness, for the same reason: at this
+    brightness the lining is plainly visible through the glass, so its cast lands
+    on every pane. The warm greys above pulled the glazing toward olive. Kept
+    neutral-to-cool now, which lets the green tint read as green.
+
+    Stopping at 0.75 is deliberate: past it the emission starts to overpower the
+    sky reflection (local contrast climbed 0.079 -> 0.088), and the pane drifts
+    from "glass with lit rooms behind it" toward "glowing panel".
+    """
+    mat = _new(name)
+    b = _bsdf(mat)
+    _set(b, "Base Color", (*color, 1.0))
+    _set(b, "Roughness", 0.80)
+    _set(b, "Specular IOR Level", 0.15)
+    # Self-illumination stands in for lit floors — on the lining, well behind the
+    # glass, so it never flattens the pane the way emission on the glass did.
+    _set(b, "Emission Color", (*color, 1.0))
+    _set(b, "Emission Strength", 0.75)
     return mat
 
 
@@ -247,6 +331,7 @@ def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_GREEN):
         "concrete": make_concrete(),
         "spandrel": make_wall(color=wall_color),
         "glass": make_glass(engine=engine, tint=glass_tint),
+        "interior": make_interior(),
         "metal": make_metal(),
         "dark": make_dark(),
         "ground": make_ground(),

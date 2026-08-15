@@ -32,7 +32,7 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-59 geometry assertions over the saved `.blend` — derived footprint, band heights,
+71 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the even 8 m long-facade margin, solid corners,
 blank base/top bands, vent adjacency, pilotis clearance:
@@ -180,9 +180,39 @@ putting sRGB values straight into a Blender colour socket renders washed out.
 | | |
 | --- | --- |
 | walls | warm pale stone, matte (roughness 0.72), `WALL_COLOR` |
-| glass | faint green, transmission 0.75, IOR 1.52, roughness 0.02 |
+| glass | pale green tint, transmission 1.0, IOR 1.52, roughness 0.0, no emission |
+| interior lining | matte warm grey 0.85 m behind the glass, self-illuminated 0.75 |
 | mullions / louvres | dark anodised metal, roughness 0.38 |
 | structure | grey concrete, roughness 0.85 |
+
+### Keeping the glass clear, not frosted
+
+Three separate settings each turn smooth glass into ground glass, and they add
+up quietly — an earlier version had all three at once and the panes looked
+sandblasted:
+
+* **Transmission below 1.0.** The leftover weight is a *diffuse* lobe using the
+  base colour, and a diffuse lobe on a window is exactly what frosted glass is.
+* **Roughness above ~0.01.** Architectural glazing is float glass, optically
+  flat. Even 0.02 scatters visibly at this distance.
+* **Emission on the glass.** A glow is uniform across the pane, so it washes out
+  the reflections and reads as a milky film.
+
+Plus one that is not a material setting at all: Cycles' **Filter Glossy**
+(`blur_glossy`) deliberately blurs glossy and refractive rays to cut noise. At
+1.0 it frosts perfectly smooth glass on its own, whatever the material says. It
+is held at 0 and the noise is paid for in samples instead.
+
+`verify_house.py` asserts all four, since they are easy to reintroduce while
+tuning.
+
+The catch with fully clear glass is that it shows whatever is behind it — over
+an empty tower that is the far facade and then the sky, so the panes lose all
+depth and read as gaps. Hence `Interior_Lining`: a matte surface 0.85 m behind
+the glazing, standing in for lit floors. Because it sits *behind* the pane it
+shifts against the sky reflection as the view moves, which is the cue that reads
+as glass. That is also what replaced the emission that used to be on the glass —
+same brightness, but with depth.
 
 Three things mattered more than the material parameters, each found by measuring
 rendered pixels rather than by eye:
@@ -200,29 +230,76 @@ hemisphere. The world shader desaturates the sky to 0.28 and mixes 35% warm tone
 which keeps a readable sky in the glass reflections while letting surfaces show
 their real colour.
 
-**Fully transmissive glass over an unlit interior renders black.** At
-transmission 1.0 the panes measured 0.10 brightness against a 0.59 wall — a smoked
-panel, not glazing. Holding transmission at 0.75, raising specular to 0.75 and
-adding a 0.06 emission (standing in for lit floors) brings the panes to 0.51 with
-a clear green bias, which is what makes real curtain wall look bright.
+**Fully transmissive glass needs something behind it, not less transmission.**
+Clear glass over an unlit interior renders near-black, and the tempting fix —
+pulling transmission back and adding a glow — is what frosted the panes. The
+right fix is geometric: put a lit lining behind the glazing and leave the glass
+alone.
 
-Measured on the final build, per surface:
+**A pale green needs two measurements, not one.** Only what passes *through* the
+pane is tinted; the sky reflection is not, and at these viewing angles the
+reflection carries most of the brightness — and it is blue. So the tint has to
+fight the sky, and tracking "how green" alone walks straight into yellow or cyan.
+Watch both:
 
-| surface | R | G | B | green bias |
-| --- | --- | --- | --- | --- |
-| glass | 0.404 | 0.512 | 0.470 | +0.108 |
-| wall | 0.601 | 0.594 | 0.577 | −0.006 (warm) |
+* **green bias** = G − (R+B)/2 — how green
+* **warm bias** = R − B — green vs *yellow*-green vs cyan
+
+| tint | green bias | warm bias | |
+| --- | --- | --- | --- |
+| `(0.88, 0.965, 0.92)` | +0.010 | −0.008 | too weak: B 0.456 beat G 0.448, reads blue-grey |
+| `(0.88, 0.965, 0.70)` | +0.025 | **+0.012** | **yellow-green** — red high + blue low *is* yellow |
+| `(0.74, 0.965, 0.86)` | +0.026 | −0.056 | cyan: B caught up with G |
+| `(0.72, 0.965, 0.76)` | +0.035 | −0.039 | **in use** — G clearly leads, R under B, no yellow |
+
+All three channels matter: G highest by a clear margin, R lowest, B in between.
+To adjust — raise all three for paler, lower red for greener, raise blue if it
+looks yellow, lower blue if it looks cyan.
+
+**Transparency is mostly a property of the lining, not the glass.** Once
+transmission is 1.0 and roughness 0.0 there is nothing left to make the material
+clearer — what remains is whether there is anything legible on the far side.
+Where the lining falls dark the pane goes opaque and heavy regardless. Lifting it
+to emission 0.75 cut the share of glass pixels below 0.25 luminance from 3.6% to
+0.8%. Going brighter still (emission 1.0) starts to overpower the sky reflection
+and the panes drift toward "glowing panel".
+
+The lining's *colour* matters for the same reason — at that brightness it is
+plainly visible through clear glass, so its cast lands on every pane. A warm grey
+lining tints the whole facade yellow on its own, which was half of why the
+windows read as olive. `INTERIOR_LINING` is kept neutral-to-cool so the green
+tint can read as green.
+
+Measured over glass pixels only (found by ray-casting the camera through each
+pixel — whole-frame averages are useless, since spandrel covers most of the
+facade and drowns the panes out):
+
+| surface | R | G | B | mean luminance | local stdev |
+| --- | --- | --- | --- | --- | --- |
+| glass | 0.496 | 0.550 | 0.534 | 0.537 | 0.079 |
+| wall | 0.598 | 0.592 | 0.574 | 0.592 | 0.020 |
+
+The **stdev** column is the frosted test, and the only one that catches it
+numerically: a rough or partly-diffuse pane averages its surroundings, so
+neighbouring pixels converge and local contrast collapses toward the wall's.
+Clear glass holds sharp sky-reflection, mullion and lining detail — here it runs
+**≈4× the matte wall's local contrast**, at roughly 0.9× the wall's brightness.
+`measure_glass.py` reports all of this:
+
+```bash
+blender --background --factory-startup --python measure_glass.py -- out/highrise_house.blend
+```
 
 To try the pale grey wall instead of beige, set
 `WALL_COLOR = materials.COOL_STONE` in `build_house.py`.
 
 ## Geometry organisation
 
-Everything is generated from boxes and joined into eight objects, so the scene
-stays light (~35k vertices at 40 storeys):
+Everything is generated from boxes and joined into nine objects, so the scene
+stays light (~39k vertices at 40 storeys):
 
-`Facade_Spandrels` · `Windows_Glass` · `Window_Mullions` · `Vent_Louvres` ·
-`Vent_Shadowboxes` · `Floor_Plates` · `Structure` · `Ground`
+`Facade_Spandrels` · `Windows_Glass` · `Interior_Lining` · `Window_Mullions` ·
+`Vent_Louvres` · `Vent_Shadowboxes` · `Floor_Plates` · `Structure` · `Ground`
 
 ## Changing the design
 
