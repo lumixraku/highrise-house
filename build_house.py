@@ -1,0 +1,419 @@
+"""Procedural high-rise house generator for Blender.
+
+Run headless:
+    blender --background --factory-startup --python build_house.py
+
+Outputs (into out/):
+    highrise_house.blend   full scene
+    highrise_house.glb     glTF export
+    preview.png            EEVEE render
+
+Design brief
+------------
+* Floor-to-floor height 4.0 m.
+* Bottom 3 floors are pilotis (open, raised on columns + a service core).
+* Above that sits the solid core of the building: 12 occupied floors.
+* Every occupied floor carries a 1.5 m ribbon window spanning the full
+  width of every facade, vertically centred in the floor.
+* Directly above and below that window sits a 0.3 m ventilation louvre
+  strip of the same length as the window.
+
+Vertical band layout per floor, measured from the floor level:
+    0.00 - 0.95  solid spandrel
+    0.95 - 1.25  ventilation louvres
+    1.25 - 2.75  window  (centre at 2.00 m = mid floor)
+    2.75 - 3.05  ventilation louvres
+    3.05 - 4.00  solid spandrel
+"""
+
+import math
+import os
+import sys
+
+import bpy
+from mathutils import Matrix, Vector
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+
+W = 20.0          # footprint width  (X)
+D = 14.0          # footprint depth  (Y)
+H = 4.0           # floor-to-floor height
+
+PILOTIS_FLOORS = 3     # open, raised floors at the bottom
+TOWER_FLOORS = 12      # occupied floors above
+
+WALL_T = 0.30     # facade wall thickness
+SLAB_T = 0.22     # floor plate thickness
+
+WIN_H = 1.50      # window height
+VENT_H = 0.30     # ventilation strip height
+GLASS_T = 0.03
+GLASS_INSET = 0.09    # from the outer wall face
+VENT_INSET = 0.13     # louvres sit deeper than the glass
+
+MULLION_W = 0.09
+MULLION_SPACING = 2.6
+
+COL_SIZE = 0.85       # pilotis column footprint
+CORE_W, CORE_D = 5.0, 4.2   # service core inside the pilotis zone
+
+PARAPET_H = 1.10
+PARAPET_T = 0.25
+
+BASE_Z = PILOTIS_FLOORS * H          # underside of the tower = 12.0
+TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 60.0
+
+OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+
+# Band offsets inside one floor, derived so the window is vertically centred.
+SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0     # 0.95
+VENT_LO_Z = SPANDREL_H                          # 0.95
+WIN_Z = VENT_LO_Z + VENT_H                      # 1.25
+VENT_HI_Z = WIN_Z + WIN_H                       # 2.75
+SPANDREL_HI_Z = VENT_HI_Z + VENT_H              # 3.05
+
+assert abs(SPANDREL_H + VENT_H + WIN_H + VENT_H + SPANDREL_H - H) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def reset_scene():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+
+def make_material(name, base_color, roughness=0.6, metallic=0.0,
+                  transmission=0.0, ior=1.45, emission=None):
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Base Color"].default_value = (*base_color, 1.0)
+    bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = metallic
+    if "Transmission Weight" in bsdf.inputs:
+        bsdf.inputs["Transmission Weight"].default_value = transmission
+    if "IOR" in bsdf.inputs:
+        bsdf.inputs["IOR"].default_value = ior
+    if emission is not None:
+        bsdf.inputs["Emission Color"].default_value = (*emission, 1.0)
+        bsdf.inputs["Emission Strength"].default_value = 1.0
+    if transmission > 0.0:
+        mat.blend_method = "BLEND"
+        mat.use_backface_culling = False
+    return mat
+
+
+_BOX_VERTS = [
+    (-0.5, -0.5, -0.5), (0.5, -0.5, -0.5), (0.5, 0.5, -0.5), (-0.5, 0.5, -0.5),
+    (-0.5, -0.5, 0.5), (0.5, -0.5, 0.5), (0.5, 0.5, 0.5), (-0.5, 0.5, 0.5),
+]
+_BOX_FACES = [
+    (0, 1, 2, 3), (7, 6, 5, 4), (0, 4, 5, 1),
+    (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0),
+]
+
+
+def box(name, center, dims, mat, rot=None):
+    """Axis-aligned box (optionally rotated about its own centre)."""
+    mesh = bpy.data.meshes.new(name)
+    sx, sy, sz = dims
+    verts = [(v[0] * sx, v[1] * sy, v[2] * sz) for v in _BOX_VERTS]
+    mesh.from_pydata(verts, [], _BOX_FACES)
+    mesh.validate()
+    obj = bpy.data.objects.new(name, mesh)
+    obj.location = center
+    if rot:
+        obj.rotation_euler = rot
+    obj.data.materials.append(mat)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
+def join(objects, name):
+    """Join a list of objects into one; returns the merged object."""
+    objects = [o for o in objects if o is not None]
+    if not objects:
+        return None
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in objects:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objects[0]
+    if len(objects) > 1:
+        bpy.ops.object.join()
+    merged = bpy.context.view_layer.objects.active
+    merged.name = name
+    merged.data.name = name
+    bpy.ops.object.select_all(action="DESELECT")
+    return merged
+
+
+def ring(name, z0, height, thickness, mat, outer_w=W, outer_d=D):
+    """Closed rectangular band of wall, hugging the footprint edges."""
+    zc = z0 + height / 2.0
+    t = thickness
+    parts = [
+        box(f"{name}_S", (0.0, -(outer_d / 2 - t / 2), zc), (outer_w, t, height), mat),
+        box(f"{name}_N", (0.0, +(outer_d / 2 - t / 2), zc), (outer_w, t, height), mat),
+        box(f"{name}_W", (-(outer_w / 2 - t / 2), 0.0, zc), (t, outer_d - 2 * t, height), mat),
+        box(f"{name}_E", (+(outer_w / 2 - t / 2), 0.0, zc), (t, outer_d - 2 * t, height), mat),
+    ]
+    return parts
+
+
+# ---------------------------------------------------------------------------
+# Facade pieces
+# ---------------------------------------------------------------------------
+
+def glass_ring(name, z0, height, mat):
+    """Continuous glazing ribbon around all four facades.
+
+    The E/W panes run the full depth and the N/S panes butt into them, so the
+    ribbon reads as unbroken glass wrapping the corners.
+    """
+    zc = z0 + height / 2.0
+    off = GLASS_INSET + GLASS_T / 2.0
+    ns_w = W - 2 * (GLASS_INSET + GLASS_T)
+    parts = [
+        box(f"{name}_W", (-(W / 2 - off), 0.0, zc), (GLASS_T, D, height), mat),
+        box(f"{name}_E", (+(W / 2 - off), 0.0, zc), (GLASS_T, D, height), mat),
+        box(f"{name}_S", (0.0, -(D / 2 - off), zc), (ns_w, GLASS_T, height), mat),
+        box(f"{name}_N", (0.0, +(D / 2 - off), zc), (ns_w, GLASS_T, height), mat),
+    ]
+    return parts
+
+
+def mullions(name, z0, height, mat):
+    """Slim vertical frames breaking up the ribbon window."""
+    parts = []
+    zc = z0 + height / 2.0
+    off = GLASS_INSET + GLASS_T / 2.0
+    depth = 0.14
+
+    n_x = max(1, int((W - 2.0) // MULLION_SPACING))
+    step_x = W / (n_x + 1)
+    for i in range(1, n_x + 1):
+        x = -W / 2 + i * step_x
+        for sy in (-1, 1):
+            parts.append(box(
+                f"{name}_ns_{i}_{sy}",
+                (x, sy * (D / 2 - off), zc),
+                (MULLION_W, depth, height), mat))
+
+    n_y = max(1, int((D - 2.0) // MULLION_SPACING))
+    step_y = D / (n_y + 1)
+    for i in range(1, n_y + 1):
+        y = -D / 2 + i * step_y
+        for sx in (-1, 1):
+            parts.append(box(
+                f"{name}_ew_{i}_{sx}",
+                (sx * (W / 2 - off), y, zc),
+                (depth, MULLION_W, height), mat))
+    return parts
+
+
+def vent_strip(name, z0, louver_mat, back_mat):
+    """Louvred ventilation band: dark backing panel plus tilted slats.
+
+    Same length as the window: it wraps every facade.
+    """
+    parts = []
+    n_slats = 3
+    slat_t = 0.035
+    slat_depth = 0.11
+    tilt = math.radians(30.0)
+
+    # Dark recessed backing so the opening does not read as a hole.
+    back_off = VENT_INSET + 0.12
+    ns_w = W - 2 * (VENT_INSET + 0.06)
+    zc = z0 + VENT_H / 2.0
+    parts += [
+        box(f"{name}_back_W", (-(W / 2 - back_off), 0.0, zc), (0.04, D, VENT_H), back_mat),
+        box(f"{name}_back_E", (+(W / 2 - back_off), 0.0, zc), (0.04, D, VENT_H), back_mat),
+        box(f"{name}_back_S", (0.0, -(D / 2 - back_off), zc), (ns_w, 0.04, VENT_H), back_mat),
+        box(f"{name}_back_N", (0.0, +(D / 2 - back_off), zc), (ns_w, 0.04, VENT_H), back_mat),
+    ]
+
+    off = VENT_INSET + slat_depth / 2.0
+    for k in range(n_slats):
+        sz = z0 + VENT_H * (k + 0.5) / n_slats
+        # N/S facades: slats run along X, tilt about X.
+        for sy in (-1, 1):
+            parts.append(box(
+                f"{name}_slat_ns_{k}_{sy}",
+                (0.0, sy * (D / 2 - off), sz),
+                (ns_w, slat_depth, slat_t), louver_mat,
+                rot=(sy * tilt, 0.0, 0.0)))
+        # E/W facades: slats run along Y, tilt about Y.
+        for sx in (-1, 1):
+            parts.append(box(
+                f"{name}_slat_ew_{k}_{sx}",
+                (sx * (W / 2 - off), 0.0, sz),
+                (slat_depth, D, slat_t), louver_mat,
+                rot=(0.0, -sx * tilt, 0.0)))
+    return parts
+
+
+# ---------------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------------
+
+def build():
+    reset_scene()
+
+    concrete = make_material("Concrete", (0.72, 0.71, 0.68), roughness=0.65)
+    spandrel = make_material("Spandrel", (0.80, 0.79, 0.76), roughness=0.5)
+    glass = make_material("Glass", (0.55, 0.68, 0.72), roughness=0.05,
+                          transmission=0.9, ior=1.5)
+    metal = make_material("LouvreMetal", (0.38, 0.39, 0.40), roughness=0.35, metallic=0.85)
+    dark = make_material("Shadowbox", (0.05, 0.05, 0.06), roughness=0.9)
+    ground_mat = make_material("Ground", (0.30, 0.31, 0.29), roughness=0.9)
+
+    walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
+
+    # --- pilotis: open, raised base ------------------------------------
+    structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 6.0, D + 6.0, 0.30), concrete)]
+
+    col_xs = (-W / 2 + 1.6, 0.0, W / 2 - 1.6)
+    col_ys = (-D / 2 + 1.4, D / 2 - 1.4)
+    for i, x in enumerate(col_xs):
+        for j, y in enumerate(col_ys):
+            structure.append(box(
+                f"Column_{i}_{j}", (x, y, BASE_Z / 2.0),
+                (COL_SIZE, COL_SIZE, BASE_Z), concrete))
+
+    # Service core rising through the open floors (stairs / lifts).
+    structure += ring("Core", 0.0, BASE_Z, 0.28, concrete, outer_w=CORE_W, outer_d=CORE_D)
+
+    # Intermediate landings inside the core, one per open floor.
+    for f in range(1, PILOTIS_FLOORS):
+        structure.append(box(
+            f"CoreLanding_{f}", (0.0, 0.0, f * H),
+            (CORE_W - 0.56, CORE_D - 0.56, 0.18), concrete))
+
+    # Underside slab of the tower, slightly oversized as a drip edge.
+    structure.append(box("TowerSoffit", (0.0, 0.0, BASE_Z - SLAB_T / 2.0),
+                         (W + 0.5, D + 0.5, SLAB_T), concrete))
+
+    # --- tower: the solid core of the building -------------------------
+    for f in range(TOWER_FLOORS):
+        z0 = BASE_Z + f * H
+        tag = f"F{f + 1:02d}"
+
+        walls += ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
+        walls += ring(f"{tag}_SpandrelHi", z0 + SPANDREL_HI_Z, H - SPANDREL_HI_Z,
+                      WALL_T, spandrel)
+
+        strip_lo = vent_strip(f"{tag}_VentLo", z0 + VENT_LO_Z, metal, dark)
+        strip_hi = vent_strip(f"{tag}_VentHi", z0 + VENT_HI_Z, metal, dark)
+        for o in strip_lo + strip_hi:
+            (backs if "_back_" in o.name else louvres).append(o)
+
+        glazing += glass_ring(f"{tag}_Glass", z0 + WIN_Z, WIN_H, glass)
+        frames += mullions(f"{tag}_Mullion", z0 + WIN_Z, WIN_H, metal)
+
+        # Floor plate for the level above, visible behind the glazing.
+        slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
+                         (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
+
+    # --- roof ----------------------------------------------------------
+    structure.append(box("RoofSlab", (0.0, 0.0, TOP_Z + 0.11),
+                         (W, D, 0.22), concrete))
+    structure += ring("Parapet", TOP_Z + 0.22, PARAPET_H, PARAPET_T, spandrel)
+    structure.append(box("RoofPlant", (2.0, 0.0, TOP_Z + 1.4),
+                         (6.0, 4.0, 2.4), concrete))
+
+    ground = box("Ground", (0.0, 0.0, -0.32), (200.0, 200.0, 0.04), ground_mat)
+
+    merged = {
+        "Facade_Spandrels": join(walls, "Facade_Spandrels"),
+        "Windows_Glass": join(glazing, "Windows_Glass"),
+        "Window_Mullions": join(frames, "Window_Mullions"),
+        "Vent_Louvres": join(louvres, "Vent_Louvres"),
+        "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
+        "Floor_Plates": join(slabs, "Floor_Plates"),
+        "Structure": join(structure, "Structure"),
+        "Ground": ground,
+    }
+    return merged
+
+
+def setup_render():
+    scene = bpy.context.scene
+    scene.render.engine = "BLENDER_EEVEE"
+    scene.render.resolution_x = 1280
+    scene.render.resolution_y = 960
+    scene.render.film_transparent = False
+    if hasattr(scene, "eevee"):
+        for attr, value in (("taa_render_samples", 64), ("use_gtao", True),
+                            ("use_raytracing", True)):
+            if hasattr(scene.eevee, attr):
+                setattr(scene.eevee, attr, value)
+
+    world = bpy.data.worlds.new("Sky")
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs[0].default_value = (0.55, 0.68, 0.85, 1.0)
+    world.node_tree.nodes["Background"].inputs[1].default_value = 1.2
+    scene.world = world
+
+    sun_data = bpy.data.lights.new("Sun", type="SUN")
+    sun_data.energy = 4.0
+    sun_data.angle = math.radians(2.0)
+    sun = bpy.data.objects.new("Sun", sun_data)
+    sun.rotation_euler = (math.radians(52.0), 0.0, math.radians(-125.0))
+    bpy.context.collection.objects.link(sun)
+
+    cam_data = bpy.data.cameras.new("Camera")
+    cam_data.lens = 40.0
+    cam = bpy.data.objects.new("Camera", cam_data)
+    eye = Vector((72.0, -68.0, 44.0))
+    target = Vector((0.0, 0.0, 30.0))
+    direction = (target - eye).normalized()
+    cam.location = eye
+    cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+    bpy.context.collection.objects.link(cam)
+    scene.camera = cam
+
+
+def report(objects):
+    total_verts = sum(len(o.data.vertices) for o in objects.values() if o)
+    print("\n=== high-rise house ===")
+    print(f"footprint            : {W:.1f} x {D:.1f} m")
+    print(f"floor height         : {H:.1f} m")
+    print(f"open pilotis floors  : {PILOTIS_FLOORS} (0.0 -> {BASE_Z:.1f} m)")
+    print(f"occupied floors      : {TOWER_FLOORS} ({BASE_Z:.1f} -> {TOP_Z:.1f} m)")
+    print(f"total height         : {TOP_Z + PARAPET_H + 0.22:.2f} m incl. parapet")
+    print("per-floor bands      : "
+          f"{SPANDREL_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "
+          f"{VENT_H:.2f} vent / {SPANDREL_H:.2f} solid")
+    print(f"window centre        : {WIN_Z + WIN_H / 2:.2f} m above each floor "
+          f"(mid-floor = {H / 2:.2f} m)")
+    print(f"objects / vertices   : {len([o for o in objects.values() if o])} / {total_verts}")
+    print("=======================\n")
+
+
+def main():
+    objects = build()
+    setup_render()
+    report(objects)
+
+    os.makedirs(OUT_DIR, exist_ok=True)
+    blend_path = os.path.join(OUT_DIR, "highrise_house.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=blend_path)
+
+    bpy.ops.object.select_all(action="SELECT")
+    bpy.ops.export_scene.gltf(
+        filepath=os.path.join(OUT_DIR, "highrise_house.glb"),
+        export_format="GLB", use_selection=False)
+
+    if "--no-render" not in sys.argv:
+        bpy.context.scene.render.filepath = os.path.join(OUT_DIR, "preview.png")
+        bpy.ops.render.render(write_still=True)
+
+    print(f"saved -> {blend_path}")
+
+
+if __name__ == "__main__":
+    main()
