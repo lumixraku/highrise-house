@@ -1,5 +1,37 @@
 # Progress
 
+## 2026-08-15 — main — even 8 m frame on the long facade, 4 m piers on the short
+
+User wanted the long (wide) facade to read with a uniform 8 m blank margin on all
+four sides: keep its 8 m piers, drop the short-facade piers to 4 m, and grow the
+bottom blank band from 1 floor to 2 (8 m) to match the top.
+
+Changes:
+- `build_house.py` — split `CORNER_PIER` into `PIER_LONG = 8.0` and
+  `PIER_SHORT = 4.0`. `D` now derives from `PIER_SHORT`, giving 22.72 m (was
+  30.72 m). `corner_piers()` builds an asymmetric L: an 8 m leg along the wide
+  facade, a 4 m leg along the narrow. Added `SOLID_BASE_TARGET = 8.0` alongside
+  the existing top target, both rounded to whole floors, so the base band is now
+  2 floors (12.0 -> 20.0 m). Report prints the four long-facade margins.
+- `verify_house.py` — same split. The corner-overlap region is now asymmetric
+  (PIER_LONG in X, PIER_SHORT in Y) or it would have missed pieces. 54 -> 55
+  checks; added an explicit assertion that the long facade's left/right, below
+  and above margins are all exactly 8 m.
+- `render_views.py` — D updated to 22.72, cameras nudged for the slimmer plan.
+- `README.md` — replaced the "Blank bands" section with "An even 8 m frame on the
+  long facade", including a diagram; noted the column grid is now 9 x 3.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 8 objects, 35072 vertices.
+- `verify_house.py`: 55/55 passed — footprint 78.790 x 22.720 m, piers measured
+  8.000 m long / 4.000 m short, long-facade margins left/right 8.00, below 8.00,
+  above 8.00 m, glazed floors now 2..34 (33 of 37), lowest glass at 21.250 m
+  (above the 20.0 m band). Pane still exactly 2.0000 x 1.50 m both directions.
+- 4 views re-rendered, framing re-checked by projection.
+
+Remaining issues:
+- Images still not viewable in-session; verified geometrically, not by eye.
+
 ## 2026-08-15 — main — fix the pane at 2.00 x 1.50 m, derive the footprint
 
 User wants the window to be exactly 2.0 x 1.5 m, 30 panes on the wide face,

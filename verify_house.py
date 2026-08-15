@@ -14,7 +14,8 @@ TOTAL_FLOORS = 40
 PILOTIS_FLOORS = 3
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.30
-CORNER_PIER = 8.0
+PIER_LONG = 8.0
+PIER_SHORT = 4.0
 SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
 VENT_LO_Z = SPANDREL_H
 WIN_Z = VENT_LO_Z + VENT_H
@@ -25,11 +26,11 @@ WINDOWS_SHORT = 7
 # Footprint is DERIVED from the fixed pane module, as in the build script.
 OPEN_W = WINDOWS_LONG * PANE_W + (WINDOWS_LONG + 1) * MULLION_W
 OPEN_D = WINDOWS_SHORT * PANE_W + (WINDOWS_SHORT + 1) * MULLION_W
-W = OPEN_W + 2 * CORNER_PIER
-D = OPEN_D + 2 * CORNER_PIER
+W = OPEN_W + 2 * PIER_LONG
+D = OPEN_D + 2 * PIER_SHORT
 PANE_GLASS_LONG = PANE_W
 PANE_PITCH = PANE_W + MULLION_W
-SOLID_BASE_FLOORS = 1
+SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
 GLAZED_FLOORS = TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
 FIRST_GLAZED = SOLID_BASE_FLOORS
@@ -181,20 +182,20 @@ def main():
           and abs((TOP_Z - gb_high(glass)) % H) < EPS + WIN_Z,
           "window bands stay aligned to the storey grid")
 
-    # The ribbon stops CORNER_PIER short of every corner. The joined object's
+    # The ribbon stops a pier width short of every corner. The joined object's
     # overall bbox cannot show this (the E/W panes fix the X extent at ~W), so
     # each facade must be measured on its own.
     gb = world_bounds(glass)
     x_span, y_span = facade_span(glass, "S"), facade_span(glass, "E")
-    check(f"long-face glazing stops {CORNER_PIER} m short of both corners",
+    check(f"long-face glazing stops {PIER_LONG} m short of both corners",
           abs(x_span - OPEN_W) < 0.02,
           f"opening={x_span:.3f} m, expected {OPEN_W:.3f} m")
-    check(f"short-face glazing stops {CORNER_PIER} m short of both corners",
+    check(f"short-face glazing stops {PIER_SHORT} m short of both corners",
           abs(y_span - OPEN_D) < 0.02,
           f"opening={y_span:.3f} m, expected {OPEN_D:.3f} m")
-    check("all four facades have the same pier width",
-          abs((W - x_span) / 2 - CORNER_PIER) < 0.02
-          and abs((D - y_span) / 2 - CORNER_PIER) < 0.02,
+    check("piers measure 8 m on the long faces and 4 m on the short ones",
+          abs((W - x_span) / 2 - PIER_LONG) < 0.02
+          and abs((D - y_span) / 2 - PIER_SHORT) < 0.02,
           f"long {(W - x_span) / 2:.3f} m, short {(D - y_span) / 2:.3f} m")
     # With 8 m piers the short facade is mostly wall (14.72 m opening between two
     # 8 m piers = 47.9%). That is the requested consequence, not a defect; just
@@ -275,10 +276,20 @@ def main():
           abs(WINDOWS_LONG * PANE_W
               + (WINDOWS_LONG + 1) * MULLION_W - OPEN_W) < 1e-6,
           f"{WINDOWS_LONG} x {PANE_W} + 31 x {MULLION_W} = {OPEN_W:.4f} m")
-    check(f"corner piers are {CORNER_PIER:.0f} m as requested",
-          abs((W - OPEN_W) / 2 - CORNER_PIER) < 1e-6
-          and abs((D - OPEN_D) / 2 - CORNER_PIER) < 1e-6,
+    check(f"piers are {PIER_LONG:.0f} m (long) and {PIER_SHORT:.0f} m (short)",
+          abs((W - OPEN_W) / 2 - PIER_LONG) < 1e-6
+          and abs((D - OPEN_D) / 2 - PIER_SHORT) < 1e-6,
           f"long {(W - OPEN_W) / 2:.2f} m, short {(D - OPEN_D) / 2:.2f} m")
+
+    # The point of 8 m piers on the long facade: its window field should be
+    # framed by an even 8 m margin on all four sides.
+    margin_lr = (W - OPEN_W) / 2
+    margin_lo = SOLID_BASE_FLOORS * H
+    margin_hi = SOLID_TOP_FLOORS * H
+    check("long facade has an even 8 m blank margin all round",
+          abs(margin_lr - 8.0) < 1e-6 and abs(margin_lo - 8.0) < 1e-6
+          and abs(margin_hi - 8.0) < 1e-6,
+          f"left/right {margin_lr:.2f} m, below {margin_lo:.2f} m, above {margin_hi:.2f} m")
 
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]
@@ -337,9 +348,9 @@ def main():
     # Footprint must actually be the requested 70 x 30 m.
     facade = objs["Facade_Spandrels"]
     fb = world_bounds(facade)
-    check(f"footprint width is {W:.2f} m (30 panes + 2 x {CORNER_PIER:.0f} m pier)",
+    check(f"footprint width is {W:.2f} m (30 panes + 2 x {PIER_LONG:.0f} m pier)",
           abs((fb[0][1] - fb[0][0]) - W) < 0.02, f"{fb[0][1] - fb[0][0]:.3f} m")
-    check(f"footprint depth is {D:.2f} m (7 panes + 2 x {CORNER_PIER:.0f} m pier)",
+    check(f"footprint depth is {D:.2f} m (7 panes + 2 x {PIER_SHORT:.0f} m pier)",
           abs((fb[1][1] - fb[1][0]) - D) < 0.02, f"{fb[1][1] - fb[1][0]:.3f} m")
 
     # --- corners are solid --------------------------------------------
@@ -351,8 +362,10 @@ def main():
             if hi[2] <= zlo or lo[2] >= zhi:      # no vertical overlap
                 continue
             # overlaps a corner square if it reaches past the pier line in BOTH axes
-            if (max(abs(lo[0]), abs(hi[0])) > W / 2 - CORNER_PIER + 0.05
-                    and max(abs(lo[1]), abs(hi[1])) > D / 2 - CORNER_PIER + 0.05):
+            # The corner region is asymmetric now: PIER_LONG deep in X,
+            # PIER_SHORT deep in Y.
+            if (max(abs(lo[0]), abs(hi[0])) > W / 2 - PIER_LONG + 0.05
+                    and max(abs(lo[1]), abs(hi[1])) > D / 2 - PIER_SHORT + 0.05):
                 hits += 1
         return hits
 

@@ -65,14 +65,21 @@ WINDOWS_SHORT = 7      # panes across each short facade (Y)
 
 # Solid wall kept at both ends of every facade, so the ribbon stops short of the
 # corners instead of wrapping them. Measured along the facade from the corner.
-CORNER_PIER = 8.0
+# The long (wide) facade uses 8 m, matching the blank bands above and below it,
+# so its window is framed by an even 8 m margin all round. The short facade uses
+# less, or it would end up mostly wall.
+PIER_LONG = 8.0     # at the ends of the long facades (N/S)
+PIER_SHORT = 4.0    # at the ends of the short facades (E/W)
 
 # Blank (windowless) bands of the tower.
 # Bottom: the transition floor sitting directly on the pilotis zone.
 # Top: a band of blank wall, rounded to whole floors so the break lands on a
 # floor line rather than cutting a window in half.
-SOLID_BASE_FLOORS = 1
+# Both bands are 8 m, so on the long facade the window field is framed by an
+# even 8 m of blank wall on all four sides (8 m piers left and right).
+SOLID_BASE_TARGET = 8.0
 SOLID_TOP_TARGET = 8.0
+SOLID_BASE_FLOORS = max(1, round(SOLID_BASE_TARGET / H))
 SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 
 # N panes take N+1 mullions, all sitting fully inside the opening (the end ones
@@ -86,8 +93,8 @@ OPEN_W = opening_for(WINDOWS_LONG)      # long faces (N/S)
 OPEN_D = opening_for(WINDOWS_SHORT)     # short faces (E/W)
 
 # Footprint follows: clear opening plus a solid pier at each end.
-W = OPEN_W + 2 * CORNER_PIER
-D = OPEN_D + 2 * CORNER_PIER
+W = OPEN_W + 2 * PIER_LONG
+D = OPEN_D + 2 * PIER_SHORT
 
 # Every pane is the same fixed module, so pitch is uniform on all four facades.
 PANE_GLASS_LONG = PANE_W
@@ -225,8 +232,8 @@ def ring(name, z0, height, thickness, mat, outer_w=W, outer_d=D):
 def glass_ring(name, z0, height, mat):
     """Glazing band on each of the four facades.
 
-    Each pane is centred on its facade and stops CORNER_PIER short of both
-    corners, so the four corners stay solid wall.
+    Each pane is centred on its facade and stops PIER_LONG (long faces) or
+    PIER_SHORT (short faces) short of both corners, so the corners stay solid.
     """
     zc = z0 + height / 2.0
     off = GLASS_INSET + GLASS_T / 2.0
@@ -250,15 +257,18 @@ def corner_piers(name, z0, height, mat):
     parts = []
     for sx in (-1, 1):
         for sy in (-1, 1):
+            # Leg along the long facade: PIER_LONG measured from the corner.
             parts.append(box(
                 f"{name}_x_{sx}_{sy}",
-                (sx * (W / 2 - CORNER_PIER / 2.0), sy * (D / 2 - t / 2.0), zc),
-                (CORNER_PIER, t, height), mat))
+                (sx * (W / 2 - PIER_LONG / 2.0), sy * (D / 2 - t / 2.0), zc),
+                (PIER_LONG, t, height), mat))
+            # Leg along the short facade: PIER_SHORT, less the thickness already
+            # taken by the leg above, so the two meet without overlapping.
             parts.append(box(
                 f"{name}_y_{sx}_{sy}",
                 (sx * (W / 2 - t / 2.0),
-                 sy * (D / 2 - t - (CORNER_PIER - t) / 2.0), zc),
-                (t, CORNER_PIER - t, height), mat))
+                 sy * (D / 2 - t - (PIER_SHORT - t) / 2.0), zc),
+                (t, PIER_SHORT - t, height), mat))
     return parts
 
 
@@ -491,7 +501,10 @@ def report(objects):
           f"{SOLID_TOP_FLOORS * H:.1f} m "
           f"({TOP_Z - SOLID_TOP_FLOORS * H:.1f} -> {TOP_Z:.1f} m)")
     print(f"glazed floors        : {TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS}")
-    print(f"corner piers         : {CORNER_PIER:.1f} m solid at each facade end")
+    print(f"corner piers         : {PIER_LONG:.1f} m on long facades / "
+          f"{PIER_SHORT:.1f} m on short facades")
+    print(f"long-facade margins  : {PIER_LONG:.1f} m left/right, "
+          f"{SOLID_BASE_FLOORS * H:.1f} m below, {SOLID_TOP_FLOORS * H:.1f} m above")
     print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
     print(f"panes per floor      : {WINDOWS_LONG} long face / {WINDOWS_SHORT} short face")
     print(f"pane pitch           : {PANE_PITCH:.4f} m (mullion centres)")

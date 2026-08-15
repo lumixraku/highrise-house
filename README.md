@@ -30,9 +30,10 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-54 geometry assertions over the saved `.blend` — derived footprint, band heights,
+55 geometry assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
-pitch, solid corners, blank base/top bands, vent adjacency, pilotis clearance:
+pitch, per-face pier widths, the even 8 m long-facade margin, solid corners,
+blank base/top bands, vent adjacency, pilotis clearance:
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -42,40 +43,52 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 
 | | |
 | --- | --- |
-| footprint | 78.79 × 30.72 m (derived, see below) |
+| footprint | 78.79 × 22.72 m (derived, see below) |
 | floor-to-floor height | 4.0 m |
 | storeys | 40 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
 | occupied floors | 37 (12.0 → 160.0 m) |
 | total height | 161.32 m to top of parapet |
-| corner piers | 8.0 m solid at each facade end |
+| corner piers | 8.0 m on long faces / 4.0 m on short faces |
 | clear window opening | 62.79 m long face / 14.72 m short face |
-| blank base floor | 1 (12.0 → 16.0 m) |
+| blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
 | blank top band | 2 floors = 8.0 m (152.0 → 160.0 m) |
-| glazed floors | 34 |
+| glazed floors | 33 |
 | panes per floor | 30 long face / 7 short face (74 around) |
 | pane pitch | 2.09 m mullion centres |
 | clear glass per pane | **2.00 m × 1.50 m, fixed** |
 
 ### Bottom three floors
 
-Open and raised. A 9 × 4 grid of 1.60 m square concrete columns on ~9 m bays
+Open and raised. A 9 × 3 grid of 1.60 m square concrete columns on ~9 m bays
 carries the tower, with a 14.0 × 9.0 m service core (stairs/lifts) rising through
 the void and a landing at each of the three levels. Columns that would clash with
 the core are omitted. The tower's underside slab oversails the footprint by 0.25 m
 per side as a drip edge.
 
-### Blank bands
+### An even 8 m frame on the long facade
 
-Three of the 37 occupied floors carry no openings at all:
+Four of the 37 occupied floors carry no openings at all — two at the bottom
+(12.0 → 20.0 m) and two at the top (152.0 → 160.0 m), 8 m each. Together with the
+8 m piers left and right, the window field on the long facade sits inside an even
+**8 m blank margin on all four sides**:
 
-* the first floor above the pilotis (12.0 → 16.0 m), so the tower meets the open
-  base against solid wall rather than glass;
-* the top two floors (152.0 → 160.0 m), giving an 8 m blank band under the roof.
+```
+        8.0 m blank (2 floors)
+      ┌───────────────────────┐
+ 8.0  │   33 floors of        │  8.0
+ pier │   30-pane windows     │  pier
+      └───────────────────────┘
+        8.0 m blank (2 floors)
+```
 
-The top band is specified as a target height (`SOLID_TOP_TARGET = 8.0`) and
-rounded to whole floors, so the break always lands on a floor line instead of
-cutting a window in half. At a 4 m floor height that is exactly 2 floors.
+Both bands are specified as target heights (`SOLID_BASE_TARGET`,
+`SOLID_TOP_TARGET`) and rounded to whole floors, so a break always lands on a
+floor line instead of cutting a window in half. At a 4 m floor height each is
+exactly 2 floors.
+
+The short facade uses a narrower 4.0 m pier (`PIER_SHORT`). At 8 m it would leave
+only 14.72 m of window in a 30.72 m face — mostly wall.
 
 ### Facade band layout
 
@@ -100,11 +113,12 @@ Each *glazed* floor repeats the same section, measured up from its floor level:
 `0.95 + 0.30 + 1.50 + 0.30 + 0.95 = 4.00 m`, so the window sits exactly
 vertically centred and the two vent strips are flush against it.
 
-The window and both vent strips run the width of every facade but stop 8.0 m
-short of each corner (`CORNER_PIER`), so all four corners stay solid wall. The
-piers are L-shaped in plan — one leg along each facade — and fill the whole
-vent + window + vent zone. Clear openings are 62.79 m on the long faces and
-14.72 m on the short ones, identical treatment on all four sides.
+The window and both vent strips run the width of every facade but stop short of
+each corner, so all four corners stay solid wall: 8.0 m on the long faces
+(`PIER_LONG`) and 4.0 m on the short ones (`PIER_SHORT`). The piers are L-shaped
+in plan — a long leg along the wide facade, a shorter one along the narrow — and
+fill the whole vent + window + vent zone. Clear openings are 62.79 m on the long
+faces and 14.72 m on the short ones.
 
 Glazing is inset 0.09 m from the
 outer wall face; the louvres sit deeper at 0.13 m, tilted 30°, over a dark
@@ -120,17 +134,13 @@ so they meet the pier face instead of vanishing into it):
 ```
 opening   = N x 2.00 + (N + 1) x 0.09
 long  (N=30): 60.00 + 2.79 = 62.79 m  ->  W = 62.79 + 2 x 8.0 = 78.79 m
-short (N=7) : 14.00 + 0.72 = 14.72 m  ->  D = 14.72 + 2 x 8.0 = 30.72 m
+short (N=7) : 14.00 + 0.72 = 14.72 m  ->  D = 14.72 + 2 x 4.0 = 22.72 m
 pane pitch  = 2.00 + 0.09  =  2.09 m  (identical on all four facades)
 ```
 
-74 panes per floor, on 34 glazed floors. To resize the building, change
-`WINDOWS_LONG` / `WINDOWS_SHORT` (or `CORNER_PIER`) — never `W`/`D`, which are
+74 panes per floor, on 33 glazed floors. To resize the building, change
+`WINDOWS_LONG` / `WINDOWS_SHORT` (or the pier widths) — never `W`/`D`, which are
 derived. Adding one pane to a facade widens the building by exactly 2.09 m.
-
-Note the consequence of 8 m piers on the short facade: 14.72 m of window between
-two 8 m piers means that face is mostly wall (47.9% opening). The long face reads
-79.7% open.
 
 ## Geometry organisation
 
