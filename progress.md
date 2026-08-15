@@ -1,5 +1,47 @@
 # Progress
 
+## 2026-08-15 — main — stop the ribbon short of the corners
+
+User wanted the window to not wrap the corners: 4 m of solid wall at both ends
+of every facade, same on all four sides.
+
+Changes:
+- `build_house.py` — added `CORNER_PIER = 4.0` with `OPEN_W`/`OPEN_D` derived
+  (62.0 / 22.0 m clear opening) and an assert guarding against a pier too wide
+  for the footprint. `glass_ring()` now builds four separate panes sized to the
+  opening instead of a wrapping ribbon. New `corner_piers()` places an L-shaped
+  wall at each corner (two legs, the second shortened by WALL_T so they meet
+  without overlap) filling the whole vent+window+vent zone. `vent_strip()` and
+  `mullions()` constrained to the opening; mullion loop now includes both ends
+  so the glass is framed where it meets a pier.
+- `verify_house.py` — 31 → 39 checks. Added `piece_bounds()` (connected-component
+  bboxes) and `facade_span()` (per-facade extent), then new assertions: per-face
+  opening widths, equal pier width on all four faces, and no glass/louvre/mullion
+  overlapping any corner zone while wall geometry does.
+- `README.md` updated.
+
+Two bugs found in my own verification code while doing this, both fixed:
+- `world_bounds()` on the joined glass object measures the overall bbox, so the
+  E/W panes pinned the X extent at ~70 m regardless of the N/S pane length —
+  the "stops short of corners" check could never pass. Replaced with per-facade
+  vertex selection.
+- The first corner test counted vertices inside a z-slice. A box spanning the
+  slice has no vertices in it, so "no glass in corners" passed vacuously and
+  "wall present in corners" failed on geometry that was actually there.
+  Replaced with bbox-overlap testing per connected piece.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 8 objects, 35568 vertices.
+- `verify_house.py`: 39/39 passed — opening 62.000 m long face / 22.000 m short
+  face, pier 4.000 m on all four faces, 0 glass/louvre/mullion pieces in any
+  corner zone, 8 wall pieces present there (L-leg x 2 per corner x 4 corners),
+  window still 88.6% of the long face and 73.3% of the short face. All earlier
+  invariants still hold (1.50 m window centred at 2.00 m, 0.30 m vents flush).
+- 4 views re-rendered.
+
+Remaining issues:
+- Images still not viewable in-session; verified geometrically, not by eye.
+
 ## 2026-08-15 — main — scale up to 70 x 30 m, 40 storeys
 
 User asked for a larger building. Read 40 as the total storey count: 3 pilotis

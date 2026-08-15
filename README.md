@@ -30,8 +30,9 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-31 geometry assertions over the saved `.blend` — footprint, band heights, window
-centring, full-width spans, vent adjacency, pilotis clearance:
+39 geometry assertions over the saved `.blend` — footprint, band heights, window
+centring, per-facade opening widths, solid corners, vent adjacency, pilotis
+clearance:
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -47,6 +48,8 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 | open pilotis floors | 3 (0.0 → 12.0 m) |
 | occupied floors | 37 (12.0 → 160.0 m) |
 | total height | 161.32 m to top of parapet |
+| corner piers | 4.0 m solid at each facade end |
+| clear window opening | 62.0 m long face / 22.0 m short face |
 
 ### Bottom three floors
 
@@ -79,8 +82,13 @@ Each occupied floor repeats the same section, measured up from its floor level:
 `0.95 + 0.30 + 1.50 + 0.30 + 0.95 = 4.00 m`, so the window sits exactly
 vertically centred and the two vent strips are flush against it.
 
-The window and both vent strips run the full width of every facade and wrap all
-four corners, reading as continuous ribbons. Glazing is inset 0.09 m from the
+The window and both vent strips run the width of every facade but stop 4.0 m
+short of each corner (`CORNER_PIER`), so all four corners stay solid wall. The
+piers are L-shaped in plan — one leg along each facade — and fill the whole
+vent + window + vent zone. Clear openings are 62.0 m on the long faces and
+22.0 m on the short ones, identical treatment on all four sides.
+
+Glazing is inset 0.09 m from the
 outer wall face; the louvres sit deeper at 0.13 m, tilted 30°, over a dark
 shadowbox so the openings read as depth rather than holes. Mullions divide the
 glass at roughly 2.6 m centres.

@@ -57,6 +57,15 @@ VENT_INSET = 0.13     # louvres sit deeper than the glass
 MULLION_W = 0.09
 MULLION_SPACING = 2.6
 
+# Solid wall kept at both ends of every facade, so the ribbon stops short of the
+# corners instead of wrapping them. Measured along the facade from the corner.
+CORNER_PIER = 4.0
+
+# Resulting clear opening on each facade.
+OPEN_W = W - 2 * CORNER_PIER    # long faces (N/S)
+OPEN_D = D - 2 * CORNER_PIER    # short faces (E/W)
+assert OPEN_W > 0 and OPEN_D > 0, "CORNER_PIER too wide for this footprint"
+
 COL_SIZE = 1.60       # pilotis column footprint (sized for a 40-storey load)
 COL_SPACING = 9.0     # target column grid spacing
 COL_MARGIN = 2.2      # inset of the outer column line from the facade
@@ -184,20 +193,42 @@ def ring(name, z0, height, thickness, mat, outer_w=W, outer_d=D):
 # ---------------------------------------------------------------------------
 
 def glass_ring(name, z0, height, mat):
-    """Continuous glazing ribbon around all four facades.
+    """Glazing band on each of the four facades.
 
-    The E/W panes run the full depth and the N/S panes butt into them, so the
-    ribbon reads as unbroken glass wrapping the corners.
+    Each pane is centred on its facade and stops CORNER_PIER short of both
+    corners, so the four corners stay solid wall.
     """
     zc = z0 + height / 2.0
     off = GLASS_INSET + GLASS_T / 2.0
-    ns_w = W - 2 * (GLASS_INSET + GLASS_T)
     parts = [
-        box(f"{name}_W", (-(W / 2 - off), 0.0, zc), (GLASS_T, D, height), mat),
-        box(f"{name}_E", (+(W / 2 - off), 0.0, zc), (GLASS_T, D, height), mat),
-        box(f"{name}_S", (0.0, -(D / 2 - off), zc), (ns_w, GLASS_T, height), mat),
-        box(f"{name}_N", (0.0, +(D / 2 - off), zc), (ns_w, GLASS_T, height), mat),
+        box(f"{name}_W", (-(W / 2 - off), 0.0, zc), (GLASS_T, OPEN_D, height), mat),
+        box(f"{name}_E", (+(W / 2 - off), 0.0, zc), (GLASS_T, OPEN_D, height), mat),
+        box(f"{name}_S", (0.0, -(D / 2 - off), zc), (OPEN_W, GLASS_T, height), mat),
+        box(f"{name}_N", (0.0, +(D / 2 - off), zc), (OPEN_W, GLASS_T, height), mat),
     ]
+    return parts
+
+
+def corner_piers(name, z0, height, mat):
+    """L-shaped solid wall at each corner, filling the window and vent bands.
+
+    Two runs per corner: one along the long facade, one along the short one,
+    the second shortened by the wall thickness so they meet without overlapping.
+    """
+    zc = z0 + height / 2.0
+    t = WALL_T
+    parts = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            parts.append(box(
+                f"{name}_x_{sx}_{sy}",
+                (sx * (W / 2 - CORNER_PIER / 2.0), sy * (D / 2 - t / 2.0), zc),
+                (CORNER_PIER, t, height), mat))
+            parts.append(box(
+                f"{name}_y_{sx}_{sy}",
+                (sx * (W / 2 - t / 2.0),
+                 sy * (D / 2 - t - (CORNER_PIER - t) / 2.0), zc),
+                (t, CORNER_PIER - t, height), mat))
     return parts
 
 
@@ -208,20 +239,21 @@ def mullions(name, z0, height, mat):
     off = GLASS_INSET + GLASS_T / 2.0
     depth = 0.14
 
-    n_x = max(1, int((W - 2.0) // MULLION_SPACING))
-    step_x = W / (n_x + 1)
-    for i in range(1, n_x + 1):
-        x = -W / 2 + i * step_x
+    # Mullions divide the clear opening only; the corner piers are solid.
+    n_x = max(1, int(OPEN_W // MULLION_SPACING))
+    step_x = OPEN_W / n_x
+    for i in range(0, n_x + 1):
+        x = -OPEN_W / 2 + i * step_x
         for sy in (-1, 1):
             parts.append(box(
                 f"{name}_ns_{i}_{sy}",
                 (x, sy * (D / 2 - off), zc),
                 (MULLION_W, depth, height), mat))
 
-    n_y = max(1, int((D - 2.0) // MULLION_SPACING))
-    step_y = D / (n_y + 1)
-    for i in range(1, n_y + 1):
-        y = -D / 2 + i * step_y
+    n_y = max(1, int(OPEN_D // MULLION_SPACING))
+    step_y = OPEN_D / n_y
+    for i in range(0, n_y + 1):
+        y = -OPEN_D / 2 + i * step_y
         for sx in (-1, 1):
             parts.append(box(
                 f"{name}_ew_{i}_{sx}",
@@ -243,13 +275,12 @@ def vent_strip(name, z0, louver_mat, back_mat):
 
     # Dark recessed backing so the opening does not read as a hole.
     back_off = VENT_INSET + 0.12
-    ns_w = W - 2 * (VENT_INSET + 0.06)
     zc = z0 + VENT_H / 2.0
     parts += [
-        box(f"{name}_back_W", (-(W / 2 - back_off), 0.0, zc), (0.04, D, VENT_H), back_mat),
-        box(f"{name}_back_E", (+(W / 2 - back_off), 0.0, zc), (0.04, D, VENT_H), back_mat),
-        box(f"{name}_back_S", (0.0, -(D / 2 - back_off), zc), (ns_w, 0.04, VENT_H), back_mat),
-        box(f"{name}_back_N", (0.0, +(D / 2 - back_off), zc), (ns_w, 0.04, VENT_H), back_mat),
+        box(f"{name}_back_W", (-(W / 2 - back_off), 0.0, zc), (0.04, OPEN_D, VENT_H), back_mat),
+        box(f"{name}_back_E", (+(W / 2 - back_off), 0.0, zc), (0.04, OPEN_D, VENT_H), back_mat),
+        box(f"{name}_back_S", (0.0, -(D / 2 - back_off), zc), (OPEN_W, 0.04, VENT_H), back_mat),
+        box(f"{name}_back_N", (0.0, +(D / 2 - back_off), zc), (OPEN_W, 0.04, VENT_H), back_mat),
     ]
 
     off = VENT_INSET + slat_depth / 2.0
@@ -260,14 +291,14 @@ def vent_strip(name, z0, louver_mat, back_mat):
             parts.append(box(
                 f"{name}_slat_ns_{k}_{sy}",
                 (0.0, sy * (D / 2 - off), sz),
-                (ns_w, slat_depth, slat_t), louver_mat,
+                (OPEN_W, slat_depth, slat_t), louver_mat,
                 rot=(sy * tilt, 0.0, 0.0)))
         # E/W facades: slats run along Y, tilt about Y.
         for sx in (-1, 1):
             parts.append(box(
                 f"{name}_slat_ew_{k}_{sx}",
                 (sx * (W / 2 - off), 0.0, sz),
-                (slat_depth, D, slat_t), louver_mat,
+                (slat_depth, OPEN_D, slat_t), louver_mat,
                 rot=(0.0, -sx * tilt, 0.0)))
     return parts
 
@@ -322,6 +353,10 @@ def build():
         walls += ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
         walls += ring(f"{tag}_SpandrelHi", z0 + SPANDREL_HI_Z, H - SPANDREL_HI_Z,
                       WALL_T, spandrel)
+
+        # Corner piers close the vent+window+vent zone at all four corners.
+        walls += corner_piers(f"{tag}_Pier", z0 + VENT_LO_Z,
+                              SPANDREL_HI_Z - VENT_LO_Z, spandrel)
 
         strip_lo = vent_strip(f"{tag}_VentLo", z0 + VENT_LO_Z, metal, dark)
         strip_hi = vent_strip(f"{tag}_VentHi", z0 + VENT_HI_Z, metal, dark)
@@ -408,6 +443,8 @@ def report(objects):
     print(f"columns at pilotis   : {len(col_grid(W))} x {len(col_grid(D))} grid, "
           f"{COL_SIZE:.2f} m square")
     print(f"total height         : {TOP_Z + PARAPET_H + 0.22:.2f} m incl. parapet")
+    print(f"corner piers         : {CORNER_PIER:.1f} m solid at each facade end")
+    print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
     print("per-floor bands      : "
           f"{SPANDREL_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "
           f"{VENT_H:.2f} vent / {SPANDREL_H:.2f} solid")
