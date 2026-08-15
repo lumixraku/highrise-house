@@ -1,5 +1,37 @@
 # Progress
 
+## 2026-08-15 — main — scale up to 70 x 30 m, 40 storeys
+
+User asked for a larger building. Read 40 as the total storey count: 3 pilotis
+floors + 37 occupied, 160.0 m to roof, 161.32 m to top of parapet.
+
+Changes:
+- `build_house.py` — `W` 20→70, `D` 14→30, added `TOTAL_FLOORS = 40` with
+  `TOWER_FLOORS` derived from it. Replaced the three hardcoded column X
+  positions with `col_grid()`, which spaces columns across any span at ~9 m
+  bays; columns clashing with the core are skipped. Column size 0.85→1.60 m and
+  core 5.0 × 4.2 → 14.0 × 9.0 m for the increased load. Roof plant, ground slab,
+  ground plane and camera now derive from the footprint instead of fixed values.
+- `verify_house.py` — constants updated to the new scale, plus 2 new checks
+  asserting the footprint really is 70 × 30 m (29 → 31 checks).
+- `render_views.py` — portrait 900 × 1400 frames (a 160 m tower crops badly in
+  landscape), repositioned all cameras, added a `corner` view.
+- `README.md` updated; noted that verify_house.py duplicates the dimensions.
+
+Verification:
+- Build clean under Blender 5.2.0 LTS; 8 objects, 34976 vertices.
+- `verify_house.py`: 31/31 passed — footprint 70.000 × 30.000 m, 37 window bands
+  all 1.50 m and centred at 2.00 m of a 4.00 m floor, glazing spans 99.7% of X
+  and 100% of Y, all vent bands 0.30 m flush above/below each window, no facade
+  geometry below 12.0 m, structure -0.30 → 163.60 m.
+- Framing checked numerically by projecting model bounds through each camera
+  (world_to_camera_view): front/base/corner fully inside 0..1 in both axes,
+  floor_detail intentionally fills the frame. 5 renders written, ~1.3 MB each.
+
+Remaining issues:
+- Still could not view images in-session; renders verified by projection maths
+  and file size, not by eye.
+
 ## 2026-08-15 — main
 
 Initial repo: procedural Blender high-rise house generator.

@@ -37,12 +37,13 @@ from mathutils import Matrix, Vector
 # Parameters
 # ---------------------------------------------------------------------------
 
-W = 20.0          # footprint width  (X)
-D = 14.0          # footprint depth  (Y)
+W = 70.0          # footprint width  (X)
+D = 30.0          # footprint depth  (Y)
 H = 4.0           # floor-to-floor height
 
-PILOTIS_FLOORS = 3     # open, raised floors at the bottom
-TOWER_FLOORS = 12      # occupied floors above
+TOTAL_FLOORS = 40      # storeys counted from the ground
+PILOTIS_FLOORS = 3     # of which these are open and raised
+TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS   # occupied floors above
 
 WALL_T = 0.30     # facade wall thickness
 SLAB_T = 0.22     # floor plate thickness
@@ -56,8 +57,10 @@ VENT_INSET = 0.13     # louvres sit deeper than the glass
 MULLION_W = 0.09
 MULLION_SPACING = 2.6
 
-COL_SIZE = 0.85       # pilotis column footprint
-CORE_W, CORE_D = 5.0, 4.2   # service core inside the pilotis zone
+COL_SIZE = 1.60       # pilotis column footprint (sized for a 40-storey load)
+COL_SPACING = 9.0     # target column grid spacing
+COL_MARGIN = 2.2      # inset of the outer column line from the facade
+CORE_W, CORE_D = 14.0, 9.0   # service core inside the pilotis zone
 
 PARAPET_H = 1.10
 PARAPET_T = 0.25
@@ -148,6 +151,19 @@ def join(objects, name):
     merged.data.name = name
     bpy.ops.object.select_all(action="DESELECT")
     return merged
+
+
+def col_grid(span):
+    """Evenly spaced column positions across `span`, inset by COL_MARGIN.
+
+    Bays land as close to COL_SPACING as a whole number of bays allows, so the
+    grid stays regular whatever the footprint.
+    """
+    usable = span - 2 * COL_MARGIN
+    bays = max(1, round(usable / COL_SPACING))
+    step = usable / bays
+    start = -usable / 2
+    return [start + i * step for i in range(bays + 1)]
 
 
 def ring(name, z0, height, thickness, mat, outer_w=W, outer_d=D):
@@ -274,12 +290,13 @@ def build():
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
 
     # --- pilotis: open, raised base ------------------------------------
-    structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 6.0, D + 6.0, 0.30), concrete)]
+    structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 14.0, D + 14.0, 0.30), concrete)]
 
-    col_xs = (-W / 2 + 1.6, 0.0, W / 2 - 1.6)
-    col_ys = (-D / 2 + 1.4, D / 2 - 1.4)
-    for i, x in enumerate(col_xs):
-        for j, y in enumerate(col_ys):
+    for i, x in enumerate(col_grid(W)):
+        for j, y in enumerate(col_grid(D)):
+            # Skip columns that would land inside the service core walls.
+            if abs(x) < CORE_W / 2 + COL_SIZE and abs(y) < CORE_D / 2 + COL_SIZE:
+                continue
             structure.append(box(
                 f"Column_{i}_{j}", (x, y, BASE_Z / 2.0),
                 (COL_SIZE, COL_SIZE, BASE_Z), concrete))
@@ -322,10 +339,10 @@ def build():
     structure.append(box("RoofSlab", (0.0, 0.0, TOP_Z + 0.11),
                          (W, D, 0.22), concrete))
     structure += ring("Parapet", TOP_Z + 0.22, PARAPET_H, PARAPET_T, spandrel)
-    structure.append(box("RoofPlant", (2.0, 0.0, TOP_Z + 1.4),
-                         (6.0, 4.0, 2.4), concrete))
+    structure.append(box("RoofPlant", (W * 0.12, 0.0, TOP_Z + 1.9),
+                         (W * 0.30, D * 0.34, 3.4), concrete))
 
-    ground = box("Ground", (0.0, 0.0, -0.32), (200.0, 200.0, 0.04), ground_mat)
+    ground = box("Ground", (0.0, 0.0, -0.32), (600.0, 600.0, 0.04), ground_mat)
 
     merged = {
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),
@@ -368,11 +385,14 @@ def setup_render():
     cam_data = bpy.data.cameras.new("Camera")
     cam_data.lens = 40.0
     cam = bpy.data.objects.new("Camera", cam_data)
-    eye = Vector((72.0, -68.0, 44.0))
-    target = Vector((0.0, 0.0, 30.0))
-    direction = (target - eye).normalized()
+
+    # Frame the whole building: pull back proportionally to its size so the
+    # camera keeps working when the footprint or floor count changes.
+    reach = max(W, D, TOP_Z) * 1.35
+    target = Vector((0.0, 0.0, TOP_Z * 0.52))
+    eye = Vector((reach * 0.78, -reach * 1.05, TOP_Z * 0.72))
     cam.location = eye
-    cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
+    cam.rotation_euler = (target - eye).normalized().to_track_quat("-Z", "Y").to_euler()
     bpy.context.collection.objects.link(cam)
     scene.camera = cam
 
@@ -382,8 +402,11 @@ def report(objects):
     print("\n=== high-rise house ===")
     print(f"footprint            : {W:.1f} x {D:.1f} m")
     print(f"floor height         : {H:.1f} m")
+    print(f"storeys              : {TOTAL_FLOORS} total")
     print(f"open pilotis floors  : {PILOTIS_FLOORS} (0.0 -> {BASE_Z:.1f} m)")
     print(f"occupied floors      : {TOWER_FLOORS} ({BASE_Z:.1f} -> {TOP_Z:.1f} m)")
+    print(f"columns at pilotis   : {len(col_grid(W))} x {len(col_grid(D))} grid, "
+          f"{COL_SIZE:.2f} m square")
     print(f"total height         : {TOP_Z + PARAPET_H + 0.22:.2f} m incl. parapet")
     print("per-floor bands      : "
           f"{SPANDREL_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "

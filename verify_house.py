@@ -9,8 +9,10 @@ import sys
 
 import bpy
 
-W, D, H = 20.0, 14.0, 4.0
-PILOTIS_FLOORS, TOWER_FLOORS = 3, 12
+W, D, H = 70.0, 30.0, 4.0
+TOTAL_FLOORS = 40
+PILOTIS_FLOORS = 3
+TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.30
 BASE_Z = PILOTIS_FLOORS * H
 TOP_Z = BASE_Z + TOWER_FLOORS * H
@@ -143,8 +145,16 @@ def main():
 
     # --- overall envelope ----------------------------------------------
     all_z = max(world_bounds(o)[2][1] for o in objs.values())
-    check("total height matches 15 floors + parapet", all_z >= TOP_Z + 1.0,
+    check(f"total height matches {TOTAL_FLOORS} floors + parapet", all_z >= TOP_Z + 1.0,
           f"top={all_z:.2f} m")
+
+    # Footprint must actually be the requested 70 x 30 m.
+    facade = objs["Facade_Spandrels"]
+    fb = world_bounds(facade)
+    check("footprint width is 70 m", abs((fb[0][1] - fb[0][0]) - W) < 0.02,
+          f"{fb[0][1] - fb[0][0]:.3f} m")
+    check("footprint depth is 30 m", abs((fb[1][1] - fb[1][0]) - D) < 0.02,
+          f"{fb[1][1] - fb[1][0]:.3f} m")
 
     print(f"\n{checks - len(failures)}/{checks} checks passed")
     if failures:

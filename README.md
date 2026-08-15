@@ -21,7 +21,8 @@ Writes into `out/`:
 
 Add `--no-render` after the script name to skip rendering.
 
-Extra views (front elevation, pilotis base, single-floor facade close-up):
+Extra views, rendered portrait since the tower is 160 m tall (front elevation,
+pilotis base, single-floor facade close-up, corner):
 
 ```bash
 blender --background --factory-startup --python render_views.py -- out/highrise_house.blend
@@ -29,8 +30,8 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-29 geometry assertions over the saved `.blend` — band heights, window centring,
-full-width spans, vent adjacency, pilotis clearance:
+31 geometry assertions over the saved `.blend` — footprint, band heights, window
+centring, full-width spans, vent adjacency, pilotis clearance:
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -40,18 +41,20 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 
 | | |
 | --- | --- |
-| footprint | 20.0 × 14.0 m |
+| footprint | 70.0 × 30.0 m |
 | floor-to-floor height | 4.0 m |
+| storeys | 40 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
-| occupied floors | 12 (12.0 → 60.0 m) |
-| total height | 62.60 m to top of parapet |
+| occupied floors | 37 (12.0 → 160.0 m) |
+| total height | 161.32 m to top of parapet |
 
 ### Bottom three floors
 
-Open and raised. Six 0.85 m square concrete columns carry the tower, with a
-5.0 × 4.2 m service core (stairs/lifts) rising through the void and a landing at
-each of the three levels. The tower's underside slab oversails the footprint by
-0.25 m per side as a drip edge.
+Open and raised. An 8 × 4 grid of 1.60 m square concrete columns on ~9 m bays
+carries the tower, with a 14.0 × 9.0 m service core (stairs/lifts) rising through
+the void and a landing at each of the three levels. Columns that would clash with
+the core are omitted. The tower's underside slab oversails the footprint by 0.25 m
+per side as a drip edge.
 
 ### Facade band layout
 
@@ -85,7 +88,7 @@ glass at roughly 2.6 m centres.
 ## Geometry organisation
 
 Everything is generated from boxes and joined into eight objects, so the scene
-stays light (~6.4k vertices):
+stays light (~35k vertices at 40 storeys):
 
 `Facade_Spandrels` · `Windows_Glass` · `Window_Mullions` · `Vent_Louvres` ·
 `Vent_Shadowboxes` · `Floor_Plates` · `Structure` · `Ground`
@@ -93,7 +96,11 @@ stays light (~6.4k vertices):
 ## Changing the design
 
 All parameters sit at the top of `build_house.py`. `W`/`D` set the footprint,
-`PILOTIS_FLOORS`/`TOWER_FLOORS` the counts. The five vertical bands are derived
+`TOTAL_FLOORS` the storey count and `PILOTIS_FLOORS` how many of those are open
+(`TOWER_FLOORS` is the remainder). The column grid, roof plant and camera all
+derive from the footprint, so changing `W`/`D` keeps the model coherent. Note that
+`verify_house.py` carries its own copy of `W`, `D` and the floor counts — update it
+to match, or its assertions will test the old dimensions. The five vertical bands are derived
 from `H`, `WIN_H` and `VENT_H` — `SPANDREL_H` is computed as
 `(H - WIN_H - 2 * VENT_H) / 2`, which keeps the window centred for any floor
 height, and an `assert` fails the build if the bands stop summing to `H`.

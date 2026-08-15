@@ -11,11 +11,14 @@ import sys
 import bpy
 from mathutils import Vector
 
+W, D, TOP_Z = 70.0, 30.0, 160.0
+
 VIEWS = [
-    # name,          camera position,             look-at,            lens
-    ("front",        (0.0, -96.0, 30.0),          (0.0, 0.0, 30.0),   48.0),
-    ("base_pilotis", (34.0, -30.0, 6.0),          (0.0, 0.0, 11.0),   34.0),
-    ("floor_detail", (26.0, -16.0, 30.0),         (0.0, 0.0, 29.0),   80.0),
+    # name,          camera position,               look-at,             lens
+    ("front",        (0.0, -400.0, 78.0),           (0.0, 0.0, 78.0),    42.0),
+    ("base_pilotis", (86.0, -70.0, 8.0),            (0.0, 0.0, 16.0),    32.0),
+    ("floor_detail", (D / 2 + 30.0, -40.0, 58.0),   (0.0, 0.0, 56.0),    70.0),
+    ("corner",       (172.0, -215.0, 112.0),        (0.0, 0.0, 76.0),    38.0),
 ]
 
 
@@ -32,6 +35,10 @@ def main():
     scene = bpy.context.scene
     out_dir = os.path.dirname(os.path.abspath(argv[0]))
     cam = scene.camera
+
+    # A 160 m tower does not fit a landscape frame; render these views portrait.
+    scene.render.resolution_x = 900
+    scene.render.resolution_y = 1400
 
     for name, eye, target, lens in VIEWS:
         cam.data.lens = lens
