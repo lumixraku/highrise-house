@@ -3,6 +3,14 @@
 Procedural Blender model of a high-rise house: a ribbon-window tower lifted off the
 ground on three open pilotis floors.
 
+| | |
+| --- | --- |
+| ![Front elevation](out/view_front.png) | ![Corner](out/view_corner.png) |
+| **Front elevation** — the full 161 m from 440 m out, 42 mm. The blank 8 m bands top and bottom, and the refuge void at mid-height. | **Corner** — 38 mm from above the halfway point, showing how the ribbon window stops short of the solid corner piers. |
+| ![Sky garden](out/view_sky_garden.png) | ![Pilotis base](out/view_base_pilotis.png) |
+| **Refuge floor / sky garden** — 58 mm, camera inside the void and slightly below it, looking up into the 8 m double height past the fin screen and the planting. | **Pilotis base** — 32 mm looking up the open base: the 1.60 m columns, the service core behind them, and the soffit oversailing as a drip edge. |
+| ![Facade detail](out/view_floor_detail.png) | **Facade detail** — one floor at 70 mm: the 2.00 × 1.50 m pane, its mullions, the 0.30 m vent bands flush above and below the glass, and the spandrel between. Every pane in the building is this same fixed module; the footprint is derived from how many of them fit, not the other way round. |
+
 ## Build
 
 Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). Renders
@@ -32,13 +40,14 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-97 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+101 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the even 8 m long-facade margin, solid corners,
 blank base/top bands, vent adjacency, pilotis clearance, and the refuge void
 (open on all sides, undivided double height, guarded edges, planting inside it,
-core continuity, SCDF spacing, and the screen's alignment with the window
-mullions and its open area):
+core continuity, SCDF spacing, the screen's alignment with the window mullions and
+its open area, and the void's load path — column count, spacing on the pane
+module, and stress against the C40 limit):
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend

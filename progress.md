@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-08-16 — main — put the rendered views in the README
+
+User asked for screenshots in the README. Added all five `out/view_*.png` as a
+single two-column table under the intro, each with a caption naming what the view
+is for and the focal length it was taken at, so the framing is documented rather
+than implied. They are committed build products already in the repo, so relative
+paths render on GitHub without any hosting.
+
+Two stale numbers fixed while in the file: the verify section still advertised 97
+checks (now 101), and its list of what is covered did not mention the void's load
+path. Confirmed all five paths resolve to files on disk and that every render is
+900 × 1400 portrait, so the two-column layout is even.
+
+Caveat unchanged: I cannot view a PNG in this environment, so the captions describe
+each camera's target and lens as set in `render_views.py`, not what I can see in the
+image. If a caption misdescribes its picture, that is why.
+
+Remaining issue: `out/` build products are now load-bearing for the README, which
+argues against the idea of stripping them from the repo to save ~6 MB. If they are
+ever removed, the images need hosting elsewhere first.
+
 ## 2026-08-16 — main — carry the tower across the refuge void on real columns
 
 User asked, from a structural point of view, whether the columns are too slim and
