@@ -8,13 +8,16 @@ Run headless:
 import sys
 
 import bpy
+from mathutils import Vector
 
 H = 4.0
 TOTAL_FLOORS = 40
 PILOTIS_FLOORS = 3
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.30
+SLAB_T = 0.22
 PIER_LONG = 8.0
+WALL_T = 0.30
 PIER_SHORT = 4.0
 SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
 VENT_LO_Z = SPANDREL_H
@@ -34,9 +37,27 @@ PANE_GLASS_LONG = PANE_W
 PANE_PITCH = PANE_W
 SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
-GLAZED_FLOORS = TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
 FIRST_GLAZED = SOLID_BASE_FLOORS
 LAST_GLAZED = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
+# Refuge floor / sky garden: an open double-height void, mirroring build_house.py.
+SKY_GARDEN = True
+REFUGE_FLOORS = 2
+BALUSTRADE_H = 1.20
+GARDEN_SLAB_T = 0.45
+# Columns carrying the tower across the void. The fins screen it; these hold it up.
+REFUGE_COL_SIZE = 1.20
+REFUGE_COL_PITCH = PANE_W * 3
+REFUGE_START = (FIRST_GLAZED + LAST_GLAZED + 1 - REFUGE_FLOORS) // 2
+REFUGE_END = REFUGE_START + REFUGE_FLOORS - 1
+REFUGE_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else set()
+REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
+BASE_Z_ = PILOTIS_FLOORS * H
+REFUGE_Z0 = BASE_Z_ + REFUGE_START * H
+REFUGE_Z1 = REFUGE_Z0 + REFUGE_FLOORS * H
+# The void is glazed on no facade, so it comes off the glazed count.
+GLAZED_FLOORS = (TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
+                 - len(REFUGE_SET))
+GLAZED_SET = set(range(FIRST_GLAZED, LAST_GLAZED + 1)) - REFUGE_SET
 BASE_Z = PILOTIS_FLOORS * H
 TOP_Z = BASE_Z + TOWER_FLOORS * H
 EPS = 1e-4
@@ -137,7 +158,7 @@ def main():
 
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
                  "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
-                 "Interior_Lining", "Structure"):
+                 "Interior_Lining", "Sky_Garden_Grille", "Structure"):
         check(f"object present: {name}", name in objs)
     if failures:
         sys.exit(1)
@@ -182,9 +203,10 @@ def main():
           f"centre offsets={set(centres_rel)}")
 
     floors_seen = sorted({int(((lo + hi) / 2 - BASE_Z) // H) for lo, hi in bands})
-    check("one window band per glazed floor, none on the blank floors",
-          floors_seen == list(range(FIRST_GLAZED, LAST_GLAZED + 1)),
-          f"glazed floors={floors_seen[0]}..{floors_seen[-1]} ({len(floors_seen)})")
+    check("one window band per glazed floor, none on the blank or refuge floors",
+          floors_seen == sorted(GLAZED_SET),
+          f"glazed floors={floors_seen[0]}..{floors_seen[-1]} ({len(floors_seen)}), "
+          f"refuge {sorted(REFUGE_SET)} excluded")
 
     # --- blank bands ---------------------------------------------------
     check("the floor above the pilotis has no window",
@@ -353,6 +375,235 @@ def main():
           and abs(facade_span(lining, "E") - OPEN_D) < 0.05,
           f"{facade_span(lining, 'S'):.2f} x {facade_span(lining, 'E'):.2f} m")
 
+    # --- refuge floor / sky garden -------------------------------------
+    if SKY_GARDEN:
+        plates = objs["Floor_Plates"]
+        facade = objs["Facade_Spandrels"]
+
+        def pieces_at_corner_in_slice(obj, zlo, zhi):
+            """Count connected pieces overlapping a corner zone within a z-slice.
+
+            Bbox overlap, not vertex sampling: a box spanning the slice may have
+            no vertex inside it.
+            """
+            hits = 0
+            for lo, hi in piece_bounds(obj):
+                if hi[2] <= zlo or lo[2] >= zhi:
+                    continue
+                if (max(abs(lo[0]), abs(hi[0])) > W / 2 - PIER_LONG + 0.05
+                        and max(abs(lo[1]), abs(hi[1])) > D / 2 - PIER_SHORT + 0.05):
+                    hits += 1
+            return hits
+
+        # The whole point is an OPEN double-height void: nothing enclosing it, and
+        # no slab cutting it in half.
+        for name in ("Windows_Glass", "Interior_Lining", "Vent_Louvres"):
+            inside = [c for lo, hi in piece_bounds(objs[name])
+                      for c in [(lo[2] + hi[2]) / 2]
+                      if REFUGE_Z0 + 0.05 < c < REFUGE_Z1 - 0.05]
+            check(f"no {name} in the refuge void (it is open, not glazed)",
+                  not inside, f"{len(inside)} pieces between "
+                  f"{REFUGE_Z0:.0f} and {REFUGE_Z1:.0f} m")
+
+        mid_z = REFUGE_Z0 + H          # where an intermediate slab would sit
+        cutting = [1 for lo, hi in piece_bounds(plates)
+                   if lo[2] < mid_z - 0.01 < hi[2]
+                   or abs((lo[2] + hi[2]) / 2 - (mid_z - SLAB_T / 2)) < 0.05]
+        check(f"no floor plate splits the void, so it is a full "
+              f"{REFUGE_FLOORS * H:.0f} m double height", not cutting,
+              f"{len(cutting)} plates at z={mid_z:.1f} m")
+
+        # It must still be a floor you can stand on, and a lid above it.
+        st = piece_bounds(objs["Structure"])
+        garden_slab = [(lo, hi) for lo, hi in st
+                       if abs(hi[2] - REFUGE_Z0) < 0.02
+                       and (hi[0] - lo[0]) > W * 0.9]
+        check("the garden has a floor slab at its own level",
+              len(garden_slab) >= 1,
+              f"{len(garden_slab)} slab(s) topping out at {REFUGE_Z0:.1f} m")
+        check("the garden slab is thicker than a normal plate (it carries soil)",
+              any(abs((hi[2] - lo[2]) - GARDEN_SLAB_T) < 0.02
+                  for lo, hi in garden_slab),
+              f"thickness={[round(hi[2] - lo[2], 3) for lo, hi in garden_slab]}, "
+              f"normal plate {SLAB_T}")
+        ceiling = [1 for lo, hi in piece_bounds(plates)
+                   if abs(hi[2] - REFUGE_Z1) < 0.02]
+        check("the void is capped by the plate of the floor above", ceiling,
+              f"{len(ceiling)} plate(s) topping out at {REFUGE_Z1:.1f} m")
+
+        # --- the screen across the void --------------------------------
+        # A fully open refuge level reads as a bite out of the tower, so a grille
+        # holds the facade plane. It must be a filter, not a wall.
+        grille_obj = objs["Sky_Garden_Grille"]
+        gp = piece_bounds(grille_obj)
+        gz_ = world_bounds(grille_obj)[2]
+        check("the void is screened, not left fully open", len(gp) > 20,
+              f"{len(gp)} grille members")
+        check("the screen spans the full height of the void",
+              gz_[0] <= REFUGE_Z0 + 0.3 and gz_[1] >= REFUGE_Z1 - 0.3,
+              f"z {gz_[0]:.2f}..{gz_[1]:.2f} vs void {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f}")
+
+        # THE point of the 2 m cell: grille verticals must land on the window
+        # mullions, so the vertical lines carry through the garden unbroken. Any
+        # other pitch makes the refuge level read as a foreign object.
+        def face_verticals(obj, zlo, zhi, min_h):
+            return sorted({round((lo[0] + hi[0]) / 2, 3) for lo, hi in piece_bounds(obj)
+                           if abs((lo[1] + hi[1]) / 2 + D / 2) < 1.0
+                           and zlo < (lo[2] + hi[2]) / 2 < zhi
+                           and (hi[2] - lo[2]) > min_h})
+
+        gxs = face_verticals(grille_obj, REFUGE_Z0, REFUGE_Z1, 4.0)
+        mull_z = REFUGE_Z1 + WIN_Z + WIN_H / 2       # a glazed floor above the void
+        mxs = face_verticals(objs["Window_Mullions"], mull_z - 1.0, mull_z + 1.0, 0.0)
+        aligned = [g for g in gxs if any(abs(g - m) < 0.02 for m in mxs)]
+        # The rule is that the screen pitch DIVIDES the pane pitch, so the vertical
+        # lines carry through. GRID puts one member per pane (every member hits a
+        # mullion); FINS subdivides it, so every Nth blade does. Either way every
+        # mullion must be met by a blade — that is what keeps the lines unbroken.
+        gpitch = (gxs[1] - gxs[0]) if len(gxs) >= 2 else 0.0
+        ratio = PANE_PITCH / gpitch if gpitch else 0.0
+        check("the screen pitch divides the window pane pitch",
+              gpitch and abs(ratio - round(ratio)) < 1e-6 and round(ratio) >= 1,
+              f"grille pitch={gpitch:.3f} m, pane pitch={PANE_PITCH:.2f} m "
+              f"= {round(ratio)} blades per pane")
+        check("every window mullion is met by a grille vertical",
+              mxs and len(aligned) == len(mxs),
+              f"{len(aligned)} of {len(gxs)} blades land on a mullion, "
+              f"covering {len(mxs)} mullions")
+
+        # Real openings, or the refuge floor cannot ventilate.
+        open_frac = None
+        if len(gxs) >= 2:
+            member = min(hi[0] - lo[0] for lo, hi in gp
+                         if (hi[2] - lo[2]) > 4.0
+                         and abs((lo[1] + hi[1]) / 2 + D / 2) < 1.0)
+            # Blades run the full height, so what they block is measured along the
+            # facade only. (For a GRID the horizontals block a share of the height
+            # too, but the verticals dominate and this stays the conservative
+            # lower bound on open area.)
+            open_frac = 1.0 - (len(gxs) * member) / OPEN_W
+        check("the screen is mostly open (a filter, not a wall)",
+              open_frac is not None and 0.45 < open_frac < 0.85,
+              f"open area {open_frac:.1%} of the long face" if open_frac else "n/a")
+
+        # Independent of the arithmetic above: a ray through a cell centre must
+        # leave the building, and one through a member must not.
+        if len(gxs) >= 12:
+            scene = bpy.context.scene
+            dg = bpy.context.evaluated_depsgraph_get()
+
+            def hits_through(x, z):
+                o = Vector((x, -(D / 2 + 30.0), z))
+                d = Vector((0.0, 1.0, 0.0))
+                n = 0
+                for _ in range(40):
+                    ok, loc, _, _, _, _ = scene.ray_cast(dg, o, d)
+                    if not ok:
+                        break
+                    n += 1
+                    o = loc + d * 0.02
+                return n
+
+            z_probe = REFUGE_Z0 + 3.0
+            mid = (gxs[10] + gxs[11]) / 2
+            check("a ray passes clean through a grille cell (real opening)",
+                  hits_through(mid, z_probe) == 0,
+                  f"{hits_through(mid, z_probe)} hits at x={mid:.2f}, z={z_probe:.1f}")
+            check("a ray is blocked by a grille member",
+                  hits_through(gxs[10], z_probe) > 0,
+                  f"{hits_through(gxs[10], z_probe)} hits at x={gxs[10]:.2f}")
+
+        # --- the load path across the void ------------------------------
+        # The fins are 0.10 m blades and carry nothing. Real columns have to take
+        # the floors above down through the void, or the corner piers and core are
+        # left with 26.6 m2 of concrete under 513638 kN = 19.3 MPa, over C40.
+        st_ = piece_bounds(objs["Structure"])
+        cols = [(lo, hi) for lo, hi in st_
+                if abs(lo[2] - REFUGE_Z0) < 0.05
+                and abs(hi[2] - REFUGE_Z1) < 0.05
+                and abs((hi[0] - lo[0]) - REFUGE_COL_SIZE) < 0.02
+                and abs((hi[1] - lo[1]) - REFUGE_COL_SIZE) < 0.02]
+        check("structural columns cross the refuge void", len(cols) >= 20,
+              f"{len(cols)} columns of {REFUGE_COL_SIZE:.2f} m square "
+              f"spanning {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f} m")
+
+        # Utilisation, so the section cannot silently be shaved to nothing.
+        pier_area = 4 * (PIER_LONG * WALL_T + (PIER_SHORT - WALL_T) * WALL_T)
+        core_area = 14.0 * 9.0 - (14.0 - 0.56) * (9.0 - 0.56)
+        col_area = len(cols) * REFUGE_COL_SIZE ** 2
+        floors_above = TOWER_FLOORS - REFUGE_END - 1
+        load = floors_above * W * D * (1.35 * 7.0 + 1.5 * 2.5)      # kN, factored
+        stress = load / (pier_area + core_area + col_area) / 1e3    # MPa
+        check("the void's load path is within C40 capacity", stress < 18.0,
+              f"{load:.0f} kN over {pier_area + core_area + col_area:.1f} m2 "
+              f"= {stress:.2f} MPa ({stress / 18 * 100:.0f}% of 18 MPa), "
+              f"{floors_above} floors above")
+
+        # Columns must sit on the facade line and on the window module, or the
+        # vertical rhythm breaks where it matters most.
+        col_xs = sorted({round((lo[0] + hi[0]) / 2, 3) for lo, hi in cols
+                         if abs((lo[1] + hi[1]) / 2 + D / 2) < 1.0})
+        on_module = [x for x in col_xs
+                     if any(abs(x - m) < 0.02 for m in mxs)]
+        check("every refuge column lands on a window mullion line",
+              col_xs and len(on_module) == len(col_xs),
+              f"{len(on_module)} of {len(col_xs)} columns on a mullion")
+        if len(col_xs) >= 2:
+            cpitch = col_xs[1] - col_xs[0]
+            r = cpitch / PANE_PITCH
+            check("refuge column spacing is a whole number of window panes",
+                  abs(r - round(r)) < 1e-6,
+                  f"pitch {cpitch:.2f} m = {round(r)} panes")
+
+        # Open edges need guarding, and the corners must still turn.
+        fb_ = piece_bounds(facade)
+        balus = [(lo, hi) for lo, hi in fb_
+                 if abs(lo[2] - REFUGE_Z0) < 0.02
+                 and abs((hi[2] - lo[2]) - BALUSTRADE_H) < 0.02]
+        check("a balustrade guards all four open edges", len(balus) >= 4,
+              f"{len(balus)} balustrade runs at {REFUGE_Z0:.1f} m")
+        check("balustrade is at least 1.0 m tall", BALUSTRADE_H >= 1.0,
+              f"{BALUSTRADE_H:.2f} m")
+        piers_here = pieces_at_corner_in_slice(facade, REFUGE_Z0 + 0.5,
+                                               REFUGE_Z1 - 0.5)
+        check("corner piers still turn the corners through the void",
+              piers_here >= 4, f"{piers_here} pier pieces in the corner zones")
+
+        # Planting, and it has to sit inside the void rather than anywhere else.
+        for name in ("Sky_Garden_Planting", "Sky_Garden_Trunks"):
+            pz_ = world_bounds(objs[name])[2]
+            check(f"{name} sits inside the refuge void",
+                  pz_[0] >= REFUGE_Z0 - 0.02 and pz_[1] <= REFUGE_Z1 - 0.02,
+                  f"z {pz_[0]:.2f}..{pz_[1]:.2f} in {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f}")
+        trees = piece_bounds(objs["Sky_Garden_Trunks"])
+        check("the garden is planted with trees", len(trees) >= 8,
+              f"{len(trees)} trunks")
+        canopy_top = world_bounds(objs["Sky_Garden_Planting"])[2][1]
+        check("tree canopies clear the ceiling above",
+              canopy_top < REFUGE_Z1 - 0.3,
+              f"canopy tops at {canopy_top:.2f} m, ceiling {REFUGE_Z1:.1f} m")
+
+        # The lift core is exposed here — this is the transfer level.
+        core_here = [1 for lo, hi in st
+                     if lo[2] < REFUGE_Z0 + 1.0 and hi[2] > REFUGE_Z1 - 1.0
+                     and (hi[0] - lo[0]) < W * 0.5]
+        check("the lift/stair core rises through the void (transfer level)",
+              core_here, f"{len(core_here)} core pieces spanning the void")
+
+        # Placement rules.
+        check("the void does not overlap the blank bands",
+              not (REFUGE_SET & (set(range(SOLID_BASE_FLOORS))
+                   | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))),
+              f"refuge floors {sorted(REFUGE_SET)}")
+        check("refuge floor spacing is within 20 storeys (SCDF)",
+              REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20,
+              f"storey {REFUGE_STOREY} of {TOTAL_FLOORS}: "
+              f"{REFUGE_STOREY} below, {TOTAL_FLOORS - REFUGE_STOREY} above")
+        check("the void is roughly mid-tower",
+              0.35 < (REFUGE_Z0 - BASE_Z) / (TOP_Z - BASE_Z) < 0.65,
+              f"{(REFUGE_Z0 - BASE_Z) / (TOP_Z - BASE_Z):.0%} up the tower "
+              f"({REFUGE_Z0:.0f} m of {BASE_Z:.0f}..{TOP_Z:.0f})")
+
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]
     lx, ly = facade_span(louv, "S"), facade_span(louv, "E")
@@ -400,8 +651,14 @@ def main():
     # --- floor plates --------------------------------------------------
     plates = objs["Floor_Plates"]
     pz = z_clusters(plates)
-    check("one floor plate per occupied floor, blank ones included",
-          len(pz) == TOWER_FLOORS * 2, f"{len(pz)} levels")
+    # The refuge void has no intermediate plate  # noqa: E116 (that is what makes it double
+    # height), and the plate under it is replaced by the thicker garden slab,
+    # which lives in Structure. So two plates fewer than there are storeys.
+    expected_plates = TOWER_FLOORS - (REFUGE_FLOORS if SKY_GARDEN else 0)
+    check("one floor plate per occupied floor, minus the open refuge storeys",
+          len(pz) == expected_plates * 2,
+          f"{len(pz)} levels for {expected_plates} plates "
+          f"({TOWER_FLOORS} storeys - {REFUGE_FLOORS} open)")
 
     # --- overall envelope ----------------------------------------------
     all_z = max(world_bounds(o)[2][1] for o in objs.values())

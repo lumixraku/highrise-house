@@ -55,6 +55,11 @@ GLASS_GREEN = (0.720, 0.965, 0.760)
 INTERIOR_LINING = (0.630, 0.650, 0.655)
 MULLION_METAL = (0.155, 0.160, 0.165)   # dark anodised
 GROUND_GREY = (0.115, 0.120, 0.110)
+# Sky-garden planting. Foliage is much darker than it looks to the eye — a leaf
+# reflects roughly 15-20% in green and far less in red and blue, so a bright
+# green here renders as plastic turf.
+PLANT_GREEN = (0.070, 0.185, 0.058)
+PLANT_TRUNK = (0.085, 0.062, 0.044)
 
 
 def _bsdf(mat):
@@ -121,6 +126,33 @@ def make_dark(name="Shadowbox", color=(0.012, 0.013, 0.014)):
     _set(b, "Base Color", (*color, 1.0))
     _set(b, "Roughness", 0.92)
     _set(b, "Specular IOR Level", 0.1)
+    return mat
+
+
+def make_foliage(name="Foliage", color=PLANT_GREEN):
+    """Planting in the sky garden.
+
+    Matte and dark. Real foliage is far darker than intuition suggests, and a
+    little translucency matters at this scale: leaves are backlit against an open
+    void, which is what stops a planter reading as a solid green block.
+    """
+    mat = _new(name)
+    b = _bsdf(mat)
+    _set(b, "Base Color", (*color, 1.0))
+    _set(b, "Roughness", 0.68)
+    _set(b, "Specular IOR Level", 0.22)
+    # Thin, backlit leaves pass some light through.
+    _set(b, "Transmission Weight", 0.12)
+    _set(b, "IOR", 1.42)
+    return mat
+
+
+def make_trunk(name="Trunk", color=PLANT_TRUNK):
+    mat = _new(name)
+    b = _bsdf(mat)
+    _set(b, "Base Color", (*color, 1.0))
+    _set(b, "Roughness", 0.86)
+    _set(b, "Specular IOR Level", 0.15)
     return mat
 
 
@@ -332,6 +364,8 @@ def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_GREEN):
         "spandrel": make_wall(color=wall_color),
         "glass": make_glass(engine=engine, tint=glass_tint),
         "interior": make_interior(),
+        "foliage": make_foliage(),
+        "trunk": make_trunk(),
         "metal": make_metal(),
         "dark": make_dark(),
         "ground": make_ground(),

@@ -104,8 +104,15 @@ def main():
         # A frosted pane is a low-variance pane: it blurs whatever is behind and
         # around it, so neighbouring pixels converge. Clear glass holds sharp
         # sky/lining/mullion detail and stays far more varied than matte wall.
+        # Caveat: the wall is the DENOMINATOR, so this ratio also moves when the
+        # walls themselves get more varied. Since the sky garden was added the
+        # probe frame includes walls shadowed by the void, which took the wall's
+        # own stdev from 0.020 to 0.064 and dropped this ratio from ~3.9x to ~1.3x
+        # with the glass pixels completely unchanged. Read the glass stdev and
+        # dynamic range as the primary frosted test; treat this ratio as
+        # meaningful only against a comparable frame.
         print(f"glass/wall contrast ratio: {gs['sd'] / ws['sd']:.2f}x  "
-              "(clear glass should be well above 1)")
+              "(clear glass should be well above 1; see caveat in source)")
         print(f"glass dynamic range      : {gs['max'] - gs['min']:.3f}  "
               "(frosted glass compresses this)")
         print(f"glass brightness vs wall : {gs['lum'] / ws['lum']:.2f}x")

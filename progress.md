@@ -1,5 +1,234 @@
 # Progress
 
+## 2026-08-16 — main — carry the tower across the refuge void on real columns
+
+User asked, from a structural point of view, whether the columns are too slim and
+too few. Ran the numbers rather than guessing, because "立柱" could mean either the
+pilotis columns or the garden fins. Two different answers:
+
+**The pilotis columns are fine — arguably oversized.** 34 columns at 1.60 m square
+on an 8.95 × 9.20 m grid, carrying 37 floors:
+
+| | |
+| --- | --- |
+| factored axial per column | 22708 kN → 8.87 MPa |
+| wind moment (1.5 kPa on the 76 m face) | 305 kNm → 0.45 MPa |
+| peak compression | 9.32 MPa vs 18 MPa (0.45·fck, C40) |
+| utilisation | **52%** |
+| slenderness | 12.0 / 1.6 = 7.5 (stocky) |
+
+The 14 × 9 m closed core tube has I = 177 m⁴ against the columns' 18.6 m⁴ combined,
+so it takes ~91% of the storey shear and the columns are essentially gravity-only.
+Enlarging them would *worsen* the soft-storey behaviour, not improve it: at 2.2 m
+the core's share drops to 73% and the column base moment nearly triples to 877 kNm.
+Left unchanged.
+
+**The refuge void was the real problem, and worse than the user's framing.** After
+the fins replaced the posts, the only concrete crossing the 8 m void was the four
+corner piers (14.04 m²) and the core walls (12.57 m²) — 26.61 m² under 18 floors,
+513638 kN factored: **19.31 MPa, over the C40 limit**, with a 60 m clear span on
+the long face and nothing in it. Compare 87 m² of column at the base of the same
+building.
+
+This traced to a documentation claim of mine that was simply false, in README and
+in the entry below: "the screen's verticals carry the 19 floors above". A 0.10 m
+blade carries nothing, and the count was 18, not 19. Both are now corrected in
+place rather than quietly overwritten.
+
+Added `refuge_columns()`: 24 columns at `REFUGE_COL_SIZE = 1.20` m square,
+9 per long face and 3 per short face. Spacing is `REFUGE_COL_PITCH = PANE_W * 3`
+= 6.0 m, chosen so every column lands on a window mullion line and the facade's
+vertical rhythm runs straight through the garden — the same discipline the fin
+pitch follows. Load path is now 61.2 m² at **9.45 MPa, 52%**, matching the pilotis
+columns exactly. Searched the (count × section) space for the option that clears
+the stress limit while staying on the pane module; 9 × 3 at 1.20 m was the leanest.
+
+The fins stay as they are. Their job is screening, and the 79.8% open area and both
+ray-cast checks are unchanged — they were never the structure.
+
+Verification: 97 → **101 checks, all passing**. The four new ones are deliberately
+not tautologies — one counts columns actually spanning `REFUGE_Z0..REFUGE_Z1` in
+the built model, one recomputes the stress from measured geometry and fails above
+18 MPa, and two assert the columns sit on the facade line and on a whole number of
+pane widths. Rebuilt (12 objects) and re-rendered all 5 views.
+
+Remaining issues: `verify_house.py` still duplicates the dimension constants and
+now `REFUGE_COL_SIZE`/`REFUGE_COL_PITCH` and `WALL_T` too, and `render_views.py`
+still hardcodes `W`, `D`, `TOP_Z`, `REFUGE_Z0`, `REFUGE_Z1` — all need manual
+syncing. Still unable to view a rendered PNG in this session, so every claim above
+rests on computed geometry, assertions and ray-casts, not on looking at the image.
+
+## 2026-08-16 — main — switch the garden screen to slim vertical fins
+
+User rejected the 432 Park-style square grid ("好丑") and asked for the slim
+vertical option instead. Switched `GRILLE_STYLE` to `FINS` and made the blades
+finer than the values I had left in that branch: 0.10 m wide (was 0.18) at 0.50 m
+centres (was 1.00), 0.34 m deep.
+
+Kept the alignment discipline by choosing `FIN_PITCH = PANE_W / 4`, so the pitch
+still divides the 2.0 m pane pitch exactly and every fourth blade lands on a
+window mullion — the vertical lines carry through the garden unbroken, same as
+with the grid. 121 blades on the long face, 79.8% open (more than the grid's
+68.9%, since there are no horizontals).
+
+Two assertions had to be generalised, because I had written them for the grid's
+one-member-per-pane case and they failed on fins (31/121 aligned, pitch 0.50 vs
+2.00). Both failures were the tests being too narrow, not the geometry being
+wrong. The real rule is that the screen pitch must *divide* the pane pitch and
+every mullion must be met by a blade, which holds for both styles:
+- "the screen pitch divides the window pane pitch" — checks PANE_PITCH/pitch is a
+  whole number; reports blades per pane (4 for fins, 1 for the grid).
+- "every window mullion is met by a grille vertical" — counts mullions covered,
+  not blades consumed.
+The open-area calculation was also grid-specific (square cells); replaced with a
+strip calculation along the facade, which is the conservative lower bound for both.
+
+Verification:
+- Build clean; 12 objects, 39688 vertices.
+- `verify_house.py`: **97/97 passed** with FINS. Also rebuilt with GRID and
+  re-ran: **97/97** there too, so the switch stays usable either way (grid reports
+  1 blade per pane, 31/31 mullions, 82.4% open by the new strip measure).
+- Ray-casts still hold: 0 hits between blades, 4 through a blade.
+- 5 views re-rendered.
+- Fixed the 8 m frame diagram, which had the floor split reversed against its own
+  caption. It is 16 glazed floors above the garden and 15 below.
+
+Remaining issues:
+- Blade proportion (0.10 m at 0.50 m centres) is my choice and unverified visually.
+  If it still reads wrong: `FIN_W` for thickness, `FIN_PITCH` for density — but keep
+  the pitch as `PANE_W / N` (0.50, 0.40, 0.25 …) or the alignment breaks.
+- `FIN_DEPTH` 0.34 m controls how much it closes up when seen at an angle; raise it
+  if the garden shows too much of its interior from oblique views.
+
+## 2026-08-16 — main — screen the sky garden instead of leaving it hollow
+
+User: fully hollowing out the refuge level looked bad ("全空着太丑了"), and asked for
+vertical grilles or a dense field of small square openings like 432 Park Avenue.
+Right call — an unscreened void reads as a bite taken out of the tower, and there
+was nothing holding the facade plane for 8 m.
+
+Built the 432 Park option as the default, with vertical fins as a switch
+(`GRILLE_STYLE`).
+
+The dimension that matters: `GRILLE_CELL = PANE_W`, so the 2.0 m grid is on the
+*same pitch as the window panes*. That makes every grille vertical land exactly on
+a window mullion, so the vertical lines run unbroken from the glazing below,
+through the garden, into the glazing above. Measured, not assumed: 31 of 31
+verticals align (both sets read off the model and compared within 0.02 m). At any
+other pitch the refuge level reads as a foreign object inserted into the tower —
+this is the one number that must not be tuned freely.
+
+Still a filter, not a wall: 68.9% of the long face is open and the cells are real
+voids, so the level ventilates as a refuge floor must. Checked two independent
+ways — open-area arithmetic from the measured member sizes, and ray-casting: a ray
+through a cell centre leaves the building with 0 hits, one through a member is
+blocked (4 hits).
+
+Removed the separate facade posts added in the previous entry, on the grounds that
+the grille verticals sit on the same line and would double up members in one
+plane. **That reasoning was wrong and is corrected in the 2026-08-16 structural
+entry below** — a 0.10 m blade carries nothing, so removing the posts left the
+void with no load path.
+
+`GRILLE_STYLE = "FINS"` gives 0.18 m blades at 1.0 m centres, 0.45 m deep —
+transparent head-on, nearly solid at a glancing angle. Built and confirmed working
+(38344 verts) before switching back to GRID.
+
+Verification:
+- Build clean; 12 objects, 37832 vertices. New `Sky_Garden_Grille` object.
+- `verify_house.py`: **97/97 passed**, up from 89. Added 8: the void is screened
+  at all, the screen spans the full 8 m, every vertical aligns with a mullion,
+  the pitch equals the pane pitch, open area within 45-85%, and the two ray-cast
+  checks (cell open / member blocking). The earlier "nothing in the void" checks
+  still pass — they test glass, lining and louvres, none of which the screen is.
+- Both `GRILLE_STYLE` values build without error.
+- 5 views re-rendered.
+- Fixed a stale README diagram claiming 33 glazed floors; it is 31, split 15 below
+  the garden and 16 above (I first wrote that backwards and corrected it against
+  the actual floor indices).
+
+Remaining issues:
+- Whether the screen reads well — member thickness, 4 rows vs more, GRID vs FINS —
+  needs your eyes. Alignment, openness and geometry are asserted; proportion is not
+  something I can check without seeing it.
+- `GRILLE_CELL` is deliberately tied to `PANE_W`. If you want a denser screen,
+  prefer halving it to 1.0 m (still aligns, every other line meets a mullion)
+  rather than an arbitrary value that breaks the alignment.
+
+## 2026-08-16 — main — refuge floor / sky garden at mid-height
+
+User asked for the refuge floor that high-rises have every so many storeys (also
+the lift transfer level), done as a Singapore-style open sky garden: two floors
+left empty and hollowed out.
+
+Placement follows Singapore's SCDF rule — refuge floor required above 24 storeys,
+spaced no more than 20 apart. One level does it for a 40-storey tower. Landed on
+storeys 21–22, 80.0 → 88.0 m: 21 storeys below, 19 above, both inside the limit,
+and 46% up the tower so it reads as mid-height. The position is *derived*, centred
+in the glazed part rather than the whole tower, so the 8 m blank bands top and
+bottom don't push it off-centre. Two asserts fail the build if it lands on a blank
+band or breaks the spacing rule.
+
+The two storeys form ONE double-height space — no intermediate slab — which is what
+makes it read as an 8 m void rather than two stacked empty floors. No glazing, no
+spandrel, no lining on those floors.
+
+What keeps the elevation coherent where the facade stops:
+- Corner piers continue through the void, so the building line still turns.
+- A 1.2 m balustrade on all four open edges, on the same clear opening the
+  windows use, so the vertical rhythm is unbroken.
+- Slim posts on the facade line carrying the 19 floors above. Without them the
+  upper tower visually floats on nothing. **(Superseded — these were later removed
+  in favour of the grille, which cannot carry anything. See the 2026-08-16
+  structural entry: the void now has 24 real columns, and the count is 18 floors
+  above, not 19.)**
+- The lift/stair core is exposed through the void — that is what makes it a level
+  you arrive at rather than a gap. This is the transfer level.
+- Planting: perimeter troughs plus 14 trees, canopies stopping 1.35 m clear of
+  the ceiling.
+
+Two slab traps, both caught while wiring it up rather than by luck:
+1. Slabs are added at the TOP of each floor, so simply `continue`-ing past the
+   refuge storeys left the void with no ceiling and the floor above with nothing
+   under it. Fixed by emitting the cap at `REFUGE_END`.
+2. The 0.45 m garden slab (thicker, it carries soil) shares its top face with the
+   plate the floor below would add, so both would occupy the same place. The
+   floor below now skips its plate.
+
+New `PLANT_GREEN = (0.070, 0.185, 0.058)` is deliberately dark: real foliage
+reflects only ~15-20% in green and far less in red and blue, so a bright green
+renders as plastic turf. 12% transmission for leaves backlit against the void.
+
+Verification:
+- Build clean; 11 objects, 37112 vertices (fewer than before — two floors of
+  glazing removed outweighs the planting added).
+- `verify_house.py`: **89/89 passed**, up from 71. Fixed 5 pre-existing checks
+  whose constants assumed 33 glazed floors (now 31) and 37 floor plates (now 35);
+  their reported numbers were already correct, only the expectations were stale.
+  Added 18 checks: nothing glazed/lined/louvred inside the void, no plate
+  splitting it, garden slab present at 80.0 m and 0.45 m thick, ceiling at
+  88.0 m, 4 balustrade runs ≥1.0 m, corner piers continuing (16 pieces),
+  planting and trunks bounded inside the void, canopies clear of the ceiling,
+  core spanning it, no overlap with blank bands, SCDF spacing, mid-tower position.
+- Independent ray-cast check (`/tmp/void_test.py`): a horizontal ray at z=84 m
+  passes clean through the building with **0 hits**, versus 12 at a glazed floor
+  and 4 at a blank band. The void is genuinely open air, not just unglazed.
+- New `sky_garden` view added to `render_views.py`; 5 views re-rendered.
+
+- Glass unaffected: `measure_glass.py` reports byte-identical glass values
+  (R 0.500 / G 0.554 / B 0.539, stdev 0.080). Its glass/wall contrast *ratio*
+  fell 3.92x -> 1.25x, but that is the denominator moving, not the glass — the
+  probe frame now includes walls shadowed by the void, so the wall's own stdev
+  went 0.020 -> 0.064. Noted in the script so it is not misread as a regression.
+
+Remaining issues:
+- Images cannot be viewed in this session, so whether the garden *looks* right
+  (tree scale, planting density, how the void reads in elevation) needs your eyes.
+  Geometry and openness are confirmed by assertion and ray-cast.
+- `render_views.py` now also hardcodes `REFUGE_Z0`/`REFUGE_Z1`, and
+  `verify_house.py` duplicates the refuge constants — both need manual syncing if
+  `REFUGE_FLOORS` or the blank bands change.
+
 ## 2026-08-16 — main — fix the glass reading yellow-olive, not pale green
 
 User: "怎么感觉窗子是黄的？土黄色。我要淡淡的浅绿色呀。" Correct, and it was a

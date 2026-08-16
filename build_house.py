@@ -101,6 +101,59 @@ SOLID_TOP_TARGET = 8.0
 SOLID_BASE_FLOORS = max(1, round(SOLID_BASE_TARGET / H))
 SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 
+# --- refuge floor / sky garden ---------------------------------------------
+# Singapore's SCDF requires a refuge floor in buildings over 24 storeys, spaced
+# no more than 20 storeys apart, and the local convention is to give it over to a
+# planted sky garden open on all sides — it doubles as the lift transfer level.
+# One two-storey void at mid-height satisfies the spacing rule for a 40-storey
+# tower and is where the garden reads best from the street.
+#
+# REFUGE_FLOORS floors are left open: no glazing, no spandrel, no intermediate
+# slab, so the two storeys read as ONE double-height space. The facade line is
+# held by the corner piers and a run of balustrade instead.
+SKY_GARDEN = True
+REFUGE_FLOORS = 2          # storeys given to the void
+BALUSTRADE_H = 1.20        # open-edge guarding, per SCDF minimum 1.0 m
+BALUSTRADE_T = 0.12
+
+# A screen across the void. Leaving the refuge level fully open reads as a bite
+# taken out of the tower — the elevation needs something holding the plane. The
+# screen is a filter, not a wall: the openings are real voids, so the level stays
+# naturally ventilated as a refuge floor must be.
+#
+# "GRID" — square openings in a deep frame, after 432 Park Avenue. Deliberately
+#          set on the SAME pitch as the window panes, so the vertical lines run
+#          straight through from the glazing below to the glazing above instead of
+#          stopping at the garden.
+# "FINS" — vertical blades only, closer spaced. Reads as louvring rather than
+#          structure; more transparent when seen straight on, nearly solid at a
+#          glancing angle.
+GRILLE_STYLE = "FINS"
+GRILLE_CELL = PANE_W       # GRID only: 2.0 m, one cell per window pane
+GRILLE_MEMBER = 0.34       # GRID only: face width of a grid member
+GRILLE_DEPTH = 0.34        # GRID only: how far it stands proud
+# FINS: slim vertical blades, no horizontals. The pitch divides PANE_W exactly, so
+# every second blade lands on a window mullion and the vertical lines still carry
+# through from the glazing below to the glazing above.
+FIN_PITCH = PANE_W / 4     # 0.50 m — close-spaced, reads as a fine screen
+FIN_W = 0.10               # slim: a blade, not a pier
+FIN_DEPTH = 0.34           # depth gives it shadow and solidity at a raking angle
+# Columns carrying the tower across the void. The fins are 0.10 m blades — a
+# screen, not structure — so without these the 18 floors above would be landing
+# on the corner piers and core alone: 26.6 m2 of concrete under 513638 kN, which
+# is 19.3 MPa and over the limit for C40. Adding 24 columns takes the load path
+# to 61.2 m2 / 8.4 MPa, a 47% utilisation matching the pilotis columns below.
+#
+# The spacing is 3 window panes, so every column lands on a mullion line and the
+# vertical rhythm of the facade runs straight through the garden.
+REFUGE_COL_SIZE = 1.20
+REFUGE_COL_PITCH = PANE_W * 3     # 6.0 m — a whole number of window panes
+GARDEN_SLAB_T = 0.45       # deeper than a normal plate: it carries soil
+PLANTER_H = 0.85
+PLANTER_W = 2.4
+TREE_H = 4.6               # fits comfortably inside 8 m of double height
+CANOPY_D = 3.2
+
 # An opening is exactly N panes wide; the mullions cap the joints without
 # consuming any of it.
 def opening_for(n_panes):
@@ -132,7 +185,28 @@ PARAPET_H = 1.10
 PARAPET_T = 0.25
 
 BASE_Z = PILOTIS_FLOORS * H          # underside of the tower = 12.0
-TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 60.0
+TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 160.0
+
+# Centre the refuge void in the GLAZED part of the tower, not in the tower as a
+# whole, so it sits visually mid-way between the two blank bands rather than
+# being pushed off-centre by them.
+_glazed_first = SOLID_BASE_FLOORS
+_glazed_last = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
+REFUGE_START = (_glazed_first + _glazed_last + 1 - REFUGE_FLOORS) // 2
+REFUGE_END = REFUGE_START + REFUGE_FLOORS - 1        # inclusive, tower-relative
+REFUGE_FLOOR_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else set()
+# Storey number as an occupant would count it, from the ground.
+REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
+REFUGE_Z0 = BASE_Z + REFUGE_START * H
+REFUGE_Z1 = REFUGE_Z0 + REFUGE_FLOORS * H
+
+assert not (REFUGE_FLOOR_SET & (set(range(SOLID_BASE_FLOORS))
+            | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))), \
+    "the refuge void must not overlap the blank bands"
+# SCDF: refuge floors no more than 20 storeys apart, and required above 24.
+assert not SKY_GARDEN or TOTAL_FLOORS <= 24 or (
+    REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20), \
+    "refuge floor spacing exceeds 20 storeys"
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 
@@ -343,6 +417,182 @@ def mullions(name, z0, height, mat):
     return parts
 
 
+def balustrade(name, z0, mat):
+    """Open-edge guarding around the sky garden.
+
+    The void has no facade, so this is what holds the building line and keeps the
+    elevation reading as continuous. It runs between the corner piers, i.e. the
+    same clear opening the windows use, so the vertical rhythm is unbroken.
+    """
+    zc = z0 + BALUSTRADE_H / 2.0
+    t = BALUSTRADE_T
+    off = WALL_T / 2.0
+    return [
+        box(f"{name}_S", (0.0, -(D / 2 - off), zc), (OPEN_W, t, BALUSTRADE_H), mat),
+        box(f"{name}_N", (0.0, +(D / 2 - off), zc), (OPEN_W, t, BALUSTRADE_H), mat),
+        box(f"{name}_W", (-(W / 2 - off), 0.0, zc), (t, OPEN_D, BALUSTRADE_H), mat),
+        box(f"{name}_E", (+(W / 2 - off), 0.0, zc), (t, OPEN_D, BALUSTRADE_H), mat),
+    ]
+
+
+def refuge_columns(name, z0, height, mat):
+    """Structural columns carrying the tower through the open refuge level.
+
+    The screen fins are 0.10 m blades and carry nothing. These do the work: the
+    facade columns of the floors above and below continue through the void on the
+    same line, so the load path is unbroken and the upper tower is visibly stood
+    on something rather than floating over a 60 m gap.
+
+    Placed on REFUGE_COL_PITCH, which is a whole number of window panes, so each
+    column lands on a mullion line. The end positions are dropped — the corner
+    piers already occupy them.
+    """
+    parts = []
+    zc = z0 + height / 2.0
+    s = REFUGE_COL_SIZE
+
+    def interior(axis_len, pitch):
+        """Column centres across an opening, ends dropped."""
+        n = max(1, int(round(axis_len / pitch)))
+        step = axis_len / n
+        return [-axis_len / 2 + i * step for i in range(1, n)]
+
+    # Flush with the outer face of the footprint, so they sit on the facade line.
+    for sy in (-1, 1):
+        for i, x in enumerate(interior(OPEN_W, REFUGE_COL_PITCH)):
+            parts.append(box(
+                f"{name}_ns_{i}_{sy}", (x, sy * (D / 2 - s / 2.0), zc),
+                (s, s, height), mat))
+    for sx in (-1, 1):
+        for i, y in enumerate(interior(OPEN_D, REFUGE_COL_PITCH)):
+            parts.append(box(
+                f"{name}_ew_{i}_{sx}", (sx * (W / 2 - s / 2.0), y, zc),
+                (s, s, height), mat))
+    return parts
+
+
+def grille(name, z0, height, mat):
+    """Screen across the open refuge level.
+
+    Holds the facade plane where the glazing stops, without closing the level in:
+    every cell is a real opening, so the refuge floor still ventilates.
+
+    The GRID pitch is PANE_W, so a cell sits directly over each window pane and
+    the vertical lines carry through from the floor below to the floor above. Any
+    other pitch makes the garden read as a separate object stuck into the tower.
+    """
+    parts = []
+    off = WALL_T / 2.0
+
+    def divisions(axis_len, pitch):
+        """Member centres across an opening, ends included."""
+        n = max(1, int(round(axis_len / pitch)))
+        step = axis_len / n
+        return [-axis_len / 2 + i * step for i in range(n + 1)]
+
+    if GRILLE_STYLE == "FINS":
+        # Vertical blades only, full height of the void.
+        zc = z0 + height / 2.0
+        for sy in (-1, 1):
+            for i, x in enumerate(divisions(OPEN_W, FIN_PITCH)):
+                parts.append(box(
+                    f"{name}_fin_ns_{i}_{sy}",
+                    (x, sy * (D / 2 - off), zc),
+                    (FIN_W, FIN_DEPTH, height), mat))
+        for sx in (-1, 1):
+            for i, y in enumerate(divisions(OPEN_D, FIN_PITCH)):
+                parts.append(box(
+                    f"{name}_fin_ew_{i}_{sx}",
+                    (sx * (W / 2 - off), y, zc),
+                    (FIN_DEPTH, FIN_W, height), mat))
+        return parts
+
+    # GRID: verticals on the pane pitch, plus horizontals making square cells.
+    zc = z0 + height / 2.0
+    n_rows = max(1, int(round(height / GRILLE_CELL)))
+    row_pitch = height / n_rows
+
+    for sy in (-1, 1):
+        y = sy * (D / 2 - off)
+        for i, x in enumerate(divisions(OPEN_W, GRILLE_CELL)):
+            parts.append(box(
+                f"{name}_v_ns_{i}_{sy}", (x, y, zc),
+                (GRILLE_MEMBER, GRILLE_DEPTH, height), mat))
+        for r in range(n_rows + 1):
+            z = z0 + r * row_pitch
+            # Clamp the end rails so they sit inside the void, not over the slabs.
+            zr = min(max(z, z0 + GRILLE_MEMBER / 2), z0 + height - GRILLE_MEMBER / 2)
+            parts.append(box(
+                f"{name}_h_ns_{r}_{sy}", (0.0, y, zr),
+                (OPEN_W, GRILLE_DEPTH, GRILLE_MEMBER), mat))
+
+    for sx in (-1, 1):
+        x = sx * (W / 2 - off)
+        for i, y in enumerate(divisions(OPEN_D, GRILLE_CELL)):
+            parts.append(box(
+                f"{name}_v_ew_{i}_{sx}", (x, y, zc),
+                (GRILLE_DEPTH, GRILLE_MEMBER, height), mat))
+        for r in range(n_rows + 1):
+            z = z0 + r * row_pitch
+            zr = min(max(z, z0 + GRILLE_MEMBER / 2), z0 + height - GRILLE_MEMBER / 2)
+            parts.append(box(
+                f"{name}_h_ew_{r}_{sx}", (x, 0.0, zr),
+                (GRILLE_DEPTH, OPEN_D, GRILLE_MEMBER), mat))
+
+    return parts
+
+
+def sky_garden(name, z0, slab_mat, plant_mat, trunk_mat, metal_mat):
+    """Planted refuge level, open on all four sides.
+
+    Laid out as a perimeter walk: planters set just inside the balustrade, trees
+    spaced along the long faces, and the floor left clear in the middle for the
+    refuge area itself. Everything sits on the garden slab, which is thicker than
+    a normal plate because it carries soil.
+    """
+    parts_struct, parts_plant, parts_trunk = [], [], []
+
+    # Garden floor slab, spanning the full footprint inside the piers.
+    parts_struct.append(box(
+        f"{name}_Slab", (0.0, 0.0, z0 - GARDEN_SLAB_T / 2.0),
+        (W - 2 * WALL_T, D - 2 * WALL_T, GARDEN_SLAB_T), slab_mat))
+
+    # Planter troughs just inside the open edges, one run per long facade.
+    inset = WALL_T + 1.1
+    for sy in (-1, 1):
+        parts_struct.append(box(
+            f"{name}_Planter_{sy}",
+            (0.0, sy * (D / 2 - inset - PLANTER_W / 2), z0 + PLANTER_H / 2.0),
+            (OPEN_W - 4.0, PLANTER_W, PLANTER_H), slab_mat))
+        # Massed planting sitting in the trough, slightly proud of its walls.
+        parts_plant.append(box(
+            f"{name}_Shrubs_{sy}",
+            (0.0, sy * (D / 2 - inset - PLANTER_W / 2), z0 + PLANTER_H + 0.35),
+            (OPEN_W - 4.4, PLANTER_W - 0.3, 0.95), plant_mat))
+
+    # Trees along the long faces. Trunk plus a broad flat canopy — enough to read
+    # as a tree in silhouette at this distance without modelling a real one.
+    n_trees = 7
+    span = OPEN_W - 8.0
+    for i in range(n_trees):
+        x = -span / 2 + i * span / (n_trees - 1)
+        for sy in (-1, 1):
+            y = sy * (D / 2 - inset - PLANTER_W / 2)
+            parts_trunk.append(box(
+                f"{name}_Trunk_{i}_{sy}", (x, y, z0 + PLANTER_H + TREE_H / 2.0),
+                (0.34, 0.34, TREE_H), trunk_mat))
+            parts_plant.append(box(
+                f"{name}_Canopy_{i}_{sy}",
+                (x, y, z0 + PLANTER_H + TREE_H + 0.45),
+                (CANOPY_D, min(CANOPY_D, PLANTER_W + 0.8), 1.5), plant_mat))
+
+    # No separate posts here: the grille's verticals sit on the facade line at the
+    # pane pitch and read as the structure carrying the floors above. Adding posts
+    # too would double up members in the same plane.
+
+    return parts_struct, parts_plant, parts_trunk
+
+
 def vent_strip(name, z0, louver_mat, back_mat):
     """Louvred ventilation band: dark backing panel plus tilted slats.
 
@@ -403,6 +653,9 @@ def build():
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
     linings = []
+    plants, trunks, grilles = [], [], []
+    foliage_mat = mats["foliage"]
+    trunk_mat = mats["trunk"]
 
     # --- pilotis: open, raised base ------------------------------------
     structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 14.0, D + 14.0, 0.30), concrete)]
@@ -439,11 +692,40 @@ def build():
         z0 = BASE_Z + f * H
         tag = f"F{f + 1:02d}"
 
+        if f in REFUGE_FLOOR_SET:
+            # Refuge / sky garden: open on all sides. No glazing, no spandrel and
+            # no intermediate slab, so the storeys read as one double-height void.
+            # The corner piers still turn the corners, holding the building line.
+            walls += corner_piers(f"{tag}_Pier", z0, H, spandrel)
+            if f == REFUGE_START:
+                # Columns carrying the floors above across the void. These are
+                # structure; the grille behind them is only a screen.
+                structure += refuge_columns(
+                    "SkyGarden_Column", z0, REFUGE_FLOORS * H, concrete)
+                walls += balustrade(f"{tag}_Balustrade", z0, spandrel)
+                # Screen across the whole void, holding the facade plane.
+                grilles += grille("SkyGarden_Grille", z0, REFUGE_FLOORS * H,
+                                  spandrel)
+                g_struct, g_plant, g_trunk = sky_garden(
+                    "SkyGarden", z0, concrete, foliage_mat, trunk_mat, metal)
+                structure += g_struct
+                plants += g_plant
+                trunks += g_trunk
+            if f == REFUGE_END:
+                # Slabs are added at the TOP of each floor, so skipping the refuge
+                # storeys would leave the void with no ceiling and the floor above
+                # with nothing under it.
+                slabs.append(box(
+                    f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
+                    (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
+            continue
+
         if f in blank_floors:
             # Blank floor: solid wall the whole storey height, no openings.
             walls += ring(f"{tag}_Blank", z0, H, WALL_T, spandrel)
-            slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
-                             (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
+            if not (SKY_GARDEN and f == REFUGE_START - 1):
+                slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
+                                 (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
             continue
 
         walls += ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
@@ -464,9 +746,12 @@ def build():
         # Behind the glass, so the clear panes have something to show.
         linings += interior_ring(f"{tag}_Interior", z0 + WIN_Z, WIN_H, interior)
 
-        # Floor plate for the level above, visible behind the glazing.
-        slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
-                         (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
+        # Floor plate for the level above, visible behind the glazing. Skipped
+        # directly under the refuge level, where the thicker garden slab (which
+        # shares the same top face) does the job instead.
+        if not (SKY_GARDEN and f == REFUGE_START - 1):
+            slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
+                             (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
 
     # --- roof ----------------------------------------------------------
     structure.append(box("RoofSlab", (0.0, 0.0, TOP_Z + 0.11),
@@ -477,10 +762,21 @@ def build():
 
     ground = box("Ground", (0.0, 0.0, -0.32), (600.0, 600.0, 0.04), ground_mat)
 
+    # The lift/stair core has to be visible where the facade opens up, otherwise
+    # the void reads as an empty gap rather than a level you can arrive at. This
+    # is the transfer level in practice: it is the one floor above the pilotis
+    # where the core is exposed.
+    if SKY_GARDEN:
+        structure += ring("RefugeCore", REFUGE_Z0, REFUGE_FLOORS * H, 0.28,
+                          concrete, outer_w=CORE_W, outer_d=CORE_D)
+
     merged = {
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),
         "Windows_Glass": join(glazing, "Windows_Glass"),
         "Interior_Lining": join(linings, "Interior_Lining"),
+        "Sky_Garden_Grille": join(grilles, "Sky_Garden_Grille"),
+        "Sky_Garden_Planting": join(plants, "Sky_Garden_Planting"),
+        "Sky_Garden_Trunks": join(trunks, "Sky_Garden_Trunks"),
         "Window_Mullions": join(frames, "Window_Mullions"),
         "Vent_Louvres": join(louvres, "Vent_Louvres"),
         "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
@@ -574,7 +870,31 @@ def report(objects):
     print(f"blank top band       : {SOLID_TOP_FLOORS} floors = "
           f"{SOLID_TOP_FLOORS * H:.1f} m "
           f"({TOP_Z - SOLID_TOP_FLOORS * H:.1f} -> {TOP_Z:.1f} m)")
-    print(f"glazed floors        : {TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS}")
+    print(f"glazed floors        : "
+          f"{TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS - len(REFUGE_FLOOR_SET)}")
+    if SKY_GARDEN:
+        print(f"refuge / sky garden  : storeys {REFUGE_STOREY}-"
+              f"{REFUGE_STOREY + REFUGE_FLOORS - 1} "
+              f"({REFUGE_Z0:.1f} -> {REFUGE_Z1:.1f} m), {REFUGE_FLOORS} floors open "
+              f"= {REFUGE_FLOORS * H:.1f} m double height")
+        print(f"refuge spacing       : {REFUGE_STOREY} storeys up, "
+              f"{TOTAL_FLOORS - REFUGE_STOREY} above (SCDF: max 20 apart)")
+        # Count without building: refuge_columns() makes real geometry, and this
+        # runs after the join, so calling it here would leave loose boxes behind.
+        n_refuge_cols = 2 * (round(OPEN_W / REFUGE_COL_PITCH) - 1) \
+            + 2 * (round(OPEN_D / REFUGE_COL_PITCH) - 1)
+        print(f"columns across void  : {n_refuge_cols}, "
+              f"{REFUGE_COL_SIZE:.2f} m square at {REFUGE_COL_PITCH:.1f} m centres "
+              f"({REFUGE_COL_PITCH / PANE_W:.0f} panes)")
+        if GRILLE_STYLE == "GRID":
+            n_rows = max(1, round(REFUGE_FLOORS * H / GRILLE_CELL))
+            print(f"garden screen        : GRID, {WINDOWS_LONG} x {n_rows} cells "
+                  f"on the long face, {GRILLE_CELL:.2f} m pitch (= pane pitch, so "
+                  f"the lines align), {GRILLE_MEMBER:.2f} m members "
+                  f"{GRILLE_DEPTH:.2f} m deep")
+        else:
+            print(f"garden screen        : FINS, {FIN_W:.2f} m blades at "
+                  f"{FIN_PITCH:.2f} m centres, {FIN_DEPTH:.2f} m deep")
     print(f"corner piers         : {PIER_LONG:.1f} m on long facades / "
           f"{PIER_SHORT:.1f} m on short facades")
     print(f"long-facade margins  : {PIER_LONG:.1f} m left/right, "

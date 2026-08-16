@@ -24,7 +24,7 @@ Writes into `out/`:
 Add `--no-render` after the script name to skip rendering.
 
 Extra views, rendered portrait since the tower is 160 m tall (front elevation,
-pilotis base, single-floor facade close-up, corner):
+pilotis base, single-floor facade close-up, corner, sky garden):
 
 ```bash
 blender --background --factory-startup --python render_views.py -- out/highrise_house.blend
@@ -32,10 +32,13 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-71 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+97 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the even 8 m long-facade margin, solid corners,
-blank base/top bands, vent adjacency, pilotis clearance:
+blank base/top bands, vent adjacency, pilotis clearance, and the refuge void
+(open on all sides, undivided double height, guarded edges, planting inside it,
+core continuity, SCDF spacing, and the screen's alignment with the window
+mullions and its open area):
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -50,13 +53,14 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 | floor-to-floor height | 4.0 m |
 | storeys | 40 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
-| occupied floors | 37 (12.0 → 160.0 m) |
+| occupied floors | 37 (12.0 → 160.0 m), of which 2 are the refuge level |
 | total height | 161.32 m to top of parapet |
 | corner piers | 8.0 m on long faces / 4.0 m on short faces |
 | clear window opening | 60 m long face / 24 m short face |
 | blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
 | blank top band | 2 floors = 8.0 m (152.0 → 160.0 m) |
-| glazed floors | 33 |
+| refuge floor / sky garden | storeys 21–22, screened void 80.0 → 88.0 m (79.8% open) |
+| glazed floors | 31 |
 | panes per floor | 30 long face / 12 short face (84 around) |
 | pane pitch | 2.00 m mullion centres |
 | clear glass per pane | **2.00 m × 1.50 m, fixed** |
@@ -69,6 +73,81 @@ the void and a landing at each of the three levels. Columns that would clash wit
 the core are omitted. The tower's underside slab oversails the footprint by 0.25 m
 per side as a drip edge.
 
+### Refuge floor / sky garden
+
+Two storeys at mid-height (21–22, **80.0 → 88.0 m**) are given over to a planted
+refuge level, unglazed on all four sides and screened by slim vertical fins, in the
+Singapore manner. Singapore's SCDF
+requires a refuge floor in buildings over 24 storeys and no more than 20 storeys
+apart; at storey 21 of 40 there are 21 below and 19 above, so one level satisfies
+the rule. It doubles as the lift transfer level.
+
+The two storeys are a **single double-height space** — no intermediate slab — so
+the void reads as one 8 m opening rather than two stacked floors. It is screened,
+not hollowed out: leaving it fully open reads as a bite taken out of the tower.
+
+```
+        ┌│││█│││││█│││││█│││┐   88.0 m  ceiling = plate of the floor above
+   pier  ││││█│││││█│││││█│││    121 slim vertical blades, 0.10 m at
+        ─│││█│││││█│││││█│││─   0.50 m centres, full 8 m height
+        ─│││█│││││█│││││█│││─   █ = 1.20 m structural column, 6.0 m centres
+        └│││█│││││█│││││█│││┘   80.0 m  garden slab (0.45 m, carries soil)
+             trees + planters behind, 1.2 m balustrade at the edge
+```
+
+The blades screen the void; the columns marked █ are what carry the tower across
+it. 24 of them in all — 9 on each long face, 3 on each short face.
+
+### The screen aligns with the windows
+
+`FIN_PITCH` is **`PANE_W / 4` = 0.50 m**, chosen so it divides the window pane
+pitch exactly. Every fourth blade lands on a window mullion, so the vertical lines
+run unbroken from the glazing below, through the garden, into the glazing above.
+Verified rather than assumed — `verify_house.py` reads both sets of members off the
+model and asserts that all **31 mullions are met by a blade** (31 of 121). Pick a
+pitch that does not divide 2.0 m and the refuge level reads as a foreign object
+inserted into the tower.
+
+It stays a filter, not a wall: **79.8%** of the long face is open, and the gaps are
+real voids, so the level ventilates as a refuge floor must. Confirmed by
+ray-casting — a ray between two blades leaves the building with 0 hits, one aimed
+at a blade is blocked.
+
+`GRILLE_STYLE` switches the treatment. Both pass all assertions:
+
+| | |
+| --- | --- |
+| `"FINS"` | 0.10 m vertical blades at 0.50 m centres, 0.34 m deep. Default. Fine-grained; transparent head-on, closing up at a raking angle. |
+| `"GRID"` | 2.0 m square openings in 0.34 m members — after 432 Park Avenue. Heavier, and the horizontals read as four stacked bands rather than one tall void. |
+
+The grille is a screen and nothing more — a 0.10 m blade carries no load. The
+floors above cross the void on 24 dedicated columns behind it (see below).
+
+What holds the elevation together where the facade stops:
+
+* **Corner piers continue through the void**, so the building line turns the
+  corners exactly as it does on a glazed floor.
+* **A 1.2 m balustrade** runs between the piers on all four sides, on the same
+  clear opening the windows use, so the vertical rhythm is unbroken.
+* **24 structural columns**, 1.20 m square, carry the 18 floors above across the
+  void. Without them the load lands on the corner piers and core alone: 26.6 m²
+  of concrete under 513638 kN, which is 19.3 MPa and over the limit for C40. With
+  them the path is 61.2 m² at 9.45 MPa — a 52% utilisation, matching the pilotis
+  columns below. They sit at `PANE_W * 3` = 6.0 m centres, so every column lands
+  on a mullion line and the facade's vertical rhythm runs through the garden.
+* **The lift/stair core is exposed**, which is what makes it read as a level you
+  arrive at rather than a gap.
+
+The garden slab is 0.45 m rather than the usual 0.22 m because it carries soil,
+and it replaces the plate that the floor below would otherwise contribute (they
+share a top face, so building both would leave two slabs in the same place).
+
+Set `SKY_GARDEN = False` to build the tower without it; `REFUGE_FLOORS` changes
+how many storeys the void takes. Its position is derived — centred in the *glazed*
+part of the tower, not the tower as a whole, so the blank bands don't push it
+off-centre — and asserts fail the build if it lands on a blank band or breaks the
+20-storey spacing rule.
+
 ### An even 8 m frame on the long facade
 
 Four of the 37 occupied floors carry no openings at all — two at the bottom
@@ -79,11 +158,18 @@ Four of the 37 occupied floors carry no openings at all — two at the bottom
 ```
         8.0 m blank (2 floors)
       ┌───────────────────────┐
- 8.0  │   33 floors of        │  8.0
+ 8.0  │   16 floors of        │  8.0
+ pier │   30-pane windows     │  pier
+      ├───────────────────────┤
+      │   sky garden (2)      │
+      ├───────────────────────┤
+ 8.0  │   15 floors of        │  8.0
  pier │   30-pane windows     │  pier
       └───────────────────────┘
         8.0 m blank (2 floors)
 ```
+
+31 glazed floors in all: 16 above the garden, 15 below it.
 
 Both bands are specified as target heights (`SOLID_BASE_TARGET`,
 `SOLID_TOP_TARGET`) and rounded to whole floors, so a break always lands on a
@@ -184,6 +270,12 @@ putting sRGB values straight into a Blender colour socket renders washed out.
 | interior lining | matte warm grey 0.85 m behind the glass, self-illuminated 0.75 |
 | mullions / louvres | dark anodised metal, roughness 0.38 |
 | structure | grey concrete, roughness 0.85 |
+| foliage | dark matte green, 12% transmission for backlit leaves |
+
+Foliage is far darker than intuition suggests — a leaf reflects roughly 15–20% in
+green and much less in red and blue, so a bright green renders as plastic turf.
+`PLANT_GREEN` is deliberately dark, with a little transmission because the
+planting is backlit against an open void.
 
 ### Keeping the glass clear, not frosted
 
@@ -295,11 +387,13 @@ To try the pale grey wall instead of beige, set
 
 ## Geometry organisation
 
-Everything is generated from boxes and joined into nine objects, so the scene
-stays light (~39k vertices at 40 storeys):
+Everything is generated from boxes and joined into twelve objects, so the scene
+stays light (~40k vertices at 40 storeys):
 
 `Facade_Spandrels` · `Windows_Glass` · `Interior_Lining` · `Window_Mullions` ·
-`Vent_Louvres` · `Vent_Shadowboxes` · `Floor_Plates` · `Structure` · `Ground`
+`Vent_Louvres` · `Vent_Shadowboxes` · `Sky_Garden_Grille` ·
+`Sky_Garden_Planting` · `Sky_Garden_Trunks` · `Floor_Plates` · `Structure` ·
+`Ground`
 
 ## Changing the design
 
