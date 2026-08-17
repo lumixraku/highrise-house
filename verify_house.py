@@ -633,6 +633,42 @@ def main():
     check("a 0.30 m vent sits flush below every window", below_ok)
     check("a 0.30 m vent sits flush above every window", above_ok)
 
+    # --- flush glazing: no reveal, no sill ------------------------------
+    # The facade is ONE plane. Any setback here leaves a strip of opening side
+    # wall, and that strip is what reads as a window sill. Measured in depth (the
+    # Y axis on the long face), not in Z, so it is independent of the band checks
+    # above — those would pass just as happily with the glass 90 mm back.
+    wall_y = D / 2.0
+    z_mid = REFUGE_Z1 + WIN_Z + WIN_H / 2.0      # a glazed floor above the void
+
+    def outer_face(obj, zlo, zhi):
+        """Frontmost Y reached by any piece on the south face in a z window."""
+        ys = [-min(lo[1], hi[1]) for lo, hi in piece_bounds(obj)
+              if zlo < (lo[2] + hi[2]) / 2 < zhi
+              and (lo[1] + hi[1]) / 2 < -D / 4]
+        return max(ys) if ys else None
+
+    for label, obj_name, zlo, zhi in (
+            ("glass", "Windows_Glass", z_mid - 0.5, z_mid + 0.5),
+            ("mullion caps", "Window_Mullions", z_mid - 0.5, z_mid + 0.5),
+            ("vent louvres", "Vent_Louvres",
+             REFUGE_Z1 + VENT_LO_Z, REFUGE_Z1 + VENT_LO_Z + VENT_H)):
+        face = outer_face(objs[obj_name], zlo, zhi)
+        check(f"{label} finish flush with the wall face (no sill)",
+              face is not None and abs(face - wall_y) < 0.002,
+              f"outer face at {face:.4f} m vs wall {wall_y:.3f} m"
+              + (f", {(wall_y - face) * 1000:+.1f} mm" if face else ""))
+
+    # Nothing may poke THROUGH the wall either — flush means level with it, not
+    # standing proud, and a tilted louvre slat sweeps deeper than half its depth.
+    proud = []
+    for obj_name in ("Windows_Glass", "Window_Mullions", "Vent_Louvres"):
+        f = outer_face(objs[obj_name], BASE_Z, TOP_Z)
+        if f is not None and f > wall_y + 0.002:
+            proud.append(f"{obj_name} {(f - wall_y) * 1000:+.1f} mm")
+    check("nothing stands proud of the facade plane", not proud,
+          "; ".join(proud) if proud else "glass, mullions and louvres all within 2 mm")
+
     # --- pilotis -------------------------------------------------------
     struct = objs["Structure"]
     for name in ("Facade_Spandrels", "Windows_Glass", "Vent_Louvres",

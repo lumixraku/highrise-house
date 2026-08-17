@@ -61,8 +61,12 @@ SLAB_T = 0.22     # floor plate thickness
 WIN_H = 1.50      # window height
 VENT_H = 0.30     # ventilation strip height
 GLASS_T = 0.03
-GLASS_INSET = 0.09    # from the outer wall face
-VENT_INSET = 0.13     # louvres sit deeper than the glass
+# Flush glazing: the glass, its mullion caps and the louvres all finish on the
+# SAME plane as the wall, with no reveal and no sill. A non-zero inset here puts
+# the glass behind the wall face, and the 90 mm of opening side wall that leaves
+# is exactly what reads as a window sill — which is what we do not want.
+GLASS_INSET = 0.0     # from the outer wall face; 0 = flush with it
+VENT_INSET = 0.0      # louvres finish on the wall plane too
 # The glass is fully clear, so it needs something behind it or it reads as a gap.
 # This lining stands in for lit floors; set back far enough that pane and lining
 # move against each other as the view shifts, which is what reads as glass.
@@ -387,11 +391,16 @@ def corner_piers(name, z0, height, mat):
 
 
 def mullions(name, z0, height, mat):
-    """Slim vertical frames breaking up the ribbon window."""
+    """Slim vertical frames breaking up the ribbon window.
+
+    Flush: the cap's OUTER face finishes on the wall plane, same as the glass, so
+    it is centred at half its own depth rather than on the glass centreline. It
+    therefore sits behind the facade plane, not proud of it.
+    """
     parts = []
     zc = z0 + height / 2.0
-    off = GLASS_INSET + GLASS_T / 2.0
     depth = 0.14
+    off = GLASS_INSET + depth / 2.0
 
     # Cover caps centred on each pane joint, plus one at each end against the
     # pier. N panes therefore take N+1 caps, at exact multiples of the pane
@@ -614,7 +623,13 @@ def vent_strip(name, z0, louver_mat, back_mat):
         box(f"{name}_back_N", (0.0, +(D / 2 - back_off), zc), (OPEN_W, 0.04, VENT_H), back_mat),
     ]
 
-    off = VENT_INSET + slat_depth / 2.0
+    # A tilted slat sweeps deeper than half its own depth, so keying the offset
+    # to slat_depth / 2 would push its corner through the wall plane once
+    # VENT_INSET is 0. Use the rotated extent instead: the slat then finishes
+    # exactly flush however it is tilted.
+    slat_half = (slat_depth / 2.0 * math.cos(tilt)
+                 + slat_t / 2.0 * math.sin(tilt))
+    off = VENT_INSET + slat_half
     for k in range(n_slats):
         sz = z0 + VENT_H * (k + 0.5) / n_slats
         # N/S facades: slats run along X, tilt about X.

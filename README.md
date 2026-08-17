@@ -40,7 +40,7 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-101 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+105 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the even 8 m long-facade margin, solid corners,
 blank base/top bands, vent adjacency, pilotis clearance, and the refuge void
@@ -218,9 +218,28 @@ in plan — a long leg along the wide facade, a shorter one along the narrow —
 fill the whole vent + window + vent zone. Clear openings are 60 m on the long
 faces and 24 m on the short ones.
 
-Glazing is inset 0.09 m from the
-outer wall face; the louvres sit deeper at 0.13 m, tilted 30°, over a dark
-shadowbox so the openings read as depth rather than holes.
+### Flush glazing — one facade plane
+
+`GLASS_INSET = 0.0` and `VENT_INSET = 0.0`: the glass, its mullion caps and the
+louvre slats all finish on the **same plane as the wall**, with no reveal and no
+sill. Setting glass back from the wall face leaves a strip of opening side wall
+around each pane, and that strip is precisely what reads as a window sill — at
+0.09 m it was clearly visible.
+
+Depth still comes from what sits *behind* the plane, not in front of it: the
+louvres are tilted 30° over a dark shadowbox 0.10 m back, and the interior lining
+is set back `INTERIOR_SETBACK` = 0.85 m so pane and lining move against each other
+as the view shifts.
+
+One subtlety in the geometry: a tilted slat sweeps deeper than half its own
+thickness, so the louvre offset is keyed to its *rotated* extent
+(`slat_depth/2·cos θ + slat_t/2·sin θ`). Keying it to `slat_depth / 2` would push
+the slat corners 1.4 mm through the wall plane once the inset reached zero.
+
+Four assertions hold this: the outer face of glass, mullions and louvres each
+measured against the wall plane within 2 mm, plus one that nothing stands proud of
+it. They are not decorative — reverting `GLASS_INSET` to 0.09 fails two of them
+with a reported `+90.0 mm`.
 
 ### The window is the module — the footprint follows from it
 
@@ -234,13 +253,14 @@ pane pitch = 2.00 m (identical on all four facades)
 ```
 
 Mullions are 0.09 m **cover caps centred on each pane joint**: they overlap the
-two panes they join and sit proud of the glass line, so they consume no facade
-length. That is what keeps the arithmetic clean — 30 panes of 2 m is exactly
+two panes they join rather than displacing them, so they consume no facade
+length. (They are 0.14 m deep, but that depth runs *inward* from the flush face —
+see above.) That is what keeps the arithmetic clean — 30 panes of 2 m is exactly
 60 m of opening, and the footprint lands on whole metres. (An earlier version
 added each mullion's width to the facade, which pushed the dimensions to
 78.79 × 30.72 m; the caps fixed that.)
 
-84 panes per floor, on 33 glazed floors. To resize the building, change
+84 panes per floor, on 31 glazed floors. To resize the building, change
 `WINDOWS_LONG` / `WINDOWS_SHORT` (or the pier widths) — never `W`/`D`, which are
 derived. Adding one pane to a facade widens the building by exactly 2 m.
 

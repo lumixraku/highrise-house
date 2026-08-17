@@ -1,5 +1,48 @@
 # Progress
 
+## 2026-08-17 — main — flush glazing: glass, mullions and louvres on the wall plane
+
+User noticed the windows were not in the same plane as the facade and read as
+having sills, and asked for them flush. Measured before changing anything: the
+glass outer face sat at y = 15.910 against a wall face at 16.000, so it was
+**90 mm behind the wall**, and those 90 mm of opening side wall are exactly what
+reads as a sill.
+
+Asked which way to take the mullions and louvres rather than guessing, since flush
+glazing does not settle either. User chose **everything flush** — glass, mullion
+caps and louvre slats all finishing on the wall plane.
+
+- `GLASS_INSET` 0.09 → 0.0, `VENT_INSET` 0.13 → 0.0.
+- `mullions()` had to change basis, not just constant: it centred the cap on the
+  *glass centreline*, which with a zero inset would leave it standing 70 mm proud.
+  Now centred at half its own depth, so its outer face lands on the plane and its
+  0.14 m depth runs inward.
+- The louvre offset was keyed to `slat_depth / 2`, but the slats tilt 30° and a
+  tilted box sweeps deeper than half its depth: 0.0564 vs 0.055, so the corners
+  would have poked **1.4 mm** through the wall. Now keyed to the rotated extent,
+  `slat_depth/2·cos θ + slat_t/2·sin θ`, which stays flush at any tilt.
+
+Depth now comes only from behind the plane: the shadowbox 0.10 m back and the
+0.85 m interior lining, both unchanged.
+
+The verify suite was **blind to this whole change** — 101/101 passed both before
+and after, because every existing check measured Z bands or plan positions and
+nothing measured depth. Added 4 checks that do: the outer face of glass, mullions
+and louvres each against the wall plane within 2 mm, plus one that nothing stands
+proud of it. Then ran the negative test rather than trusting them: reverting
+`GLASS_INSET` to 0.09, rebuilding and re-verifying gives 103/105 with both glass
+and mullion checks failing and reporting `+90.0 mm`. Restored, rebuilt, 105/105.
+
+Lesson worth keeping: a suite that passes before and after a real geometric change
+is not confirming the change, it is silent about it. Check the negative case.
+
+Also fixed two stale numbers in the README while in there: the verify count (97 →
+105) and "33 glazed floors" (31 since the refuge void took two).
+
+Rebuilt (12 objects / 39880 verts, unchanged — this only moved geometry) and
+re-rendered all 5 views. Still cannot view a PNG in this environment, so the flush
+result is confirmed by measurement against the wall plane, not by looking at it.
+
 ## 2026-08-16 — main — put the rendered views in the README
 
 User asked for screenshots in the README. Added all five `out/view_*.png` as a
