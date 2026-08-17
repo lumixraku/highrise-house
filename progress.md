@@ -1,5 +1,50 @@
 # Progress
 
+## 2026-08-17 — main — purged renders from git history, renders now in a release
+
+The repo had grown to 108 MB. Measured where it went before touching anything, by
+summing blob sizes per path prefix over `git rev-list --objects --all`:
+**`out/` = 117.4 MB against 1.0 MB of source**, and 13 of 15 commits touched it.
+99% of every clone was build products that `build_house.py` regenerates.
+
+User asked to either stop tracking the images or strip them from history, and chose
+the stronger option: **rewrite history and force push**, with the README images
+**moved to a GitHub Release** rather than kept anywhere in the repo.
+
+Order of operations mattered here, since a force push is irreversible for anyone
+who has already cloned:
+
+1. Backed up first — `git bundle create --all` (84 MB, `/tmp/highrise-house-backup-489114b.bundle`)
+   plus a copy of `out/`. Pre-rewrite HEAD was `489114b`.
+2. Created the `renders-v1` release and uploaded the 5 PNGs; rewrote the README
+   image links to the release asset URLs.
+3. `out/` added to `.gitignore`, and this committed *before* the rewrite so the
+   rewrite would cover it too.
+4. Recorded the blob hash of all 10 source files, then
+   `git filter-repo --path out/ --invert-paths`.
+5. Verified: the 10 source blob hashes are **byte-identical** before and after, all
+   16 commits survive, `git rev-list --objects --all | grep out/` returns nothing.
+   `.git` went **91 MB → 228 KB**.
+6. Force pushed to `origin main` (`489114b` → `51ec17f`). Confirmed the remote tree
+   holds only the 10 source files and the README points at the release.
+
+Two things worth knowing for next time:
+
+- **filter-repo removes the `origin` remote on purpose**, so it cannot push a
+  rewrite anywhere by accident. Re-added by hand afterwards.
+- **filter-repo also clears the ignored working-tree files** it purged — `out/`
+  was emptied on disk, not just in history. Restored from the backup copy. Without
+  that backup the renders would have been gone, since they take ~40 min to
+  re-render.
+
+GitHub's API still reports `size: 77843 KB` — that is their cached figure and drops
+when their GC runs; the actual tree is clean.
+
+Remaining issue: **I still cannot view a rendered image in this session** (the Read
+tool returns nothing for PNGs), so I verified the release assets by size and HTTP
+200 rather than by looking at them. The 5 assets report `state=uploaded` at their
+original byte sizes, and `view_front.png` fetched back at exactly 1209475 bytes.
+
 ## 2026-08-17 — main — flush glazing: glass, mullions and louvres on the wall plane
 
 User noticed the windows were not in the same plane as the facade and read as
