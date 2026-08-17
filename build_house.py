@@ -11,7 +11,7 @@ Outputs (into out/):
 Design brief
 ------------
 * Floor-to-floor height 4.0 m.
-* Bottom 3 floors are pilotis (open, raised on columns + a service core).
+* Bottom 3 floors are pilotis (open, raised on columns + two service cores).
 * Above that sits the solid core of the building: 12 occupied floors.
 * Every occupied floor carries a 1.5 m ribbon window spanning the full
   width of every facade, vertically centred in the floor.
@@ -31,7 +31,7 @@ import os
 import sys
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import materials     # noqa: E402  (needs the path set up first)
@@ -183,13 +183,71 @@ assert abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9, \
 COL_SIZE = 1.60       # pilotis column footprint (sized for a 40-storey load)
 COL_SPACING = 9.0     # target column grid spacing
 COL_MARGIN = 2.2      # inset of the outer column line from the facade
-CORE_W, CORE_D = 14.0, 9.0   # service core inside the pilotis zone
+
+# --- service cores ----------------------------------------------------------
+# TWO cores rather than one central slab, and the reason is capacity and egress,
+# not structure. The lateral system here is the perimeter: the four L-shaped
+# corner piers give Iy = 3359 m4 against the core's 177, so a core carries only
+# 5% of the lateral stiffness and tip drift is H/2650 against a H/500 limit.
+# Nothing about the core choice buys stiffness this building needs.
+#
+# What a single 14 x 9 core could NOT do was hold the vertical transport. 37
+# floors x 76 x 32 m is 89984 m2 GFA, about 654 units and 1767 people, needing
+# 7-11 lifts. Shafts, two stairs, lobbies, smoke-stop lobbies and risers come to
+# roughly 204 m2 gross; 14 x 9 = 126 m2, short by 38%. That is a 5.2%
+# core-to-plate ratio where residential towers run 10-15%.
+#
+# Splitting also fixes two things one core cannot:
+#   * Egress. Worst-case travel to a central core was 42.5 m, marginal against
+#     SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to 24 m.
+#   * Stair remoteness. Two stairs in ONE shaft are not independent — a single
+#     incident compromises both. These sit 40 m apart.
+#   * Lift zoning, which a 654-unit tower wants anyway: low zone in the west
+#     core, high zone in the east, ~65 units per lift in each.
+#
+# Deliberately NOT an H-core: the spine that makes it an H would run a wall down
+# the middle of the plate, forcing single-loaded corridors either side. H-cores
+# suit office towers wanting deep lettable space; residential wants a continuous
+# corridor loop.
+CORE_W, CORE_D = 12.0, 12.0   # each core, plan size
+CORE_T = 0.28                 # core wall thickness
+# Offset from the building centreline. Even metres, so the core walls land on
+# mullion lines and interior partitions can follow the facade rhythm. Held clear
+# of the corner pier zone (outer edge at 26 m, pier starts at 30 m), which is
+# what rules out pushing the cores right to the ends of the plate.
+CORE_OFFSET = 20.0
+CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
+
+assert CORE_OFFSET + CORE_W / 2 <= W / 2 - PIER_LONG, \
+    "core must stay clear of the corner pier zone"
+assert abs((CORE_OFFSET - CORE_W / 2) % PANE_W) < 1e-9 \
+    and abs((CORE_OFFSET + CORE_W / 2) % PANE_W) < 1e-9, \
+    "core edges should land on the pane grid"
+assert 2 * CORE_W * CORE_D >= 203.5, "cores must hold the required provision"
 
 PARAPET_H = 1.10
 PARAPET_T = 0.25
 
+# --- what sticks up above the roof -----------------------------------------
+# A lift needs headroom above its topmost served floor for the car to overtravel
+# and for the machine above it, and the stair needs a door out onto the roof. So
+# the thing projecting above the parapet on a real tower is the CORE continuing
+# up — a lift motor room and stair bulkhead sitting directly over the shafts.
+# It is not a free-standing plant box placed wherever the elevation wants one.
+#
+# Two cores means two of these, at x = +-CORE_OFFSET, which is also what tells
+# you from the street where the vertical circulation is.
+CORE_OVERRUN = 4.6      # above the roof slab: lift overtravel + machine room
+CORE_ROOF_PARAPET = 0.9  # low upstand around each bulkhead roof
+# CORE_TOP_Z is derived once TOP_Z exists, just below.
+
 BASE_Z = PILOTIS_FLOORS * H          # underside of the tower = 12.0
 TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 160.0
+# Top of the bulkhead upstand, which is the highest point on the building.
+CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
+
+assert CORE_TOP_Z > TOP_Z + 0.22 + PARAPET_H, \
+    "the core has to finish above the roof parapet, or it is not visible"
 
 # Centre the refuge void in the GLAZED part of the tower, not in the tower as a
 # whole, so it sits visually mid-way between the two blank bands rather than
@@ -320,6 +378,23 @@ def ring(name, z0, height, thickness, mat, outer_w=W, outer_d=D):
         box(f"{name}_W", (-(outer_w / 2 - t / 2), 0.0, zc), (t, outer_d - 2 * t, height), mat),
         box(f"{name}_E", (+(outer_w / 2 - t / 2), 0.0, zc), (t, outer_d - 2 * t, height), mat),
     ]
+    return parts
+
+
+def cores(name, z0, height, mat):
+    """The pair of service cores, as closed tubes.
+
+    ring() builds about the origin, so each core is built there and then shifted
+    onto its offset. Two separate tubes, not one figure-of-eight: they must be
+    independently smoke-separated for the two stairs to count as remote.
+    """
+    parts = []
+    for k, cx in enumerate(CORE_XS):
+        tube = ring(f"{name}_{k}", z0, height, CORE_T, mat,
+                    outer_w=CORE_W, outer_d=CORE_D)
+        for ob in tube:
+            ob.location.x += cx
+        parts += tube
     return parts
 
 
@@ -677,21 +752,24 @@ def build():
 
     for i, x in enumerate(col_grid(W)):
         for j, y in enumerate(col_grid(D)):
-            # Skip columns that would land inside the service core walls.
-            if abs(x) < CORE_W / 2 + COL_SIZE and abs(y) < CORE_D / 2 + COL_SIZE:
+            # Skip columns that would land inside a service core wall. Two cores
+            # now, so this tests both.
+            if any(abs(x - cx) < CORE_W / 2 + COL_SIZE
+                   and abs(y) < CORE_D / 2 + COL_SIZE for cx in CORE_XS):
                 continue
             structure.append(box(
                 f"Column_{i}_{j}", (x, y, BASE_Z / 2.0),
                 (COL_SIZE, COL_SIZE, BASE_Z), concrete))
 
-    # Service core rising through the open floors (stairs / lifts).
-    structure += ring("Core", 0.0, BASE_Z, 0.28, concrete, outer_w=CORE_W, outer_d=CORE_D)
+    # Service cores rising through the open floors (stairs / lifts).
+    structure += cores("Core", 0.0, BASE_Z, concrete)
 
-    # Intermediate landings inside the core, one per open floor.
+    # Intermediate landings inside each core, one per open floor.
     for f in range(1, PILOTIS_FLOORS):
-        structure.append(box(
-            f"CoreLanding_{f}", (0.0, 0.0, f * H),
-            (CORE_W - 0.56, CORE_D - 0.56, 0.18), concrete))
+        for k, cx in enumerate(CORE_XS):
+            structure.append(box(
+                f"CoreLanding_{k}_{f}", (cx, 0.0, f * H),
+                (CORE_W - 2 * CORE_T, CORE_D - 2 * CORE_T, 0.18), concrete))
 
     # Underside slab of the tower, slightly oversized as a drip edge.
     structure.append(box("TowerSoffit", (0.0, 0.0, BASE_Z - SLAB_T / 2.0),
@@ -772,18 +850,34 @@ def build():
     structure.append(box("RoofSlab", (0.0, 0.0, TOP_Z + 0.11),
                          (W, D, 0.22), concrete))
     structure += ring("Parapet", TOP_Z + 0.22, PARAPET_H, PARAPET_T, spandrel)
-    structure.append(box("RoofPlant", (W * 0.12, 0.0, TOP_Z + 1.9),
-                         (W * 0.30, D * 0.34, 3.4), concrete))
+
+    # Lift motor rooms / stair bulkheads: the cores continuing above the roof.
+    # Sized and placed by the cores themselves rather than by eye, so they sit
+    # over the shafts they serve and move if the cores ever move.
+    structure += cores("CoreOverrun", TOP_Z + 0.22, CORE_OVERRUN, concrete)
+    for k, cx in enumerate(CORE_XS):
+        # Cap slab, then a low upstand around it.
+        structure.append(box(
+            f"CoreOverrunRoof_{k}",
+            (cx, 0.0, TOP_Z + 0.22 + CORE_OVERRUN + 0.11),
+            (CORE_W, CORE_D, 0.22), concrete))
+    structure += cores("CoreOverrunParapet",
+                       TOP_Z + 0.22 + CORE_OVERRUN + 0.22,
+                       CORE_ROOF_PARAPET, spandrel)
 
     ground = box("Ground", (0.0, 0.0, -0.32), (600.0, 600.0, 0.04), ground_mat)
 
-    # The lift/stair core has to be visible where the facade opens up, otherwise
-    # the void reads as an empty gap rather than a level you can arrive at. This
-    # is the transfer level in practice: it is the one floor above the pilotis
-    # where the core is exposed.
-    if SKY_GARDEN:
-        structure += ring("RefugeCore", REFUGE_Z0, REFUGE_FLOORS * H, 0.28,
-                          concrete, outer_w=CORE_W, outer_d=CORE_D)
+    # The cores run UNBROKEN from the ground to the overrun above the roof. They
+    # were previously built only at the pilotis and refuge levels, which left the
+    # tower hollow between them — the lift shafts stopped and started again, and
+    # the motor rooms on the roof would have sat on nothing. A shaft has to be
+    # continuous to be a shaft.
+    #
+    # Within the refuge level they stay visible, which is what makes that void
+    # read as a level you arrive at rather than a gap. With two of them the garden
+    # reads as running BETWEEN two solid piers, which is a better reading than one
+    # lump in the middle — the 28 m of clear span between them is the view.
+    structure += cores("TowerCore", BASE_Z, TOP_Z - BASE_Z, concrete)
 
     merged = {
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),
@@ -879,7 +973,10 @@ def report(objects):
     print(f"occupied floors      : {TOWER_FLOORS} ({BASE_Z:.1f} -> {TOP_Z:.1f} m)")
     print(f"columns at pilotis   : {len(col_grid(W))} x {len(col_grid(D))} grid, "
           f"{COL_SIZE:.2f} m square")
-    print(f"total height         : {TOP_Z + PARAPET_H + 0.22:.2f} m incl. parapet")
+    print(f"roof parapet top     : {TOP_Z + PARAPET_H + 0.22:.2f} m")
+    print(f"total height         : {CORE_TOP_Z:.2f} m to the top of the core "
+          f"bulkheads ({CORE_TOP_Z - (TOP_Z + PARAPET_H + 0.22):.2f} m above "
+          f"the parapet)")
     print(f"blank base floor(s)  : {SOLID_BASE_FLOORS} "
           f"({BASE_Z:.1f} -> {BASE_Z + SOLID_BASE_FLOORS * H:.1f} m)")
     print(f"blank top band       : {SOLID_TOP_FLOORS} floors = "
@@ -919,6 +1016,13 @@ def report(objects):
     print(f"pane pitch           : {PANE_PITCH:.2f} m (= pane width; mullions are "
           f"{MULLION_W:.2f} m caps over the joints)")
     print(f"clear internal depth : {D - 2 * WALL_T:.2f} m (inside face to inside face)")
+    print(f"service cores        : 2 x {CORE_W:.0f} x {CORE_D:.0f} m at "
+          f"x = {CORE_XS[0]:+.0f} / {CORE_XS[1]:+.0f}, "
+          f"{2 * CORE_W * CORE_D:.0f} m2 total "
+          f"({2 * CORE_W * CORE_D / (W * D) * 100:.1f}% of the plate)")
+    print(f"core spacing         : {2 * CORE_OFFSET:.0f} m between centres, "
+          f"{2 * (CORE_OFFSET - CORE_W / 2):.0f} m clear between them, "
+          f"{W / 2 - (CORE_OFFSET + CORE_W / 2):.0f} m to each building end")
     print(f"derivation           : W = {WINDOWS_LONG} x {PANE_W:.0f} + 2 x "
           f"{PIER_LONG:.0f} = {W:.0f} m,  D = {WINDOWS_SHORT} x {PANE_W:.0f} + 2 x "
           f"{PIER_SHORT:.0f} = {D:.0f} m")
@@ -934,10 +1038,49 @@ def report(objects):
     print("=======================\n")
 
 
+def frame_viewport():
+    """Park the saved VIEWPORT well back from the building.
+
+    This is separate from scene.camera, which only affects renders. Opening a
+    .blend restores the view_distance stored in its screen layout, and under
+    --factory-startup that is the default ~17 m — inside a 166 m tower, so you
+    land in the middle of the model and have to zoom out every time.
+
+    Distance is derived from the building rather than fixed, so it keeps working
+    if the footprint or floor count changes. The diagonal is the dimension that
+    has to fit, not the height alone.
+    """
+    diag = math.sqrt(W ** 2 + D ** 2 + CORE_TOP_Z ** 2)
+    for screen in bpy.data.screens:
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            for space in area.spaces:
+                if space.type != "VIEW_3D":
+                    continue
+                r3d = space.region_3d
+                # Orbit about mid-height, so the tower sits in frame rather than
+                # running off the top with the ground at centre.
+                r3d.view_location = Vector((0.0, 0.0, CORE_TOP_Z * 0.5))
+                r3d.view_distance = diag * 1.6
+                # A 3/4 view from the south-east: the lit side, matching where the
+                # render cameras sit.
+                r3d.view_rotation = Euler(
+                    (math.radians(72.0), 0.0, math.radians(38.0)), "XYZ"
+                ).to_quaternion()
+                r3d.view_perspective = "PERSP"
+                # Far clip has to clear the pull-back or the model is culled and
+                # you open onto an empty grey viewport — worse than being inside.
+                space.clip_end = max(space.clip_end, diag * 6.0)
+                space.clip_start = 0.5
+                space.lens = 35.0
+
+
 def main():
     objects = build()
     setup_render()
     report(objects)
+    frame_viewport()
 
     os.makedirs(OUT_DIR, exist_ok=True)
     blend_path = os.path.join(OUT_DIR, "highrise_house.blend")

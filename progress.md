@@ -1,5 +1,199 @@
 # Progress
 
+## 2026-08-17 — main — the .blend now opens looking at the building, not inside it
+
+User: every time they open the file they land inside the building and have to zoom
+out repeatedly.
+
+The cause is not the scene camera — that was already pulled back to
+`max(W, D, TOP_Z) * 1.35` and only affects renders anyway. It is the **viewport**
+state stored in the .blend's screen layouts, which is a completely separate thing.
+Measured the factory default directly: `view_distance` **14.99 m**, pivoting about
+the origin at z = 0. The building is 166 m tall with a 185 m diagonal, so 15 m from
+the ground plane is inside the pilotis level. Nothing in the script had ever touched
+it, so every build inherited that default.
+
+`frame_viewport()` in `build_house.py`, called from `main()` before saving:
+
+- `view_distance = diag * 1.6` where `diag = sqrt(W² + D² + CORE_TOP_Z²)` — derived,
+  so it keeps working if the footprint or floor count changes. 296 m for the current
+  building. The diagonal is what has to fit, not the height alone.
+- `view_location` at `CORE_TOP_Z * 0.5` (83 m). Orbiting the origin puts the ground
+  at screen centre and the tower off the top.
+- 3/4 view from the south-east (72° / 38°), matching where the render cameras sit,
+  which is also the lit side.
+- `clip_end = diag * 6` (1112 m). Necessary: at 296 m out, the default 1000 m clip
+  would be fine, but a smaller default would cull the model and the file would open
+  onto empty grey — worse than opening inside it.
+
+Blender stores **ten** 3D viewports (one per workspace: Layout, Modeling, Shading,
+Animation, Sculpting, UV Editing, Texture Paint, Geometry Nodes, Scripting…), so the
+function loops over `bpy.data.screens` and sets all of them. Setting only the active
+one would have left the problem in place for anyone who opens on a different tab.
+
+Verify grew 124 → 129. Five checks, reading the state back out of the saved file:
+
+- the .blend stores viewports to configure (10 across 11 workspaces)
+- every viewport opens outside the building — `view_distance > diag/2`
+- the whole tower fits the frame, computed from each viewport's own `lens` against
+  the 24 mm sensor height (203 m visible for a 166 m building)
+- the pivot is at 30–70% of building height, not the ground
+- far clip clears the pull-back
+
+**Negative test.** Disabled the `frame_viewport()` call, rebuilt, re-verified:
+126/129 with exactly the three expected failures — nearest viewport 15.0 m against
+a 93 m half-diagonal, all ten too tight for a 166 m building, pivot at z = 0. So
+the checks are reading real state rather than restating the constants. Restored
+from a copy and confirmed 129/129.
+
+Renders are unaffected — `scene.camera` was not touched, so no re-render needed.
+
+Docs: README build section explains the viewport and that it is independent of
+`scene.camera`; outputs table mentions the framed viewport; check count 124 → 129.
+
+## 2026-08-17 — main — the cores now run continuous and finish above the roof
+
+User pointed out that the core should rise above the building, and that the thing
+projecting at the top was not the core.
+
+They were right, and worse than they said. What sat up there was `RoofPlant`, an
+arbitrary 22.8 × 10.9 × 3.4 m box offset to x = +9.12 — sized as a fraction of the
+footprint, unrelated to the cores, and only on one side. Checking further, the
+cores existed **only** at the pilotis levels (0 → 12 m) and the refuge level
+(80 → 88 m); the tower was hollow between them. The lift shafts stopped and
+started again, and a motor room on the roof would have sat over nothing.
+
+Changes to `build_house.py`:
+
+- `RoofPlant` deleted.
+- `CORE_OVERRUN = 4.6` (lift overtravel + machine room) and
+  `CORE_ROOF_PARAPET = 0.9`, with `CORE_TOP_Z` derived from `TOP_Z`. An assert
+  holds `CORE_TOP_Z` above the roof parapet, so the overrun cannot silently
+  shrink below where it is visible.
+- The roof block now builds the two cores continuing up via `cores()` itself, a
+  cap slab per core, and a low upstand — placed by `CORE_XS` and `CORE_W/CORE_D`,
+  so they move if the cores ever move.
+- `cores("TowerCore", BASE_Z, TOP_Z - BASE_Z, concrete)` replaces the
+  refuge-only core, making the shafts continuous ground → roof. Within the refuge
+  void they stay visible, so the garden reads as a 28 m span between two piers.
+- Stats now print the parapet top and the bulkhead top separately.
+
+Heights: roof slab 160.22, parapet top **161.32**, bulkhead top **165.94** —
+4.62 m clear of the parapet, 5.72 m above the roof slab.
+
+**Ordering bug, caught by the build failing:** `CORE_TOP_Z` was first placed with
+the other overrun constants at line 240, before `TOP_Z` is defined at 245, giving
+`NameError`. Moved below `TOP_Z`. Worth noting the failure mode — the verify run
+immediately after that failed build passed 124/124 because it was reading the
+**previous** blend. This is the same trap recorded further down this file: always
+confirm the build printed its stats before trusting a verify result. I only caught
+it because the build's height lines were missing from the grep output.
+
+**Predicted breakage that did not happen.** I expected continuous core walls
+touching the floor plates to merge into large connected components and break the
+`core_pieces` filter's `(hi[0] - lo[0]) < W * 0.5` condition in `verify_house.py`.
+It didn't: abutting boxes share no vertices, and `piece_bounds()` walks bmesh
+edges, so contact alone doesn't merge pieces. All 12 twin-core checks still pass
+unchanged.
+
+Verify grew 117 → 124. Seven new checks, all reading geometry:
+
+- something rises above the roof parapet (18 pieces above 161.32 m)
+- the highest point **is** the core bulkhead (165.94 m, matches `CORE_TOP_Z`)
+- the overrun gives ≥ 4 m of real headroom above the roof slab (5.72 m)
+- everything above the parapet sits over a core footprint (0 pieces outside)
+- each core carries its own bulkhead (9 pieces at x = −20, 9 at +20)
+- no projecting piece wider than `CORE_W` — this is the check the old
+  22.8 m-wide `RoofPlant` would have failed
+
+Re-rendered all five views. **I still cannot see a rendered image** — the Read
+tool returns nothing for PNGs, as throughout this project. So instead of claiming
+the bulkheads look right, I projected `(±20, 0, 165.94)` through the front
+elevation camera with `world_to_camera_view`: both land at NDC y = 0.733, inside
+the frame, 1.2% of frame height above the parapet line at 0.721. That confirms
+they are *framed*, not that they *read* well. Whether the pair looks right at that
+scale needs your eyes.
+
+README: total height row now gives both figures; a new block in the core section
+covers continuity and the overrun, and names the old plant box as what it
+replaced; check count 117 → 124; "roof plant" → "roof bulkheads".
+
+## 2026-08-17 — main — twin service cores replacing the single central core
+
+User asked whether a single flat central core was right, or whether two cores at
+the ends, or an H-core, would be better in reality — noting that the facade
+already has blanks at both ends.
+
+**Corrected a premise first.** The blanks are 8 m at each end of the LONG (76 m)
+facade. The building's END is the 32 m short facade, which carries 24 m of ribbon
+window and is only solid for 4 m at each corner. So a core pushed to the end
+would back onto blank on two sides but sit behind glass on the third. The existing
+blanks do not pay for an end core.
+
+**Computed before recommending, and the structural answer was "it does not
+matter".** The lateral system is the perimeter, not the core:
+
+| | Iy (wind on 76 m face) | Ix (wind on 32 m face) |
+| --- | --- | --- |
+| core 14 × 9 | 177 m⁴ | 351 m⁴ |
+| 4 L-shaped corner piers | 3359 m⁴ | 18025 m⁴ |
+
+The core held 5.0% of Y stiffness and 1.9% of X. Tip drift 60 mm = H/2650 against
+a H/500 limit. Twin/H cores win on Ix by ~20×, but Ix is the *low-demand*
+direction (slenderness 2.11 vs 5.00). Extra stiffness there buys nothing.
+
+**The real problem was capacity.** 37 floors × 76 × 32 = 89,984 m² GFA, ~654 units,
+~1,767 people, needing 7–11 lifts. Shafts + 2 stairs + lobbies + smoke-stop
+lobbies + risers ≈ 204 m² gross. The 14 × 9 core was 126 m², short by 38%, a 5.2%
+core-to-plate ratio where residential runs 10–15%. Egress was also marginal:
+worst-case travel 42.5 m against SCDF's ~30 m dead-end / ~45 m two-way. And two
+stairs in one shaft are not independent.
+
+**Built: two 12 × 12 cores at x = ±20.** 288 m² (+42% margin), 11.8% of the plate,
+worst-case egress 24.0 m, stairs 40 m apart with 28 m of clear plate between, 10 m
+unit depth either side. Swept the placement and size options rather than picking:
+±20 with 12 × 12 was the point where egress bottomed out while keeping unit depth
+in the 9–13 m band and the edges (14 m and 26 m) on the 2.00 m pane grid.
+
+**Rejected the H-core deliberately.** Its spine would run a wall down the middle
+of the plate, forcing single-loaded corridors either side. H-cores suit office
+towers wanting deep lettable space; residential wants a continuous corridor loop.
+The extra 36 m² does not pay for a severed plan.
+
+User's two facade constraints held automatically, because the cores are internal
+and never touch a facade: every pane is still 2.00 m, counts are still 30 and 12,
+footprint still 76 × 32 m on whole metres. Asserts in `build_house.py` now enforce
+the pier-zone clearance, pane-grid alignment and minimum provision.
+
+Side effect worth recording: the refuge void's load path IMPROVED. Twin cores give
+26.25 m² of core wall against the old 12.57, so the piers-plus-cores case is now
+14.34 MPa where it was 19.31 and over the C40 limit. The 24 columns stay — 14.34 is
+80% utilisation with no margin, and they carry the facade rhythm through the
+garden. With them it is 7.72 MPa / 43%. Updated the stale figures in the README.
+
+**Three verify failures, and all three were my own test code, not the geometry:**
+
+- Filtered core wall pieces by the y CENTRE, which keeps the east/west walls
+  (centred y = 0) and drops the north/south walls (centred y = ±5.86). Fixed by
+  filtering on the piece lying within the footprint instead.
+- The grille ray test hardcoded bay `gxs[10]`, which stopped being clear the
+  moment the cores moved behind it. Now it scans for a bay that is actually open
+  and reports how many of the 120 are (76).
+- Twice I diagnosed a "failure" against a stale `.blend` — after `git stash` and
+  after a build that had crashed on my own stats line. **Always confirm the build
+  printed its stats before trusting a verify run.**
+
+Verify grew 105 → 117. The new checks read **measured geometry**, not this file's
+duplicated constants, which matters because a constants-based check would pass
+even if the model disagreed. Proved they bite with a negative test: reverting to a
+single central 14 × 9 gives 112/116 with 4 failures, including provision measured
+at 0 m².
+
+Remaining issue: **still cannot view a rendered image in this session** — the Read
+tool returns nothing for PNGs. So the claim that two cores read better in the sky
+garden view than one central lump is a geometric argument (28 m of clear span
+between them), not something I have seen. Verified numerically, not visually.
+
 ## 2026-08-17 — main — purged renders from git history, renders now in a release
 
 The repo had grown to 108 MB. Measured where it went before touching anything, by

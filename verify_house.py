@@ -5,6 +5,7 @@ Run headless:
         --python verify_house.py -- out/highrise_house.blend
 """
 
+import math
 import sys
 
 import bpy
@@ -47,6 +48,14 @@ GARDEN_SLAB_T = 0.45
 # Columns carrying the tower across the void. The fins screen it; these hold it up.
 REFUGE_COL_SIZE = 1.20
 REFUGE_COL_PITCH = PANE_W * 3
+# Twin service cores. Duplicated from build_house.py, like every constant here.
+CORE_W, CORE_D, CORE_T = 12.0, 12.0, 0.28
+CORE_OFFSET = 20.0
+CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
+CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
+PARAPET_H = 1.10
+CORE_OVERRUN = 4.6         # lift overtravel + machine room above the roof slab
+CORE_ROOF_PARAPET = 0.9
 REFUGE_START = (FIRST_GLAZED + LAST_GLAZED + 1 - REFUGE_FLOORS) // 2
 REFUGE_END = REFUGE_START + REFUGE_FLOORS - 1
 REFUGE_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else set()
@@ -60,6 +69,8 @@ GLAZED_FLOORS = (TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
 GLAZED_SET = set(range(FIRST_GLAZED, LAST_GLAZED + 1)) - REFUGE_SET
 BASE_Z = PILOTIS_FLOORS * H
 TOP_Z = BASE_Z + TOWER_FLOORS * H
+ROOF_TOP_Z = TOP_Z + 0.22 + PARAPET_H          # top of the roof parapet
+CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
 EPS = 1e-4
 
 failures = []
@@ -505,13 +516,32 @@ def main():
                 return n
 
             z_probe = REFUGE_Z0 + 3.0
-            mid = (gxs[10] + gxs[11]) / 2
-            check("a ray passes clean through a grille cell (real opening)",
-                  hits_through(mid, z_probe) == 0,
-                  f"{hits_through(mid, z_probe)} hits at x={mid:.2f}, z={z_probe:.1f}")
-            check("a ray is blocked by a grille member",
-                  hits_through(gxs[10], z_probe) > 0,
-                  f"{hits_through(gxs[10], z_probe)} hits at x={gxs[10]:.2f}")
+
+            # This test is about the SCREEN having real openings, so it has to
+            # probe a bay where nothing else is in the way. The refuge level also
+            # contains the service cores, the 1.20 m structural columns and the
+            # planting, any of which will stop a Y-ray regardless of the screen.
+            # Rather than hardcode a bay index — the old version used gxs[10],
+            # which stopped being clear the moment the cores moved — find a gap
+            # that is genuinely open and report how many there were.
+            gaps = [(gxs[i], (gxs[i] + gxs[i + 1]) / 2)
+                    for i in range(len(gxs) - 1)]
+            clear = [(m, mem) for mem, m in gaps
+                     if hits_through(m, z_probe) == 0]
+            check("the screen has bays that are clear through (real openings)",
+                  len(clear) >= 10,
+                  f"{len(clear)} of {len(gaps)} bays open through the whole "
+                  f"depth at z={z_probe:.1f} m")
+            if clear:
+                mid, member = clear[len(clear) // 2]
+                check("a ray passes clean through a grille cell (real opening)",
+                      hits_through(mid, z_probe) == 0,
+                      f"{hits_through(mid, z_probe)} hits at x={mid:.2f}, "
+                      f"z={z_probe:.1f}")
+                check("a ray is blocked by a grille member",
+                      hits_through(member, z_probe) > 0,
+                      f"{hits_through(member, z_probe)} hits at x={member:.2f} "
+                      f"(the blade beside that opening)")
 
         # --- the load path across the void ------------------------------
         # The fins are 0.10 m blades and carry nothing. Real columns have to take
@@ -529,7 +559,8 @@ def main():
 
         # Utilisation, so the section cannot silently be shaved to nothing.
         pier_area = 4 * (PIER_LONG * WALL_T + (PIER_SHORT - WALL_T) * WALL_T)
-        core_area = 14.0 * 9.0 - (14.0 - 0.56) * (9.0 - 0.56)
+        core_area = 2 * (CORE_W * CORE_D
+                         - (CORE_W - 2 * CORE_T) * (CORE_D - 2 * CORE_T))
         col_area = len(cols) * REFUGE_COL_SIZE ** 2
         floors_above = TOWER_FLOORS - REFUGE_END - 1
         load = floors_above * W * D * (1.35 * 7.0 + 1.5 * 2.5)      # kN, factored
@@ -583,12 +614,17 @@ def main():
               canopy_top < REFUGE_Z1 - 0.3,
               f"canopy tops at {canopy_top:.2f} m, ceiling {REFUGE_Z1:.1f} m")
 
-        # The lift core is exposed here — this is the transfer level.
-        core_here = [1 for lo, hi in st
+        # Both cores are exposed here — this is the transfer level, and there are
+        # two of them now, so a check that passes on one is not good enough.
+        core_here = [((lo[0] + hi[0]) / 2) for lo, hi in st
                      if lo[2] < REFUGE_Z0 + 1.0 and hi[2] > REFUGE_Z1 - 1.0
                      and (hi[0] - lo[0]) < W * 0.5]
-        check("the lift/stair core rises through the void (transfer level)",
-              core_here, f"{len(core_here)} core pieces spanning the void")
+        west = [x for x in core_here if x < -W / 8]
+        east = [x for x in core_here if x > W / 8]
+        check("both lift/stair cores rise through the void (transfer level)",
+              west and east,
+              f"{len(west)} pieces west, {len(east)} east, "
+              f"{len(core_here)} spanning the void in total")
 
         # Placement rules.
         check("the void does not overlap the blank bands",
@@ -684,6 +720,156 @@ def main():
     cols = [o for o in bpy.data.objects if o.name.startswith("Column_")]
     check("pilotis columns merged into Structure (none left loose)", not cols)
 
+    # --- twin service cores --------------------------------------------
+    # TWO cores, and the reason is capacity and egress rather than structure: a
+    # single 14 x 9 held only 126 m2 against ~204 m2 of shafts, stairs, lobbies
+    # and risers that 654 units need, and put worst-case travel at 42.5 m.
+    # These checks measure that, so the cores cannot quietly shrink back.
+    # Core walls only. Filter on the piece lying WITHIN the core footprint in y,
+    # not on its centre: the north and south walls of a core are centred at
+    # y = +-5.86 while the east and west walls are centred at y = 0, so a
+    # centre-based test keeps two walls and drops the other two. The pilotis
+    # columns this needs to exclude sit at y = +-13.8, well outside the core.
+    core_pieces = [(lo, hi) for lo, hi in piece_bounds(struct)
+                   if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
+                   and (hi[0] - lo[0]) < W * 0.5
+                   and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5]
+    core_xs = sorted({round((lo[0] + hi[0]) / 2, 1) for lo, hi in core_pieces})
+    w_side = [x for x in core_xs if x < 0]
+    e_side = [x for x in core_xs if x > 0]
+    check("there are two separate service cores, not one",
+          w_side and e_side,
+          f"{len(w_side)} wall centrelines west of centre, {len(e_side)} east")
+
+    # Each core has to be a CLOSED tube, or it is not a smoke-separated shaft and
+    # the two stairs inside it are not protected.
+    for k, cx in enumerate(CORE_XS):
+        walls_here = [(lo, hi) for lo, hi in core_pieces
+                      if abs((lo[0] + hi[0]) / 2 - cx) < CORE_W / 2 + 0.5]
+        check(f"core {k} is a closed tube (4 walls)", len(walls_here) == 4,
+              f"{len(walls_here)} walls at x={cx:+.0f}")
+    # Provision: the whole point of the change. MEASURED from the model, not
+    # computed from the constants above — this file duplicates build_house.py's
+    # constants, so a check on those would pass even if the geometry disagreed.
+    def measured_cores():
+        """(x centre, width, depth) of each core, read off the wall pieces."""
+        found = []
+        for cx in CORE_XS:
+            here = [(lo, hi) for lo, hi in core_pieces
+                    if abs((lo[0] + hi[0]) / 2 - cx) < CORE_W / 2 + 0.5]
+            if len(here) != 4:
+                continue
+            x0 = min(lo[0] for lo, _ in here)
+            x1 = max(hi[0] for _, hi in here)
+            y0 = min(lo[1] for lo, _ in here)
+            y1 = max(hi[1] for _, hi in here)
+            found.append(((x0 + x1) / 2, x1 - x0, y1 - y0))
+        return found
+
+    mc = measured_cores()
+    check("both cores are found in the geometry to be measured", len(mc) == 2,
+          f"{len(mc)} complete cores located")
+    provision = sum(bw * bd for _, bw, bd in mc)
+    check("the cores hold the required vertical transport provision",
+          provision >= CORE_PROVISION,
+          f"{provision:.0f} m2 measured against {CORE_PROVISION:.0f} m2 needed "
+          f"({provision / CORE_PROVISION - 1:+.0%}), "
+          f"{provision / (W * D) * 100:.1f}% of the plate")
+
+    # Egress: worst-case rectilinear travel from the far corners and mid-edge to
+    # the nearest core. This is the number that a single central core failed.
+    def travel(px, py):
+        best = 1e9
+        for cx, bw, bd in (mc or [(cx, CORE_W, CORE_D) for cx in CORE_XS]):
+            dx = max(cx - bw / 2 - px, px - (cx + bw / 2), 0.0)
+            dy = max(-bd / 2 - py, py - bd / 2, 0.0)
+            best = min(best, dx + dy)
+        return best
+
+    worst = max(travel(px, py) for px, py in
+                ((W / 2, D / 2), (-W / 2, D / 2), (0.0, D / 2), (0.0, 0.0)))
+    check("worst-case egress travel is within SCDF two-way limits",
+          worst <= 30.0,
+          f"{worst:.1f} m to the nearest core (limit ~30 m dead-end, ~45 m two-way)")
+
+    # Stair remoteness: two stairs in ONE shaft share a failure. Separating the
+    # cores is what makes them independent.
+    if len(mc) == 2:
+        (xa, wa, _), (xb, wb, _) = sorted(mc)
+        gap = (xb - wb / 2) - (xa + wa / 2)
+        check("the two stair cores are genuinely remote from each other",
+              gap >= 20.0,
+              f"{xb - xa:.0f} m between measured centres, "
+              f"{gap:.0f} m of clear plate between them")
+
+    # The cores are internal. If one ever touched a facade it would blow a hole
+    # in the ribbon window, so check the clearance to the pier zone explicitly.
+    check("the cores stay clear of the corner pier zone",
+          CORE_OFFSET + CORE_W / 2 <= W / 2 - PIER_LONG,
+          f"outer edge at {CORE_OFFSET + CORE_W / 2:.0f} m, "
+          f"pier zone starts at {W / 2 - PIER_LONG:.0f} m")
+
+    # Core walls on the pane grid, so interior partitions can follow the facade.
+    for edge in (CORE_OFFSET - CORE_W / 2, CORE_OFFSET + CORE_W / 2):
+        check(f"core edge at {edge:.0f} m lands on the pane grid",
+              abs(edge % PANE_W) < 1e-6,
+              f"{edge:.2f} m / {PANE_W:.2f} m = {edge / PANE_W:.3f} panes")
+
+    # Unit depth either side of a core: too deep a core leaves unusable slivers.
+    unit_depth = (D - CORE_D) / 2
+    check("usable depth remains either side of the cores",
+          9.0 <= unit_depth <= 13.0,
+          f"{unit_depth:.1f} m each side (residential wants 9-13 m)")
+
+    # --- what rises above the roof -------------------------------------
+    # The thing projecting above the parapet has to BE the cores continuing up
+    # (lift overtravel + machine room + stair bulkhead), not a decorative box
+    # placed by eye. Two tests: it is above the parapet at all, and it sits over
+    # the core footprints rather than anywhere else on the plate.
+    above = [(lo, hi) for lo, hi in piece_bounds(struct)
+             if hi[2] > ROOF_TOP_Z + 0.2]
+    check("something rises above the roof parapet", bool(above),
+          f"{len(above)} pieces above {ROOF_TOP_Z:.2f} m")
+
+    all_z = max(world_bounds(o)[2][1] for o in objs.values())
+    check("the highest point on the building is the core bulkhead",
+          abs(all_z - CORE_TOP_Z) < 0.05,
+          f"top={all_z:.2f} m, expected {CORE_TOP_Z:.2f} m "
+          f"({all_z - ROOF_TOP_Z:.2f} m clear of the parapet)")
+    check("the overrun gives real lift headroom, not a token upstand",
+          all_z - (TOP_Z + 0.22) >= 4.0,
+          f"{all_z - (TOP_Z + 0.22):.2f} m above the roof slab "
+          f"(overtravel + machine room needs ~4 m)")
+
+    # Every projecting piece within a core footprint. This is the check that a
+    # free-standing plant box in the middle of the roof would fail.
+    strays = [(lo, hi) for lo, hi in above
+              if not any(lo[0] > cx - CORE_W / 2 - 0.05
+                         and hi[0] < cx + CORE_W / 2 + 0.05
+                         and lo[1] > -CORE_D / 2 - 0.05
+                         and hi[1] < CORE_D / 2 + 0.05
+                         for cx in CORE_XS)]
+    check("everything above the parapet sits over a core footprint",
+          not strays,
+          f"{len(above)} pieces, {len(strays)} outside the core plan"
+          + (f" (first at x={strays[0][0][0]:+.1f}..{strays[0][1][0]:+.1f})"
+             if strays else ""))
+
+    # One bulkhead per core, so the pair reads symmetrically from the street.
+    for k, cx in enumerate(CORE_XS):
+        here = [p for p in above
+                if abs((p[0][0] + p[1][0]) / 2 - cx) < CORE_W / 2 + 0.5]
+        check(f"core {k} carries its own bulkhead above the roof", bool(here),
+              f"{len(here)} pieces at x={cx:+.0f}")
+
+    # The old RoofPlant box was 22.8 x 10.9 m at x=+9.12 — unrelated to the
+    # cores, and only on one side. Nothing that wide should remain up there.
+    check("no oversized roof plant box remains",
+          all(hi[0] - lo[0] <= CORE_W + 0.05 for lo, hi in above),
+          f"widest projecting piece is "
+          f"{max((hi[0] - lo[0] for lo, hi in above), default=0):.2f} m "
+          f"(core is {CORE_W:.0f} m)")
+
     # --- floor plates --------------------------------------------------
     plates = objs["Floor_Plates"]
     pz = z_clusters(plates)
@@ -697,9 +883,55 @@ def main():
           f"({TOWER_FLOORS} storeys - {REFUGE_FLOORS} open)")
 
     # --- overall envelope ----------------------------------------------
-    all_z = max(world_bounds(o)[2][1] for o in objs.values())
+    # all_z was measured with the core-overrun checks above.
     check(f"total height matches {TOTAL_FLOORS} floors + parapet", all_z >= TOP_Z + 1.0,
           f"top={all_z:.2f} m")
+
+    # --- saved viewport ------------------------------------------------
+    # Opening the .blend restores the view_distance stored in its screens. The
+    # factory default is 15 m, which puts you inside a 166 m tower. Check every
+    # workspace, since Blender saves ten of them and you can open into any.
+    diag = math.sqrt(W ** 2 + D ** 2 + all_z ** 2)
+    views = [(sp, sc.name) for sc in bpy.data.screens for ar in sc.areas
+             if ar.type == "VIEW_3D" for sp in ar.spaces if sp.type == "VIEW_3D"]
+    check("the .blend stores 3D viewports to configure", bool(views),
+          f"{len(views)} viewports across {len(bpy.data.screens)} workspaces")
+
+    too_near = [(n, sp.region_3d.view_distance) for sp, n in views
+                if sp.region_3d.view_distance <= diag / 2]
+    check("the saved viewport opens OUTSIDE the building, not inside it",
+          not too_near,
+          f"{len(views)} viewports, nearest "
+          f"{min((sp.region_3d.view_distance for sp, _ in views), default=0):.0f} m "
+          f"against a {diag / 2:.0f} m half-diagonal"
+          + (f" — {too_near[0][0]} at {too_near[0][1]:.1f} m" if too_near else ""))
+
+    # Far enough out that the whole tower fits the frame, using the 24 mm sensor
+    # height each viewport's own lens is measured against.
+    tight = [n for sp, n in views
+             if 2 * sp.region_3d.view_distance * math.tan(math.atan(12.0 / sp.lens))
+             < all_z * 1.15]
+    check("the whole tower fits the frame at the saved distance", not tight,
+          f"{len(tight)} viewports too tight for a {all_z:.0f} m building")
+
+    # Orbiting about the origin puts the ground at screen centre and the tower
+    # off the top; it should orbit about mid-height.
+    off = [n for sp, n in views
+           if not 0.3 * all_z <= sp.region_3d.view_location.z <= 0.7 * all_z]
+    check("the viewport orbits about mid-height, not the ground", not off,
+          f"pivot at z={views[0][0].region_3d.view_location.z:.1f} m "
+          f"({views[0][0].region_3d.view_location.z / all_z:.0%} up the tower)"
+          if views else "no viewports")
+
+    # Far clip must clear the pull-back, or the model is culled and the file
+    # opens onto empty grey — worse than opening inside it.
+    culled = [(n, sp.clip_end, sp.region_3d.view_distance) for sp, n in views
+              if sp.clip_end < sp.region_3d.view_distance * 1.5]
+    check("far clip clears the pull-back (model is not culled on open)",
+          not culled,
+          f"clip_end {views[0][0].clip_end:.0f} m against a "
+          f"{views[0][0].region_3d.view_distance:.0f} m view distance"
+          if views else "no viewports")
 
     # Footprint must actually be the requested 70 x 30 m.
     facade = objs["Facade_Spandrels"]

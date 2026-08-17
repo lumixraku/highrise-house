@@ -8,7 +8,7 @@ ground on three open pilotis floors.
 | ![Front elevation](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_front.png) | ![Corner](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_corner.png) |
 | **Front elevation** — the full 161 m from 440 m out, 42 mm. The blank 8 m bands top and bottom, and the refuge void at mid-height. | **Corner** — 38 mm from above the halfway point, showing how the ribbon window stops short of the solid corner piers. |
 | ![Sky garden](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_sky_garden.png) | ![Pilotis base](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_base_pilotis.png) |
-| **Refuge floor / sky garden** — 58 mm, camera inside the void and slightly below it, looking up into the 8 m double height past the fin screen and the planting. | **Pilotis base** — 32 mm looking up the open base: the 1.60 m columns, the service core behind them, and the soffit oversailing as a drip edge. |
+| **Refuge floor / sky garden** — 58 mm, camera inside the void and slightly below it, looking up into the 8 m double height past the fin screen and the planting. | **Pilotis base** — 32 mm looking up the open base: the 1.60 m columns, the two service cores behind them, and the soffit oversailing as a drip edge. |
 | ![Facade detail](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_floor_detail.png) | **Facade detail** — one floor at 70 mm: the 2.00 × 1.50 m pane, its mullions, the 0.30 m vent bands flush above and below the glass, and the spandrel between. Every pane in the building is this same fixed module; the footprint is derived from how many of them fit, not the other way round. |
 
 Renders live in the [`renders-v1` release](https://github.com/lumixraku/highrise-house/releases/tag/renders-v1),
@@ -29,11 +29,20 @@ Writes into `out/`:
 
 | file | contents |
 | --- | --- |
-| `highrise_house.blend` | full scene: geometry, materials, sun, camera |
+| `highrise_house.blend` | full scene: geometry, materials, sun, camera, framed viewport |
 | `highrise_house.glb` | glTF export for web/DCC viewers |
 | `preview.png` | EEVEE render, 3/4 view |
 
 Add `--no-render` after the script name to skip rendering.
+
+The `.blend` also saves a **framed viewport**, so opening it puts you 296 m out
+looking at the whole tower rather than inside it. Blender's factory default is a
+15 m view distance orbiting the origin, which for a 166 m building with a 185 m
+diagonal means the file opens somewhere inside the pilotis level. `frame_viewport()`
+derives the distance from the building diagonal and pivots about mid-height, and
+sets all ten workspaces, so `Layout`, `Modeling`, `Shading` and the rest all open
+the same way. Note this is independent of `scene.camera` — that one only affects
+renders and was already pulled back.
 
 Extra views, rendered portrait since the tower is 160 m tall (front elevation,
 pilotis base, single-floor facade close-up, corner, sky garden):
@@ -44,14 +53,18 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-105 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+129 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the even 8 m long-facade margin, solid corners,
-blank base/top bands, vent adjacency, pilotis clearance, and the refuge void
+blank base/top bands, vent adjacency, pilotis clearance, the twin service cores
+(two closed tubes, measured provision against what the unit count needs,
+worst-case egress travel, stair remoteness, clearance from the pier zone, edges
+on the pane grid, usable depth either side), and the refuge void
 (open on all sides, undivided double height, guarded edges, planting inside it,
 core continuity, SCDF spacing, the screen's alignment with the window mullions and
 its open area, and the void's load path — column count, spacing on the pane
-module, and stress against the C40 limit):
+module, and stress against the C40 limit). Also the saved viewport, since a file
+that opens inside the model is a defect you notice every single time:
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -67,7 +80,7 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 | storeys | 40 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
 | occupied floors | 37 (12.0 → 160.0 m), of which 2 are the refuge level |
-| total height | 161.32 m to top of parapet |
+| total height | 161.32 m to top of parapet, 165.94 m to top of the core bulkheads |
 | corner piers | 8.0 m on long faces / 4.0 m on short faces |
 | clear window opening | 60 m long face / 24 m short face |
 | blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
@@ -81,10 +94,91 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 ### Bottom three floors
 
 Open and raised. A 9 × 4 grid of 1.60 m square concrete columns on ~9 m bays
-carries the tower, with a 14.0 × 9.0 m service core (stairs/lifts) rising through
-the void and a landing at each of the three levels. Columns that would clash with
-the core are omitted. The tower's underside slab oversails the footprint by 0.25 m
-per side as a drip edge.
+carries the tower, with **two** 12.0 × 12.0 m service cores (stairs/lifts) rising
+through the void and a landing at each of the three levels. Columns that would
+clash with a core are omitted. The tower's underside slab oversails the footprint
+by 0.25 m per side as a drip edge.
+
+### Two service cores, not one
+
+The cores sit at x = ±20 m, 288 m² between them, 11.8% of the floorplate. This
+replaced a single central 14 × 9 core, and the reason is **capacity and egress,
+not structure**.
+
+The lateral system here is the perimeter, not the core. The four L-shaped corner
+piers give Iy = 3359 m⁴ against a central core's 177 m⁴, so the core carried only
+**5% of the lateral stiffness** and tip drift is H/2650 against a H/500 limit.
+Twin and H-shaped cores do win on Ix by a factor of ~20, but that is the direction
+with the *least* demand — the 32 m end face has a slenderness of 2.11. Extra
+stiffness there buys nothing.
+
+What the single core could not do was hold the vertical transport:
+
+| | |
+| --- | --- |
+| tower GFA | 37 × 76 × 32 = 89,984 m² |
+| at 80% efficiency, 110 m²/unit | ~654 units, ~1,767 people |
+| lifts needed (1 per 60–90 units) | 7–11 |
+| shafts + 2 stairs + lobbies + risers | ~204 m² gross |
+| single 14 × 9 core | 126 m² — **short by 38%** |
+| two 12 × 12 cores | 288 m² — **+42% margin** |
+
+A 14 × 9 core is a 5.2% core-to-plate ratio where residential towers run 10–15%.
+
+Splitting also fixes three things one core cannot:
+
+* **Egress.** Worst-case travel to a central core was 42.5 m, marginal against
+  SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **24.0 m**.
+* **Stair remoteness.** Two stairs inside one shaft are not independent — a single
+  incident compromises both. These sit 40 m apart with 28 m of clear plate between.
+* **Lift zoning**, which a 654-unit tower wants anyway: low zone in the west core,
+  high zone in the east, ~65 units per lift in each.
+
+Deliberately **not an H-core**. The spine that makes it an H would run a wall down
+the middle of the plate, forcing single-loaded corridors either side. H-cores suit
+office towers wanting deep lettable space; residential wants a continuous corridor
+loop. The extra 36 m² does not pay for a severed plan.
+
+The cores are internal, so the facade is untouched: every pane is still 2.00 m and
+the footprint is still 76 × 32 m on whole metres. Core edges land at 14 and 26 m,
+both whole multiples of the 2.00 m pane, so interior partitions can follow the
+facade rhythm. The outer edge stops at 26 m, clear of the 30 m corner pier zone —
+which is what rules out pushing the cores to the ends of the plate.
+
+Plan, at any occupied floor (x runs −38 → +38):
+
+```
+        -38      -26   -14        +14   +26      +38
+         ┌────────┬─────┬──────────┬─────┬────────┐
+         │        │█████│          │█████│        │  +16   10 m unit depth
+    32 m │  12 m  │ 12  │   28 m   │ 12  │  12 m  │        ─────────────
+         │  end   │  x  │  clear   │  x  │  end   │   0    core band
+         │ 8 m    │ 12  │  span    │ 12  │    8 m │        ─────────────
+         │        │█████│          │█████│        │  -16   10 m unit depth
+         └────────┴─────┴──────────┴─────┴────────┘
+                     ↑                ↑
+              west core (low zone)  east core (high zone)
+
+   worst-case egress 24.0 m   ·   stairs 40 m apart   ·   28 m clear between
+```
+
+The 12 m stub past each core to the building end is a dead-end corridor, well
+inside the ~30 m limit; the 28 m between cores is served from both directions.
+
+The cores run **unbroken from the ground to above the roof** — a shaft that stops
+is not a shaft. That includes straight through the refuge void, where they read as
+two solid piers with the 28 m garden span between them, and up past the parapet:
+
+| | |
+| --- | --- |
+| roof parapet top | 161.32 m |
+| core bulkhead top | **165.94 m** — 4.62 m clear of the parapet |
+| above the roof slab | 5.72 m (lift overtravel + machine room + stair door) |
+
+The thing projecting at the top **is** the cores, sized and placed by them, not a
+plant box positioned by eye — which is what an earlier version had, a 22.8 × 10.9 m
+box offset to x = +9.12 that sat over nothing. Two cores means two bulkheads at
+x = ±20, which is also what tells you from the street where the lifts are.
 
 ### Refuge floor / sky garden
 
@@ -143,13 +237,16 @@ What holds the elevation together where the facade stops:
 * **A 1.2 m balustrade** runs between the piers on all four sides, on the same
   clear opening the windows use, so the vertical rhythm is unbroken.
 * **24 structural columns**, 1.20 m square, carry the 18 floors above across the
-  void. Without them the load lands on the corner piers and core alone: 26.6 m²
-  of concrete under 513638 kN, which is 19.3 MPa and over the limit for C40. With
-  them the path is 61.2 m² at 9.45 MPa — a 52% utilisation, matching the pilotis
-  columns below. They sit at `PANE_W * 3` = 6.0 m centres, so every column lands
-  on a mullion line and the facade's vertical rhythm runs through the garden.
-* **The lift/stair core is exposed**, which is what makes it read as a level you
-  arrive at rather than a gap.
+  void. The 577843 kN factored load lands on 74.9 m² of concrete at **7.72 MPa**,
+  a 43% utilisation of C40, matching the pilotis columns below. Without them the
+  piers and cores are left with 40.3 m² at 14.34 MPa — inside the limit since the
+  twin cores replaced the single one, but at 80% utilisation with no margin, and
+  the columns also carry the facade's vertical rhythm through the garden. They sit
+  at `PANE_W * 3` = 6.0 m centres, so every column lands on a mullion line.
+* **Both lift/stair cores are exposed**, which is what makes it read as a level you
+  arrive at rather than a gap. With two of them the garden reads as running
+  *between* two solid piers, with 28 m of clear span between — a better reading
+  than one lump in the middle.
 
 The garden slab is 0.45 m rather than the usual 0.22 m because it carries soil,
 and it replaces the plate that the floor below would otherwise contribute (they
@@ -433,8 +530,9 @@ stays light (~40k vertices at 40 storeys):
 All parameters sit at the top of `build_house.py`. `PANE_W` and the pane counts
 set the footprint (`W`/`D` are derived — don't set them directly),
 `TOTAL_FLOORS` the storey count and `PILOTIS_FLOORS` how many of those are open
-(`TOWER_FLOORS` is the remainder). The column grid, roof plant and camera all
-derive from the footprint, so changing the pane counts keeps the model coherent.
+(`TOWER_FLOORS` is the remainder). The column grid, roof bulkheads and camera
+all derive from the footprint and the core positions, so changing the pane
+counts keeps the model coherent.
 Note that
 `verify_house.py` carries its own copy of `W`, `D` and the floor counts — update it
 to match, or its assertions will test the old dimensions. The five vertical bands are derived
