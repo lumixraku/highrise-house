@@ -5,11 +5,15 @@ ground on three open pilotis floors.
 
 | | |
 | --- | --- |
-| ![Front elevation](out/view_front.png) | ![Corner](out/view_corner.png) |
+| ![Front elevation](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_front.png) | ![Corner](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_corner.png) |
 | **Front elevation** — the full 161 m from 440 m out, 42 mm. The blank 8 m bands top and bottom, and the refuge void at mid-height. | **Corner** — 38 mm from above the halfway point, showing how the ribbon window stops short of the solid corner piers. |
-| ![Sky garden](out/view_sky_garden.png) | ![Pilotis base](out/view_base_pilotis.png) |
+| ![Sky garden](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_sky_garden.png) | ![Pilotis base](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_base_pilotis.png) |
 | **Refuge floor / sky garden** — 58 mm, camera inside the void and slightly below it, looking up into the 8 m double height past the fin screen and the planting. | **Pilotis base** — 32 mm looking up the open base: the 1.60 m columns, the service core behind them, and the soffit oversailing as a drip edge. |
-| ![Facade detail](out/view_floor_detail.png) | **Facade detail** — one floor at 70 mm: the 2.00 × 1.50 m pane, its mullions, the 0.30 m vent bands flush above and below the glass, and the spandrel between. Every pane in the building is this same fixed module; the footprint is derived from how many of them fit, not the other way round. |
+| ![Facade detail](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_floor_detail.png) | **Facade detail** — one floor at 70 mm: the 2.00 × 1.50 m pane, its mullions, the 0.30 m vent bands flush above and below the glass, and the spandrel between. Every pane in the building is this same fixed module; the footprint is derived from how many of them fit, not the other way round. |
+
+Renders live in the [`renders-v1` release](https://github.com/lumixraku/highrise-house/releases/tag/renders-v1),
+not in the repository — `out/` is a build product and is gitignored, so a clone
+stays around 2 MB instead of carrying 117 MB of PNGs in its history.
 
 ## Build
 
