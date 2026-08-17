@@ -76,30 +76,65 @@ INTERIOR_SETBACK = 0.85
 # EVERYTHING outside is derived from the pane counts — never the other way round.
 PANE_W = 2.00
 WINDOWS_LONG = 30      # panes across each long facade  (X)
-WINDOWS_SHORT = 12     # panes across each short facade (Y)
+# 14 rather than 12 on the short face, and the reason is PIER_SHORT dropping to
+# 2 m: the pane count is the input, so thinning the pier without adding panes
+# would have narrowed D from 32 to 28 m and taken the unit depth either side of
+# the cores down to 8.0 m, under the 9 m a residential plan needs. Two more panes
+# put D back to 32 m exactly.
+WINDOWS_SHORT = 14     # panes across each short facade (Y)
 
 # The mullion is a cover cap centred on each pane joint: it sits proud of the
 # glass line and overlaps the two panes it joins, so it costs NO facade length.
 # That keeps the arithmetic clean — an opening is exactly N x PANE_W, so the
 # footprint comes out on whole metres:
-#   W = 30 x 2.00 + 2 x 8.00 = 76.00 m
-#   D = 12 x 2.00 + 2 x 4.00 = 32.00 m
+#   W = 30 x 2.00 + 2 x 2.00 = 64.00 m
+#   D = 14 x 2.00 + 2 x 2.00 = 32.00 m
 MULLION_W = 0.09
 
 # Solid wall kept at both ends of every facade, so the ribbon stops short of the
 # corners instead of wrapping them. Measured along the facade from the corner.
-# The long (wide) facade uses 8 m, matching the blank bands above and below it,
-# so its window is framed by an even 8 m margin all round. The short facade uses
-# less, or it would end up mostly wall.
-PIER_LONG = 8.0     # at the ends of the long facades (N/S)
-PIER_SHORT = 4.0    # at the ends of the short facades (E/W)
+#
+# ONE pane width on all four facades. What these numbers actually control is the
+# END OF THE BUILDING, not the edge of the glass: a glass run is fixed at
+# N x PANE_W, so the glazing edge does not move when a pier is thinned — the
+# building end moves inward towards it. The pier only decides how much dead wall
+# wraps past the last pane. They were 8 m long / 4 m short, which left the corner
+# apartment with 8 m of blank wall around its outboard end and 4 m around its
+# return. At 2 m on both, it turns the corner after a single pane and has a real
+# second aspect, which is the whole point of putting it there.
+#
+# Thinning PIER_SHORT is what forced WINDOWS_SHORT from 12 to 14. D is derived, so
+# 2 m piers with 12 panes would have given D = 28 m and 8.0 m of unit depth beside
+# the cores, under the 9 m residential minimum. Two more panes hold D at 32 m, so
+# the depth is unchanged and only the corners moved.
+#
+# The cost is lateral stiffness, and it is affordable. Each figure below is at its
+# own footprint, since W is what the wind acts on:
+#   8 long / 4 short, W 76   Iy 3,870 m4   H/2,748
+#   2 long / 4 short, W 64   Iy 2,061 m4   H/1,738
+#   2 long / 2 short, W 64   Iy 1,655 m4   H/1,395   <- in use, 2.8x the limit
+#   0 long / 2 short, W 64   Iy 1,052 m4   H/887
+#   no piers at all,  W 64   Iy   601 m4   H/507     cores alone, 1% margin
+# Most of what a pier buys is the lever arm of its short-facade return about the
+# weak axis, which is why the long leg is the cheap one to thin. Going to zero
+# would still scrape past drift on this arithmetic; what it actually breaks is the
+# facade, since nothing would stop a ribbon short of the corner and the corners
+# would open up. Ten checks in verify_house.py catch that. A real all-glass tower
+# would not lean on this arithmetic anyway: it needs a perimeter Vierendeel frame
+# (structural spandrels at every floor), which this model, walls and columns with
+# no beams, lacks.
+PIER_LONG = 2.0     # one pane width at the ends of the long facades (N/S)
+PIER_SHORT = 2.0    # one pane width at the ends of the short facades (E/W)
 
 # Blank (windowless) bands of the tower.
 # Bottom: the transition floor sitting directly on the pilotis zone.
 # Top: a band of blank wall, rounded to whole floors so the break lands on a
 # floor line rather than cutting a window in half.
-# Both bands are 8 m, so on the long facade the window field is framed by an
-# even 8 m of blank wall on all four sides (8 m piers left and right).
+# Both bands are 8 m. They used to be matched by 8 m piers left and right, framing
+# the long-facade window field evenly all round; the piers are now one pane wide,
+# so the frame is 8 m top and bottom against 2 m at the ends. That asymmetry is
+# the point — the horizontal bands read as the building's cap and base, while the
+# ends stay open so the corner apartments turn the corner.
 SOLID_BASE_TARGET = 8.0
 SOLID_TOP_TARGET = 8.0
 SOLID_BASE_FLOORS = max(1, round(SOLID_BASE_TARGET / H))
@@ -144,9 +179,10 @@ FIN_W = 0.10               # slim: a blade, not a pier
 FIN_DEPTH = 0.34           # depth gives it shadow and solidity at a raking angle
 # Columns carrying the tower across the void. The fins are 0.10 m blades — a
 # screen, not structure — so without these the 18 floors above would be landing
-# on the corner piers and core alone: 26.6 m2 of concrete under 513638 kN, which
-# is 19.3 MPa and over the limit for C40. Adding 24 columns takes the load path
-# to 61.2 m2 / 8.4 MPa, a 47% utilisation matching the pilotis columns below.
+# on the corner piers and core alone: 33.1 m2 of concrete under 486605 kN, which
+# is 14.7 MPa — inside C40 but at 82% utilisation with no margin. Adding 24
+# columns takes the load path to 67.7 m2 / 7.2 MPa, a 40% utilisation matching
+# the pilotis columns below.
 #
 # The spacing is 3 window panes, so every column lands on a mullion line and the
 # vertical rhythm of the facade runs straight through the garden.
@@ -187,22 +223,26 @@ COL_MARGIN = 2.2      # inset of the outer column line from the facade
 # --- service cores ----------------------------------------------------------
 # TWO cores rather than one central slab, and the reason is capacity and egress,
 # not structure. The lateral system here is the perimeter: the four L-shaped
-# corner piers give Iy = 3359 m4 against the core's 177, so a core carries only
-# 5% of the lateral stiffness and tip drift is H/2650 against a H/500 limit.
+# corner piers give Iy = 1460 m4 against the core's 177, so a core carries only
+# 11% of the lateral stiffness and tip drift is H/1738 against a H/500 limit.
 # Nothing about the core choice buys stiffness this building needs.
 #
 # What a single 14 x 9 core could NOT do was hold the vertical transport. 37
-# floors x 76 x 32 m is 89984 m2 GFA, about 654 units and 1767 people, needing
-# 7-11 lifts. Shafts, two stairs, lobbies, smoke-stop lobbies and risers come to
-# roughly 204 m2 gross; 14 x 9 = 126 m2, short by 38%. That is a 5.2%
+# floors x 64 x 32 m is 75776 m2 GFA, about 551 units and 1488 people, needing
+# 7-9 lifts. Shafts, two stairs, lobbies, smoke-stop lobbies and risers come to
+# roughly 172 m2 gross; 14 x 9 = 126 m2, short by 27%. That is a 6.2%
 # core-to-plate ratio where residential towers run 10-15%.
+# CORE_PROVISION below stays at the 203.5 m2 figure derived from the wider 76 m
+# plate, deliberately: it is the stricter of the two and the measured 288 m2
+# clears it anyway, so keeping it means the cores cannot shrink on the strength
+# of a smaller unit count.
 #
 # Splitting also fixes two things one core cannot:
 #   * Egress. Worst-case travel to a central core was 42.5 m, marginal against
 #     SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to 24 m.
 #   * Stair remoteness. Two stairs in ONE shaft are not independent — a single
 #     incident compromises both. These sit 40 m apart.
-#   * Lift zoning, which a 654-unit tower wants anyway: low zone in the west
+#   * Lift zoning, which a 551-unit tower wants anyway: low zone in the west
 #     core, high zone in the east, ~65 units per lift in each.
 #
 # Deliberately NOT an H-core: the spine that makes it an H would run a wall down
@@ -213,9 +253,25 @@ CORE_W, CORE_D = 12.0, 12.0   # each core, plan size
 CORE_T = 0.28                 # core wall thickness
 # Offset from the building centreline. Even metres, so the core walls land on
 # mullion lines and interior partitions can follow the facade rhythm. Held clear
-# of the corner pier zone (outer edge at 26 m, pier starts at 30 m), which is
+# of the corner pier zone (outer edge at 24 m, pier starts at 30 m), which is
 # what rules out pushing the cores right to the ends of the plate.
-CORE_OFFSET = 20.0
+#
+# 18 rather than 20, and the reason is the CORNER APARTMENT. It sits outboard of
+# a core, so its width is W/2 - (CORE_OFFSET + CORE_W/2). With W now 64 m, 20
+# would leave 6 m against a 10 m depth — a corridor, not a flat — and still only
+# 2 panes on the long facade, because the outer end falls beyond the fixed
+# x = +-30 glazing edge. At 18 it is 8 x 10 m with 3 panes on the long face plus
+# the short-face return, which is the two-aspect unit the plan is aiming at.
+#
+# This works WITH the 2 m PIER_LONG rather than instead of it: the pier decides
+# how much dead wall wraps the outboard end, the core offset decides how wide
+# the unit is. Both were needed.
+#
+# The cost is the clear span between the cores, 28 -> 24 m. That is the span the
+# sky garden reads across and the depth available to the middle units. 24 m is
+# still well over the 20 m needed to keep the two stairs remote from each other,
+# and worst-case egress is unchanged at 24.0 m.
+CORE_OFFSET = 18.0
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 
 assert CORE_OFFSET + CORE_W / 2 <= W / 2 - PIER_LONG, \
@@ -519,6 +575,22 @@ def balustrade(name, z0, mat):
     ]
 
 
+def col_bay(axis_len, pitch):
+    """Refuge-column bay across an opening: whole panes, closest to `pitch`.
+
+    The bay has to DIVIDE the pane count, or the columns stop landing on mullion
+    lines and the vertical rhythm breaks exactly where the facade is most exposed.
+    Rounding axis_len / pitch is not enough — the short face is 14 panes and 14/3
+    is not an integer, so the naive step comes out at 5.6 m, off-grid on every
+    column. So the long face takes 3 panes (6.0 m) and the short face 2 (4.0 m).
+    """
+    panes = int(round(axis_len / PANE_W))
+    want = max(1, int(round(pitch / PANE_W)))
+    divisors = [k for k in range(1, panes + 1) if panes % k == 0]
+    per_bay = min(divisors, key=lambda k: (abs(k - want), k))
+    return per_bay * PANE_W
+
+
 def refuge_columns(name, z0, height, mat):
     """Structural columns carrying the tower through the open refuge level.
 
@@ -537,8 +609,8 @@ def refuge_columns(name, z0, height, mat):
 
     def interior(axis_len, pitch):
         """Column centres across an opening, ends dropped."""
-        n = max(1, int(round(axis_len / pitch)))
-        step = axis_len / n
+        step = col_bay(axis_len, pitch)
+        n = int(round(axis_len / step))
         return [-axis_len / 2 + i * step for i in range(1, n)]
 
     # Flush with the outer face of the footprint, so they sit on the facade line.
@@ -993,11 +1065,14 @@ def report(objects):
               f"{TOTAL_FLOORS - REFUGE_STOREY} above (SCDF: max 20 apart)")
         # Count without building: refuge_columns() makes real geometry, and this
         # runs after the join, so calling it here would leave loose boxes behind.
-        n_refuge_cols = 2 * (round(OPEN_W / REFUGE_COL_PITCH) - 1) \
-            + 2 * (round(OPEN_D / REFUGE_COL_PITCH) - 1)
+        bay_w = col_bay(OPEN_W, REFUGE_COL_PITCH)
+        bay_d = col_bay(OPEN_D, REFUGE_COL_PITCH)
+        n_refuge_cols = 2 * (round(OPEN_W / bay_w) - 1) \
+            + 2 * (round(OPEN_D / bay_d) - 1)
         print(f"columns across void  : {n_refuge_cols}, "
-              f"{REFUGE_COL_SIZE:.2f} m square at {REFUGE_COL_PITCH:.1f} m centres "
-              f"({REFUGE_COL_PITCH / PANE_W:.0f} panes)")
+              f"{REFUGE_COL_SIZE:.2f} m square at {bay_w:.1f} m centres "
+              f"({bay_w / PANE_W:.0f} panes) on the long face, {bay_d:.1f} m "
+              f"({bay_d / PANE_W:.0f} panes) on the short")
         if GRILLE_STYLE == "GRID":
             n_rows = max(1, round(REFUGE_FLOORS * H / GRILLE_CELL))
             print(f"garden screen        : GRID, {WINDOWS_LONG} x {n_rows} cells "

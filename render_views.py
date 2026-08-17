@@ -12,7 +12,7 @@ import bpy
 from mathutils import Vector
 
 # Footprint is derived from the window module in build_house.py; keep in sync.
-W, D, TOP_Z = 76.0, 32.0, 160.0
+W, D, TOP_Z = 64.0, 32.0, 160.0
 # Refuge floor / sky garden void, from build_house.py: storeys 21-22.
 REFUGE_Z0, REFUGE_Z1 = 80.0, 88.0
 REFUGE_MID = (REFUGE_Z0 + REFUGE_Z1) / 2

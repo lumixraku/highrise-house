@@ -1,5 +1,67 @@
 # Progress
 
+## 2026-08-17 — main — all four corner piers down to one pane (2 m)
+
+Two rounds in one session. First the long-facade pier only (8 → 2 m), then the user
+pointed at the render: "都改为 2m 呀！！！侧面也应该呀" — the short faces too.
+
+The reasoning I had in the file before this was wrong and is now replaced. I had
+claimed shrinking `PIER_LONG` gives nothing because "the glazing edge moves inward
+with the corner unit". It does not: a glass run is fixed at N × 2.00 m, so the
+glazing edge stays put and the pier only decides how far the **building end** sits
+beyond it. At 8 m the corner apartment ended in 8 m of dead wall before reaching its
+return; at 2 m it turns the corner after one pane.
+
+Changed, in `build_house.py` and the duplicated constants in `verify_house.py`:
+
+- `PIER_LONG` 8.0 → 2.0, `PIER_SHORT` 4.0 → 2.0.
+- **`WINDOWS_SHORT` 12 → 14**, which is what makes the short pier affordable. D is
+  derived, so thinning that pier alone would have given D = 28 m and dropped the unit
+  depth beside the cores to 8.0 m, under the 9 m residential minimum. Two more panes
+  hold D at exactly 32 m. Footprint ends at **64 × 32 m** (was 76 × 32): the depth the
+  user asked to leave alone is unchanged, only the corners moved.
+- `CORE_OFFSET` kept at 18.0, not reverted to 20.0 as an earlier "Y" had covered: at
+  W = 64 the ±20 corner unit is 6 m wide against 10 m deep, a corridor. At ±18 it is
+  8 × 10 m with 3 panes on the long face. Told the user.
+- `render_views.py` `W` 76.0 → 64.0 (it hardcodes the footprint).
+
+**A real bug the pane change exposed.** `refuge_columns()` derived its bay as
+`round(axis_len / REFUGE_COL_PITCH)`, which only lands on the pane grid when the
+result happens to divide the pane count. 14 panes with a 3-pane target gives 5.6 m
+bays — every short-face column off-grid — and the existing check sampled the long face
+only, so it would have passed silently. Extracted `col_bay()`, which picks the
+panes-per-bay that *divides* the pane count and sits closest to the requested pitch:
+3 panes (6.0 m) long, 2 panes (4.0 m) short. Added two checks on the short face
+specifically. 30 columns now, up from 24.
+
+Corrected figures that were wrong or moved with the smaller plate:
+
+- I had said `PIER_LONG = 0` fails drift at H/428. It does not — that used the 76 m
+  wind width. Ran the check with `PIER_LONG = 0` to confirm: **H/1,311, passes**.
+  Deleting all piers gives H/507, still inside H/500 by 1%. So drift is not what stops
+  the pier going to zero; the facade is (nothing halts a ribbon short of the corner,
+  ten checks fail). Documented it that way.
+- Current drift **H/1,395**, Iy 1,655 m⁴. Refuge void load 486,605 kN over 73.9 m² =
+  **6.59 MPa**, 37% of C40 (was 7.72 MPa / 43%); without the columns 30.7 m² at
+  15.85 MPa, 88%. Tower GFA 89,984 → 75,776 m², ~654 → ~551 units. Egress improved to
+  22.0 m. Perimeter Iy vs a central core is now 1,053 vs 177 m⁴, so the core carries
+  14% of lateral stiffness rather than 5%.
+- `CORE_PROVISION` deliberately left at 203.5 m² — the stricter figure from the wider
+  plate, and the measured 288 m² clears it either way, so the cores cannot shrink on
+  the strength of fewer units.
+- Also fixed "the 32 m end face has a slenderness of 2.11", which was neither H/D nor
+  H/W. Wind on the 64 m end face works against H/W = 2.3; the long face sees H/D = 4.6.
+
+Verification: build printed `footprint : 64.0 x 32.0 m` and
+`derivation : W = 30 x 2 + 2 x 2 = 64 m, D = 14 x 2 + 2 x 2 = 32 m`; verify
+**134/134 passed**. Measured the corner geometry directly out of the .blend: 2.00 m of
+wall on the long face and 2.00 m on the short, so the two glass runs meet at the
+corner. Negative test with `PIER_LONG = 0` gave 122/132 with the facade failures
+listed above, so the new checks are load-bearing. All five views re-rendered.
+
+Remaining issues: none. The ±18 core move from earlier in the session goes in the same
+commit.
+
 ## 2026-08-17 — main — the .blend now opens looking at the building, not inside it
 
 User: every time they open the file they land inside the building and have to zoom

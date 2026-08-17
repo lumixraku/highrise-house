@@ -17,16 +17,16 @@ PILOTIS_FLOORS = 3
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.30
 SLAB_T = 0.22
-PIER_LONG = 8.0
+PIER_LONG = 2.0
 WALL_T = 0.30
-PIER_SHORT = 4.0
+PIER_SHORT = 2.0
 SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
 VENT_LO_Z = SPANDREL_H
 WIN_Z = VENT_LO_Z + VENT_H
 MULLION_W = 0.09
 PANE_W = 2.00
 WINDOWS_LONG = 30
-WINDOWS_SHORT = 12
+WINDOWS_SHORT = 14
 # Footprint is DERIVED from the pane counts, as in the build script. Mullions are
 # cover caps over the pane joints, so they add no facade length: an opening is
 # exactly N x PANE_W and the footprint lands on whole metres.
@@ -50,7 +50,7 @@ REFUGE_COL_SIZE = 1.20
 REFUGE_COL_PITCH = PANE_W * 3
 # Twin service cores. Duplicated from build_house.py, like every constant here.
 CORE_W, CORE_D, CORE_T = 12.0, 12.0, 0.28
-CORE_OFFSET = 20.0
+CORE_OFFSET = 18.0
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
 PARAPET_H = 1.10
@@ -252,13 +252,14 @@ def main():
     check(f"short-face glazing stops {PIER_SHORT} m short of both corners",
           abs(y_span - OPEN_D) < 0.02,
           f"opening={y_span:.3f} m, expected {OPEN_D:.3f} m")
-    check("piers measure 8 m on the long faces and 4 m on the short ones",
+    check(f"piers measure {PIER_LONG:.0f} m on the long faces and "
+          f"{PIER_SHORT:.0f} m on the short ones",
           abs((W - x_span) / 2 - PIER_LONG) < 0.02
           and abs((D - y_span) / 2 - PIER_SHORT) < 0.02,
           f"long {(W - x_span) / 2:.3f} m, short {(D - y_span) / 2:.3f} m")
-    # With 8 m piers the short facade is mostly wall (14.72 m opening between two
-    # 8 m piers = 47.9%). That is the requested consequence, not a defect; just
-    # assert the opening is still a real window band on both faces.
+    # The long-facade pier is one pane wide, so the glazing is nearly the whole
+    # face. Assert the opening is still a real band on BOTH faces — the short one
+    # keeps 4 m piers and so is the tighter of the two.
     check("openings are a meaningful share of each facade",
           x_span / W > 0.5 and y_span / D > 0.4,
           f"long face {x_span / W:.1%}, short face {y_span / D:.1%}")
@@ -340,7 +341,8 @@ def main():
     check("footprint is exactly panes + piers, no leftover",
           abs(W - (WINDOWS_LONG * PANE_W + 2 * PIER_LONG)) < 1e-9
           and abs(D - (WINDOWS_SHORT * PANE_W + 2 * PIER_SHORT)) < 1e-9,
-          f"{WINDOWS_LONG}x2+2x8={W:.0f} m, {WINDOWS_SHORT}x2+2x4={D:.0f} m")
+          f"{WINDOWS_LONG}x{PANE_W:.0f}+2x{PIER_LONG:.0f}={W:.0f} m, "
+          f"{WINDOWS_SHORT}x{PANE_W:.0f}+2x{PIER_SHORT:.0f}={D:.0f} m")
     check("depth is at least 30 m", D >= 30.0 - 1e-9, f"D={D:.2f} m")
     check("clear internal depth is at least 30 m",
           D - 2 * 0.30 >= 30.0 - 1e-9, f"{D - 0.60:.2f} m inside face to face")
@@ -349,15 +351,45 @@ def main():
           and abs((D - OPEN_D) / 2 - PIER_SHORT) < 1e-6,
           f"long {(W - OPEN_W) / 2:.2f} m, short {(D - OPEN_D) / 2:.2f} m")
 
-    # The point of 8 m piers on the long facade: its window field should be
-    # framed by an even 8 m margin on all four sides.
+    # The point of a one-pane pier on the long facade: the corner apartment,
+    # which sits outboard of a core, should turn the corner almost at once and so
+    # have windows on two faces. The pier is what stands between it and the
+    # return, and it used to be 8 m of blank wall.
     margin_lr = (W - OPEN_W) / 2
-    margin_lo = SOLID_BASE_FLOORS * H
-    margin_hi = SOLID_TOP_FLOORS * H
-    check("long facade has an even 8 m blank margin all round",
-          abs(margin_lr - 8.0) < 1e-6 and abs(margin_lo - 8.0) < 1e-6
-          and abs(margin_hi - 8.0) < 1e-6,
-          f"left/right {margin_lr:.2f} m, below {margin_lo:.2f} m, above {margin_hi:.2f} m")
+    check("the long-facade pier is one pane wide, not a blank band",
+          abs(margin_lr - PANE_W) < 1e-6,
+          f"{margin_lr:.2f} m = {margin_lr / PANE_W:.0f} pane(s)")
+    corner_unit_w = W / 2 - (CORE_OFFSET + CORE_W / 2)
+    corner_panes = (OPEN_W / 2 - (CORE_OFFSET + CORE_W / 2)) / PANE_W
+    check("the corner apartment is a habitable width, not a corridor",
+          corner_unit_w >= 7.0,
+          f"{corner_unit_w:.1f} m wide x {(D - CORE_D) / 2:.1f} m deep")
+    check("the corner apartment has glass on the long face as well as the return",
+          corner_panes >= 2.0,
+          f"{corner_panes:.0f} panes on the long face before the pier")
+
+    # Thinning the pier costs lateral stiffness, and that is the constraint that
+    # rules out taking it to zero. Thin-walled box for the cores, parallel axis
+    # for the four L-piers, cantilever tip drift under a uniform 1.5 kPa.
+    def box_I(b, d, t):
+        return (b * d ** 3 - (b - 2 * t) * (d - 2 * t) ** 3) / 12.0
+
+    I_cores = 2 * box_I(CORE_W, CORE_D, CORE_T)
+    I_piers = 0.0
+    for sy in (-1, 1):
+        for _sx in (-1, 1):
+            a1, y1 = PIER_LONG * WALL_T, sy * (D / 2 - WALL_T / 2)
+            a2 = WALL_T * (PIER_SHORT - WALL_T)
+            y2 = sy * (D / 2 - WALL_T - (PIER_SHORT - WALL_T) / 2)
+            I_piers += (PIER_LONG * WALL_T ** 3 / 12 + a1 * y1 ** 2
+                        + WALL_T * (PIER_SHORT - WALL_T) ** 3 / 12 + a2 * y2 ** 2)
+    H_cant = TOP_Z - BASE_Z
+    drift = (1.5e3 * W) * H_cant ** 4 / (8 * 32.8e9 * (I_cores + I_piers))
+    check("lateral drift is within H/500 with the thinned pier",
+          H_cant / drift >= 500.0,
+          f"{drift * 1000:.0f} mm tip drift = H/{H_cant / drift:,.0f}, "
+          f"Iy {I_cores + I_piers:,.0f} m4 (cores {I_cores:,.0f} + "
+          f"piers {I_piers:,.0f})")
 
     # --- interior lining behind the glazing ----------------------------
     # Clear glass shows whatever is behind it; without a lining the panes look
@@ -546,7 +578,7 @@ def main():
         # --- the load path across the void ------------------------------
         # The fins are 0.10 m blades and carry nothing. Real columns have to take
         # the floors above down through the void, or the corner piers and core are
-        # left with 26.6 m2 of concrete under 513638 kN = 19.3 MPa, over C40.
+        # left with 33.1 m2 of concrete under 486605 kN = 14.7 MPa, 82% of C40.
         st_ = piece_bounds(objs["Structure"])
         cols = [(lo, hi) for lo, hi in st_
                 if abs(lo[2] - REFUGE_Z0) < 0.05
@@ -585,6 +617,25 @@ def main():
             check("refuge column spacing is a whole number of window panes",
                   abs(r - round(r)) < 1e-6,
                   f"pitch {cpitch:.2f} m = {round(r)} panes")
+
+        # The SHORT face too, and it is the one that catches an off-grid pitch: the
+        # bay has to divide the pane count, not merely come close to the requested
+        # spacing. 14 panes with a 3-pane target gives 5.6 m bays — off-grid on
+        # every column — and the long-face checks above would pass regardless.
+        col_ys = sorted({round((lo[1] + hi[1]) / 2, 3) for lo, hi in cols
+                         if abs((lo[0] + hi[0]) / 2 + W / 2) < 1.0})
+        y_edges = [-OPEN_D / 2 + i * PANE_W for i in range(WINDOWS_SHORT + 1)]
+        y_on_grid = [y for y in col_ys
+                     if any(abs(y - e) < 0.02 for e in y_edges)]
+        check("every refuge column on the short face lands on a pane line",
+              col_ys and len(y_on_grid) == len(col_ys),
+              f"{len(y_on_grid)} of {len(col_ys)} columns on the {PANE_W:.2f} m grid")
+        if len(col_ys) >= 2:
+            ypitch = col_ys[1] - col_ys[0]
+            ry = ypitch / PANE_PITCH
+            check("short-face refuge column spacing is a whole number of panes",
+                  abs(ry - round(ry)) < 1e-6,
+                  f"pitch {ypitch:.2f} m = {ry:.2f} panes")
 
         # Open edges need guarding, and the corners must still turn.
         fb_ = piece_bounds(facade)
