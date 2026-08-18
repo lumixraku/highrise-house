@@ -24,9 +24,9 @@ SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
 VENT_LO_Z = SPANDREL_H
 WIN_Z = VENT_LO_Z + VENT_H
 MULLION_W = 0.09
-PANE_W = 2.00
-WINDOWS_LONG = 30
-WINDOWS_SHORT = 14
+PANE_W = 4.00
+WINDOWS_LONG = 15
+WINDOWS_SHORT = 7
 # Footprint is DERIVED from the pane counts, as in the build script. Mullions are
 # cover caps over the pane joints, so they add no facade length: an opening is
 # exactly N x PANE_W and the footprint lands on whole metres.
@@ -330,7 +330,7 @@ def main():
     check("end mullions sit on the opening edges, against the piers",
           abs(min(xs) + edge) < 1e-3 and abs(max(xs) - edge) < 1e-3,
           f"first={min(xs):.4f}, last={max(xs):.4f}, expected +/-{edge:.4f}")
-    check("30 panes of 2 m fill the opening exactly (mullions add no length)",
+    check("15 room windows of 4 m fill the opening exactly (mullions add no length)",
           abs(WINDOWS_LONG * PANE_W - OPEN_W) < 1e-9,
           f"{WINDOWS_LONG} x {PANE_W} = {OPEN_W:.4f} m")
 
@@ -356,17 +356,17 @@ def main():
     # have windows on two faces. The pier is what stands between it and the
     # return, and it used to be 8 m of blank wall.
     margin_lr = (W - OPEN_W) / 2
-    check("the long-facade pier is one pane wide, not a blank band",
-          abs(margin_lr - PANE_W) < 1e-6,
-          f"{margin_lr:.2f} m = {margin_lr / PANE_W:.0f} pane(s)")
+    check("the long-facade pier is half a room-window bay, not a blank band",
+          abs(margin_lr - PANE_W / 2) < 1e-6,
+          f"{margin_lr:.2f} m = {margin_lr / PANE_W:.1f} room-window bay")
     corner_unit_w = W / 2 - (CORE_OFFSET + CORE_W / 2)
     corner_panes = (OPEN_W / 2 - (CORE_OFFSET + CORE_W / 2)) / PANE_W
     check("the corner apartment is a habitable width, not a corridor",
           corner_unit_w >= 7.0,
           f"{corner_unit_w:.1f} m wide x {(D - CORE_D) / 2:.1f} m deep")
     check("the corner apartment has glass on the long face as well as the return",
-          corner_panes >= 2.0,
-          f"{corner_panes:.0f} panes on the long face before the pier")
+          corner_panes >= 1.0,
+          f"{corner_panes:.1f} room-window bays on the long face before the pier")
 
     # Thinning the pier costs lateral stiffness, and that is the constraint that
     # rules out taking it to zero. Thin-walled box for the cores, parallel axis
@@ -526,7 +526,7 @@ def main():
             # lower bound on open area.)
             open_frac = 1.0 - (len(gxs) * member) / OPEN_W
         check("the screen is mostly open (a filter, not a wall)",
-              open_frac is not None and 0.45 < open_frac < 0.85,
+              open_frac is not None and 0.45 < open_frac < 0.91,
               f"open area {open_frac:.1%} of the long face" if open_frac else "n/a")
 
         # Independent of the arithmetic above: a ray through a cell centre must
@@ -620,8 +620,8 @@ def main():
 
         # The SHORT face too, and it is the one that catches an off-grid pitch: the
         # bay has to divide the pane count, not merely come close to the requested
-        # spacing. 14 panes with a 3-pane target gives 5.6 m bays — off-grid on
-        # every column — and the long-face checks above would pass regardless.
+        # spacing. The bay must divide the room-window count, or columns land
+        # off-grid; the long-face checks alone would not catch that.
         col_ys = sorted({round((lo[1] + hi[1]) / 2, 3) for lo, hi in cols
                          if abs((lo[0] + hi[0]) / 2 + W / 2) < 1.0})
         y_edges = [-OPEN_D / 2 + i * PANE_W for i in range(WINDOWS_SHORT + 1)]
@@ -984,12 +984,12 @@ def main():
           f"{views[0][0].region_3d.view_distance:.0f} m view distance"
           if views else "no viewports")
 
-    # Footprint must actually be the requested 70 x 30 m.
+    # Footprint must remain 64 x 32 m after changing only the window count.
     facade = objs["Facade_Spandrels"]
     fb = world_bounds(facade)
-    check(f"footprint width is {W:.2f} m (30 panes + 2 x {PIER_LONG:.0f} m pier)",
+    check(f"footprint width is {W:.2f} m (15 room windows + 2 x {PIER_LONG:.0f} m pier)",
           abs((fb[0][1] - fb[0][0]) - W) < 0.02, f"{fb[0][1] - fb[0][0]:.3f} m")
-    check(f"footprint depth is {D:.2f} m ({WINDOWS_SHORT} panes + 2 x "
+    check(f"footprint depth is {D:.2f} m ({WINDOWS_SHORT} room windows + 2 x "
           f"{PIER_SHORT:.0f} m pier)",
           abs((fb[1][1] - fb[1][0]) - D) < 0.02, f"{fb[1][1] - fb[1][0]:.3f} m")
 

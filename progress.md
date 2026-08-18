@@ -1,5 +1,16 @@
 # Progress
 
+## 2026-08-18 — main — one 4 x 1.5 m window per room, footprint unchanged
+
+Changed the facade module from two 2 x 1.5 m panes per room to one 4 x 1.5 m
+room window. Window counts are now 15 on each long face and 7 on each short face;
+the derived footprint remains exactly 64 x 32 m. Updated the floor-plan generator,
+refuge screen/column spacing, and verification labels/checks accordingly.
+
+Verification: `python3 -m py_compile build_house.py floor_plan.py verify_house.py`,
+`python3 floor_plan.py`, Blender rebuild with `--no-render`, and
+`verify_house.py`: **134/134 checks passed**. Remaining issues: None.
+
 ## 2026-08-17 — main — all four corner piers down to one pane (2 m)
 
 Two rounds in one session. First the long-facade pier only (8 → 2 m), then the user

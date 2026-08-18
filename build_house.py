@@ -72,23 +72,18 @@ VENT_INSET = 0.0      # louvres finish on the wall plane too
 # move against each other as the view shifts, which is what reads as glass.
 INTERIOR_SETBACK = 0.85
 
-# The window pane is the fixed module: exactly PANE_W x WIN_H of clear glass.
-# EVERYTHING outside is derived from the pane counts — never the other way round.
-PANE_W = 2.00
-WINDOWS_LONG = 30      # panes across each long facade  (X)
-# 14 rather than 12 on the short face, and the reason is PIER_SHORT dropping to
-# 2 m: the pane count is the input, so thinning the pier without adding panes
-# would have narrowed D from 32 to 28 m and taken the unit depth either side of
-# the cores down to 8.0 m, under the 9 m a residential plan needs. Two more panes
-# put D back to 32 m exactly.
-WINDOWS_SHORT = 14     # panes across each short facade (Y)
+# The room window is the fixed module: exactly PANE_W x WIN_H of clear glass.
+# EVERYTHING outside is derived from the room-window counts — never the other way round.
+PANE_W = 4.00
+WINDOWS_LONG = 15      # room windows across each long facade  (X)
+WINDOWS_SHORT = 7       # room windows across each short facade (Y)
 
 # The mullion is a cover cap centred on each pane joint: it sits proud of the
 # glass line and overlaps the two panes it joins, so it costs NO facade length.
 # That keeps the arithmetic clean — an opening is exactly N x PANE_W, so the
 # footprint comes out on whole metres:
-#   W = 30 x 2.00 + 2 x 2.00 = 64.00 m
-#   D = 14 x 2.00 + 2 x 2.00 = 32.00 m
+#   W = 15 x 4.00 + 2 x 2.00 = 64.00 m
+#   D =  7 x 4.00 + 2 x 2.00 = 32.00 m
 MULLION_W = 0.09
 
 # Solid wall kept at both ends of every facade, so the ribbon stops short of the
@@ -168,13 +163,13 @@ BALUSTRADE_T = 0.12
 #          structure; more transparent when seen straight on, nearly solid at a
 #          glancing angle.
 GRILLE_STYLE = "FINS"
-GRILLE_CELL = PANE_W       # GRID only: 2.0 m, one cell per window pane
+GRILLE_CELL = PANE_W       # GRID only: 4.0 m, one cell per room window
 GRILLE_MEMBER = 0.34       # GRID only: face width of a grid member
 GRILLE_DEPTH = 0.34        # GRID only: how far it stands proud
 # FINS: slim vertical blades, no horizontals. The pitch divides PANE_W exactly, so
 # every second blade lands on a window mullion and the vertical lines still carry
 # through from the glazing below to the glazing above.
-FIN_PITCH = PANE_W / 4     # 0.50 m — close-spaced, reads as a fine screen
+FIN_PITCH = PANE_W / 4     # 1.00 m — close-spaced, reads as a fine screen
 FIN_W = 0.10               # slim: a blade, not a pier
 FIN_DEPTH = 0.34           # depth gives it shadow and solidity at a raking angle
 # Columns carrying the tower across the void. The fins are 0.10 m blades — a
@@ -184,10 +179,10 @@ FIN_DEPTH = 0.34           # depth gives it shadow and solidity at a raking angl
 # columns takes the load path to 67.7 m2 / 7.2 MPa, a 40% utilisation matching
 # the pilotis columns below.
 #
-# The spacing is 3 window panes, so every column lands on a mullion line and the
+# The spacing is one room window, so every column lands on a mullion line and the
 # vertical rhythm of the facade runs straight through the garden.
 REFUGE_COL_SIZE = 1.20
-REFUGE_COL_PITCH = PANE_W * 3     # 6.0 m — a whole number of window panes
+REFUGE_COL_PITCH = PANE_W         # 4.0 m — a whole number of room windows
 GARDEN_SLAB_T = 0.45       # deeper than a normal plate: it carries soil
 PLANTER_H = 0.85
 PLANTER_W = 2.4
@@ -580,9 +575,8 @@ def col_bay(axis_len, pitch):
 
     The bay has to DIVIDE the pane count, or the columns stop landing on mullion
     lines and the vertical rhythm breaks exactly where the facade is most exposed.
-    Rounding axis_len / pitch is not enough — the short face is 14 panes and 14/3
-    is not an integer, so the naive step comes out at 5.6 m, off-grid on every
-    column. So the long face takes 3 panes (6.0 m) and the short face 2 (4.0 m).
+    Rounding axis_len / pitch is not enough: the bay must divide the room-window
+    count, or the columns stop landing on mullion lines.
     """
     panes = int(round(axis_len / PANE_W))
     want = max(1, int(round(pitch / PANE_W)))
@@ -1087,7 +1081,7 @@ def report(objects):
     print(f"long-facade margins  : {PIER_LONG:.1f} m left/right, "
           f"{SOLID_BASE_FLOORS * H:.1f} m below, {SOLID_TOP_FLOORS * H:.1f} m above")
     print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
-    print(f"panes per floor      : {WINDOWS_LONG} long face / {WINDOWS_SHORT} short face")
+    print(f"room windows/floor    : {WINDOWS_LONG} long face / {WINDOWS_SHORT} short face")
     print(f"pane pitch           : {PANE_PITCH:.2f} m (= pane width; mullions are "
           f"{MULLION_W:.2f} m caps over the joints)")
     print(f"clear internal depth : {D - 2 * WALL_T:.2f} m (inside face to inside face)")
