@@ -77,6 +77,8 @@ INTERIOR_SETBACK = 0.85
 PANE_W = 4.00
 WINDOWS_LONG = 15      # room windows across each long facade  (X)
 WINDOWS_SHORT = 7       # room windows across each short facade (Y)
+WINDOW_GAP = 0.12       # real vertical joint between adjacent room windows
+PANE_GLASS_W = PANE_W - WINDOW_GAP
 
 # The mullion is a cover cap centred on each pane joint: it sits proud of the
 # glass line and overlaps the two panes it joins, so it costs NO facade length.
@@ -85,6 +87,7 @@ WINDOWS_SHORT = 7       # room windows across each short facade (Y)
 #   W = 15 x 4.00 + 2 x 2.00 = 64.00 m
 #   D =  7 x 4.00 + 2 x 2.00 = 32.00 m
 MULLION_W = 0.09
+MULLION_INSET = 0.12     # recessed from the facade plane to deepen window joints
 
 # Solid wall kept at both ends of every facade, so the ribbon stops short of the
 # corners instead of wrapping them. Measured along the facade from the corner.
@@ -202,9 +205,10 @@ OPEN_D = opening_for(WINDOWS_SHORT)     # short faces (E/W)
 W = OPEN_W + 2 * PIER_LONG
 D = OPEN_D + 2 * PIER_SHORT
 
-# Every pane is the same fixed module, so pitch is uniform on all four facades.
-PANE_GLASS_LONG = PANE_W
-PANE_GLASS_SHORT = PANE_W
+# Every pane is centred on the same fixed 4 m room module, but is slightly
+# narrower so adjacent homes read as separate windows instead of one ribbon.
+PANE_GLASS_LONG = PANE_GLASS_W
+PANE_GLASS_SHORT = PANE_GLASS_W
 PANE_PITCH = PANE_W                     # mullion centre to centre = pane width
 assert abs(WINDOWS_LONG * PANE_W - OPEN_W) < 1e-9
 assert abs(WINDOWS_SHORT * PANE_W - OPEN_D) < 1e-9
@@ -454,19 +458,26 @@ def cores(name, z0, height, mat):
 # ---------------------------------------------------------------------------
 
 def glass_ring(name, z0, height, mat):
-    """Glazing band on each of the four facades.
+    """Separate room windows on each of the four facades.
 
-    Each pane is centred on its facade and stops PIER_LONG (long faces) or
-    PIER_SHORT (short faces) short of both corners, so the corners stay solid.
+    Each 4 m room module gets its own slightly narrower pane. The resulting
+    vertical gaps are real openings between homes, not just lines on a cap.
     """
     zc = z0 + height / 2.0
     off = GLASS_INSET + GLASS_T / 2.0
-    parts = [
-        box(f"{name}_W", (-(W / 2 - off), 0.0, zc), (GLASS_T, OPEN_D, height), mat),
-        box(f"{name}_E", (+(W / 2 - off), 0.0, zc), (GLASS_T, OPEN_D, height), mat),
-        box(f"{name}_S", (0.0, -(D / 2 - off), zc), (OPEN_W, GLASS_T, height), mat),
-        box(f"{name}_N", (0.0, +(D / 2 - off), zc), (OPEN_W, GLASS_T, height), mat),
-    ]
+    parts = []
+    for i in range(WINDOWS_SHORT):
+        y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
+        for sx in (-1, 1):
+            parts.append(box(f"{name}_ew_{i}_{sx}",
+                             (sx * (W / 2 - off), y, zc),
+                             (GLASS_T, PANE_GLASS_W, height), mat))
+    for i in range(WINDOWS_LONG):
+        x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
+        for sy in (-1, 1):
+            parts.append(box(f"{name}_ns_{i}_{sy}",
+                             (x, sy * (D / 2 - off), zc),
+                             (PANE_GLASS_W, GLASS_T, height), mat))
     return parts
 
 
@@ -482,12 +493,20 @@ def interior_ring(name, z0, height, mat):
     zc = z0 + height / 2.0
     off = GLASS_INSET + INTERIOR_SETBACK
     t = 0.05
-    return [
-        box(f"{name}_W", (-(W / 2 - off), 0.0, zc), (t, OPEN_D, height), mat),
-        box(f"{name}_E", (+(W / 2 - off), 0.0, zc), (t, OPEN_D, height), mat),
-        box(f"{name}_S", (0.0, -(D / 2 - off), zc), (OPEN_W, t, height), mat),
-        box(f"{name}_N", (0.0, +(D / 2 - off), zc), (OPEN_W, t, height), mat),
-    ]
+    parts = []
+    for i in range(WINDOWS_SHORT):
+        y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
+        for sx in (-1, 1):
+            parts.append(box(f"{name}_ew_{i}_{sx}",
+                             (sx * (W / 2 - off), y, zc),
+                             (t, PANE_GLASS_W, height), mat))
+    for i in range(WINDOWS_LONG):
+        x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
+        for sy in (-1, 1):
+            parts.append(box(f"{name}_ns_{i}_{sy}",
+                             (x, sy * (D / 2 - off), zc),
+                             (PANE_GLASS_W, t, height), mat))
+    return parts
 
 
 def corner_piers(name, z0, height, mat):
@@ -519,14 +538,14 @@ def corner_piers(name, z0, height, mat):
 def mullions(name, z0, height, mat):
     """Slim vertical frames breaking up the ribbon window.
 
-    Flush: the cap's OUTER face finishes on the wall plane, same as the glass, so
-    it is centred at half its own depth rather than on the glass centreline. It
-    therefore sits behind the facade plane, not proud of it.
+    The cap is recessed from the facade plane while the glass remains flush. This
+    makes the pane joints read as deliberate shadow gaps without changing the
+    window opening or facade dimensions.
     """
     parts = []
     zc = z0 + height / 2.0
     depth = 0.14
-    off = GLASS_INSET + depth / 2.0
+    off = GLASS_INSET + depth / 2.0 + MULLION_INSET
 
     # Cover caps centred on each pane joint, plus one at each end against the
     # pier. N panes therefore take N+1 caps, at exact multiples of the pane

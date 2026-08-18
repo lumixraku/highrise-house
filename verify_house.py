@@ -24,9 +24,14 @@ SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
 VENT_LO_Z = SPANDREL_H
 WIN_Z = VENT_LO_Z + VENT_H
 MULLION_W = 0.09
+MULLION_INSET = 0.12
 PANE_W = 4.00
 WINDOWS_LONG = 15
 WINDOWS_SHORT = 7
+WINDOW_GAP = 0.12
+PANE_GLASS_W = PANE_W - WINDOW_GAP
+GLASS_OPEN_W = WINDOWS_LONG * PANE_GLASS_W + (WINDOWS_LONG - 1) * WINDOW_GAP
+GLASS_OPEN_D = WINDOWS_SHORT * PANE_GLASS_W + (WINDOWS_SHORT - 1) * WINDOW_GAP
 # Footprint is DERIVED from the pane counts, as in the build script. Mullions are
 # cover caps over the pane joints, so they add no facade length: an opening is
 # exactly N x PANE_W and the footprint lands on whole metres.
@@ -246,17 +251,17 @@ def main():
     # each facade must be measured on its own.
     gb = world_bounds(glass)
     x_span, y_span = facade_span(glass, "S"), facade_span(glass, "E")
-    check(f"long-face glazing stops {PIER_LONG} m short of both corners",
-          abs(x_span - OPEN_W) < 0.02,
-          f"opening={x_span:.3f} m, expected {OPEN_W:.3f} m")
-    check(f"short-face glazing stops {PIER_SHORT} m short of both corners",
-          abs(y_span - OPEN_D) < 0.02,
-          f"opening={y_span:.3f} m, expected {OPEN_D:.3f} m")
+    check("long-face glazing has room joints and stops short of both corners",
+          abs(x_span - GLASS_OPEN_W) < 0.02,
+          f"glazing={x_span:.3f} m, expected {GLASS_OPEN_W:.3f} m")
+    check("short-face glazing has room joints and stops short of both corners",
+          abs(y_span - GLASS_OPEN_D) < 0.02,
+          f"glazing={y_span:.3f} m, expected {GLASS_OPEN_D:.3f} m")
     check(f"piers measure {PIER_LONG:.0f} m on the long faces and "
           f"{PIER_SHORT:.0f} m on the short ones",
-          abs((W - x_span) / 2 - PIER_LONG) < 0.02
-          and abs((D - y_span) / 2 - PIER_SHORT) < 0.02,
-          f"long {(W - x_span) / 2:.3f} m, short {(D - y_span) / 2:.3f} m")
+          abs((W - OPEN_W) / 2 - PIER_LONG) < 0.02
+          and abs((D - OPEN_D) / 2 - PIER_SHORT) < 0.02,
+          f"wall margins long {(W - OPEN_W) / 2:.3f} m, short {(D - OPEN_D) / 2:.3f} m")
     # The long-facade pier is one pane wide, so the glazing is nearly the whole
     # face. Assert the opening is still a real band on BOTH faces — the short one
     # keeps 4 m piers and so is the tighter of the two.
@@ -312,16 +317,23 @@ def main():
     check(f"pane pitch is {PANE_PITCH:.4f} m",
           abs(pitches[0] - PANE_PITCH) < 1e-3,
           f"measured {pitches[0]:.4f} m")
-    check(f"clear glass per pane is exactly {PANE_W:.2f} m x {WIN_H:.2f} m",
-          abs(pitches[0] - PANE_W) < 1e-3 and abs(heights[0] - WIN_H) < EPS,
-          f"{pitches[0]:.4f} m wide x {heights[0]:.2f} m tall")
+    glass_widths = sorted({round(hi[0] - lo[0], 4) for lo, hi in piece_bounds(glass)
+                           if abs((lo[1] + hi[1]) / 2 + D / 2) < 1.0})
+    check(f"each room window is {PANE_GLASS_W:.2f} m x {WIN_H:.2f} m",
+          glass_widths == [round(PANE_GLASS_W, 4)]
+          and abs(heights[0] - WIN_H) < EPS,
+          f"widths={glass_widths}, height={heights[0]:.2f} m")
+    check(f"adjacent room windows have a {WINDOW_GAP:.2f} m vertical gap",
+          abs(pitches[0] - PANE_GLASS_W - WINDOW_GAP) < 1e-3,
+          f"pitch {pitches[0]:.4f} m - glass {PANE_GLASS_W:.4f} m = "
+          f"gap {pitches[0] - PANE_GLASS_W:.4f} m")
 
     # The short facade uses the SAME module, not a stretched one.
     pitches_y = [b - a for a, b in zip(ys, ys[1:])]
-    check(f"short facade panes are also exactly {PANE_W:.2f} m wide",
+    check(f"short facade panes are also {PANE_GLASS_W:.2f} m wide",
           max(pitches_y) - min(pitches_y) < 1e-4
           and abs(pitches_y[0] - PANE_W) < 1e-3,
-          f"{pitches_y[0]:.4f} m clear glass")
+          f"pitch={pitches_y[0]:.4f} m, glass={PANE_GLASS_W:.4f} m")
     check("pane pitch is identical on long and short facades",
           abs(pitches[0] - pitches_y[0]) < 1e-4,
           f"long {pitches[0]:.4f} m vs short {pitches_y[0]:.4f} m")
@@ -413,9 +425,9 @@ def main():
     check("lining is set back behind the glazing", lining_x < glass_x - 0.3,
           f"lining reaches x={lining_x:.3f}, glass x={glass_x:.3f} "
           f"(setback {glass_x - lining_x:.3f} m)")
-    check("lining spans the full window opening",
-          abs(facade_span(lining, "S") - OPEN_W) < 0.05
-          and abs(facade_span(lining, "E") - OPEN_D) < 0.05,
+    check("lining follows the separate room windows",
+          abs(facade_span(lining, "S") - GLASS_OPEN_W) < 0.05
+          and abs(facade_span(lining, "E") - GLASS_OPEN_D) < 0.05,
           f"{facade_span(lining, 'S'):.2f} x {facade_span(lining, 'E'):.2f} m")
 
     # --- refuge floor / sky garden -------------------------------------
@@ -694,10 +706,10 @@ def main():
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]
     lx, ly = facade_span(louv, "S"), facade_span(louv, "E")
-    check("louvres are the same length as the window (long face)",
-          abs(lx - x_span) < 0.05, f"louvre={lx:.3f} vs glass={x_span:.3f}")
-    check("louvres are the same length as the window (short face)",
-          abs(ly - y_span) < 0.05, f"louvre={ly:.3f} vs glass={y_span:.3f}")
+    check("louvres cover the full vent opening (long face)",
+          abs(lx - OPEN_W) < 0.05, f"louvre={lx:.3f} vs opening={OPEN_W:.3f}")
+    check("louvres cover the full vent opening (short face)",
+          abs(ly - OPEN_D) < 0.05, f"louvre={ly:.3f} vs opening={OPEN_D:.3f}")
     check("louvres also stop short of the corners",
           abs(lx - OPEN_W) < 0.05 and abs(ly - OPEN_D) < 0.05,
           f"{lx:.3f} x {ly:.3f}")
@@ -735,19 +747,21 @@ def main():
               and (lo[1] + hi[1]) / 2 < -D / 4]
         return max(ys) if ys else None
 
-    for label, obj_name, zlo, zhi in (
-            ("glass", "Windows_Glass", z_mid - 0.5, z_mid + 0.5),
-            ("mullion caps", "Window_Mullions", z_mid - 0.5, z_mid + 0.5),
+    for label, obj_name, expected_face, zlo, zhi in (
+            ("glass", "Windows_Glass", wall_y, z_mid - 0.5, z_mid + 0.5),
+            ("mullion caps", "Window_Mullions", wall_y - MULLION_INSET,
+             z_mid - 0.5, z_mid + 0.5),
             ("vent louvres", "Vent_Louvres",
+             wall_y,
              REFUGE_Z1 + VENT_LO_Z, REFUGE_Z1 + VENT_LO_Z + VENT_H)):
         face = outer_face(objs[obj_name], zlo, zhi)
-        check(f"{label} finish flush with the wall face (no sill)",
-              face is not None and abs(face - wall_y) < 0.002,
-              f"outer face at {face:.4f} m vs wall {wall_y:.3f} m"
-              + (f", {(wall_y - face) * 1000:+.1f} mm" if face else ""))
+        check(f"{label} reaches its intended facade depth",
+              face is not None and abs(face - expected_face) < 0.002,
+              f"outer face at {face:.4f} m vs expected {expected_face:.3f} m"
+              + (f", {(expected_face - face) * 1000:+.1f} mm" if face else ""))
 
-    # Nothing may poke THROUGH the wall either — flush means level with it, not
-    # standing proud, and a tilted louvre slat sweeps deeper than half its depth.
+    # Nothing may poke through the wall. Recessed mullions are allowed behind the
+    # facade plane, while glass and louvres remain flush with it.
     proud = []
     for obj_name in ("Windows_Glass", "Window_Mullions", "Vent_Louvres"):
         f = outer_face(objs[obj_name], BASE_Z, TOP_Z)

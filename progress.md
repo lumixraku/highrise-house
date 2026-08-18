@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-08-18 — main — recessed vertical window mullions
+
+Recessed only the vertical `Window_Mullions` caps by 120 mm from the facade
+plane. Glass and ventilation louvres remain flush, and the window dimensions,
+counts, footprint, and floor structure are unchanged.
+
+Verification: `python3 -m py_compile build_house.py floor_plan.py verify_house.py`,
+Blender rebuild with `--no-render`, and `verify_house.py`: **134/134 checks passed**.
+Remaining issues: None.
+
+## 2026-08-19 — main — separate room windows with real vertical joints
+
+Replaced each continuous facade glass ribbon with independent room panes. Each
+pane remains centred on a 4.00 m module but is 3.88 m wide, leaving a 120 mm
+vertical joint between adjacent homes. Interior linings use the same per-room
+segmentation so the gap remains visually open.
+
+Verification: Python compilation, Blender rebuild with `--no-render`, and
+`verify_house.py`: **135/135 checks passed**. Remaining issues: None.
+
 ## 2026-08-18 — main — one 4 x 1.5 m window per room, footprint unchanged
 
 Changed the facade module from two 2 x 1.5 m panes per room to one 4 x 1.5 m
