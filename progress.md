@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-08-19 — main — 0.25 m ventilation bands
+
+Reduced each ventilation louvre band from 0.30 m to 0.25 m. The centred 1.50 m
+window plus its upper and lower ventilation bands now totals exactly 2.00 m;
+the remaining solid spandrels are 1.00 m above and below.
+
+Verification: `python3 -m py_compile build_house.py floor_plan.py verify_house.py`,
+Blender rebuild with `--no-render`, and `verify_house.py`: **132/132 checks passed**.
+Remaining issues: None.
+
 ## 2026-08-19 — main — continuous full-height inset column grid
 
 Replaced the separate pilotis and sky-garden column sets with one independent

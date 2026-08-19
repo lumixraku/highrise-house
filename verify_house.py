@@ -15,7 +15,7 @@ H = 4.0
 TOTAL_FLOORS = 40
 PILOTIS_FLOORS = 3
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
-WIN_H, VENT_H = 1.50, 0.30
+WIN_H, VENT_H = 1.50, 0.25
 SLAB_T = 0.22
 PIER_LONG = 2.0
 WALL_T = 0.30
@@ -696,7 +696,7 @@ def main():
 
     vbands = list(zip(sz[0::2], sz[1::2]))
     vheights = [round(hi - lo, 5) for lo, hi in vbands]
-    check("every vent band is 0.30 m tall",
+    check("every vent band is 0.25 m tall",
           all(abs(h - VENT_H) < EPS for h in vheights), f"heights={set(vheights)}")
 
     # A vent band must sit flush against the window: one directly below, one above.
@@ -704,8 +704,8 @@ def main():
     bots = {round(lo, 4) for lo, _ in vbands}
     below_ok = all(round(lo, 4) in tops for lo, _ in bands)
     above_ok = all(round(hi, 4) in bots for _, hi in bands)
-    check("a 0.30 m vent sits flush below every window", below_ok)
-    check("a 0.30 m vent sits flush above every window", above_ok)
+    check("a 0.25 m vent sits flush below every window", below_ok)
+    check("a 0.25 m vent sits flush above every window", above_ok)
 
     # --- flush glazing: no reveal, no sill ------------------------------
     # The facade is ONE plane. Any setback here leaves a strip of opening side
@@ -1022,7 +1022,8 @@ def main():
     # The piers must close the whole vent+window zone, top and bottom.
     floor_rel = sorted({round((z - BASE_Z) % H, 3) for z in z_clusters(facade)})
     check("wall geometry spans the vent+window zone (pier top/bottom present)",
-          0.95 in floor_rel and 3.05 in floor_rel, f"levels in floor={floor_rel}")
+          SPANDREL_H in floor_rel and (H - SPANDREL_H) in floor_rel,
+          f"levels in floor={floor_rel}")
 
     print(f"\n{checks - len(failures)}/{checks} checks passed")
     if failures:

@@ -15,15 +15,15 @@ Design brief
 * Above that sits the solid core of the building: 12 occupied floors.
 * Every occupied floor carries a 1.5 m ribbon window spanning the full
   width of every facade, vertically centred in the floor.
-* Directly above and below that window sits a 0.3 m ventilation louvre
+* Directly above and below that window sits a 0.25 m ventilation louvre
   strip of the same length as the window.
 
 Vertical band layout per floor, measured from the floor level:
-    0.00 - 0.95  solid spandrel
-    0.95 - 1.25  ventilation louvres
+    0.00 - 1.00  solid spandrel
+    1.00 - 1.25  ventilation louvres
     1.25 - 2.75  window  (centre at 2.00 m = mid floor)
-    2.75 - 3.05  ventilation louvres
-    3.05 - 4.00  solid spandrel
+    2.75 - 3.00  ventilation louvres
+    3.00 - 4.00  solid spandrel
 """
 
 import math
@@ -59,7 +59,7 @@ WALL_T = 0.30     # facade wall thickness
 SLAB_T = 0.22     # floor plate thickness
 
 WIN_H = 1.50      # window height
-VENT_H = 0.30     # ventilation strip height
+VENT_H = 0.25     # ventilation strip height
 GLASS_T = 0.03
 # Flush glazing: the glass, its mullion caps and the louvres all finish on the
 # SAME plane as the wall, with no reveal and no sill. A non-zero inset here puts
@@ -329,11 +329,11 @@ assert not SKY_GARDEN or TOTAL_FLOORS <= 24 or (
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 
 # Band offsets inside one floor, derived so the window is vertically centred.
-SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0     # 0.95
-VENT_LO_Z = SPANDREL_H                          # 0.95
+SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0     # 1.00
+VENT_LO_Z = SPANDREL_H                          # 1.00
 WIN_Z = VENT_LO_Z + VENT_H                      # 1.25
 VENT_HI_Z = WIN_Z + WIN_H                       # 2.75
-SPANDREL_HI_Z = VENT_HI_Z + VENT_H              # 3.05
+SPANDREL_HI_Z = VENT_HI_Z + VENT_H              # 3.00
 
 assert abs(SPANDREL_H + VENT_H + WIN_H + VENT_H + SPANDREL_H - H) < 1e-9
 
