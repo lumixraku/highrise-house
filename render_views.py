@@ -13,6 +13,7 @@ from mathutils import Vector
 
 # Footprint is derived from the window module in build_house.py; keep in sync.
 W, D, TOP_Z = 64.0, 32.0, 160.0
+ROOF_GARDEN_Z0 = TOP_Z + 0.22
 # Refuge floor / sky garden void, from build_house.py: storeys 21-22.
 REFUGE_Z0, REFUGE_Z1 = 80.0, 88.0
 REFUGE_MID = (REFUGE_Z0 + REFUGE_Z1) / 2
@@ -26,7 +27,9 @@ VIEWS = [
     # The sky garden, close and slightly below so you look up into the void and
     # can see the planting against the open double height.
     ("sky_garden",   (46.0, -66.0, REFUGE_MID - 2.0),
-                     (0.0, 0.0, REFUGE_MID + 1.0),                       58.0),
+                      (0.0, 0.0, REFUGE_MID + 1.0),                       58.0),
+    ("roof_garden",  (76.0, -94.0, ROOF_GARDEN_Z0 + 18.0),
+                      (0.0, 0.0, ROOF_GARDEN_Z0 + 2.0),                    48.0),
 ]
 
 

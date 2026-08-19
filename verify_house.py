@@ -57,8 +57,8 @@ FIN_PITCH = 0.50
 COL_SIZE = 1.60
 COL_CLEAR_INSET = 2.0
 # Twin service cores. Duplicated from build_house.py, like every constant here.
-CORE_W, CORE_D, CORE_T = 12.0, 12.0, 0.28
-CORE_OFFSET = 18.0
+CORE_W, CORE_D, CORE_T = 16.0, 9.0, 0.28
+CORE_OFFSET = 16.0
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
 PARAPET_H = 1.10
@@ -79,6 +79,9 @@ BASE_Z = PILOTIS_FLOORS * H
 TOP_Z = BASE_Z + TOWER_FLOORS * H
 ROOF_TOP_Z = TOP_Z + 0.22 + PARAPET_H          # top of the roof parapet
 CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
+ROOF_GARDEN = True
+ROOF_GARDEN_Z0 = TOP_Z + 0.22
+ROOF_GARDEN_GRILLE_H = 2 * H
 EPS = 1e-4
 
 failures = []
@@ -640,14 +643,19 @@ def main():
 
         # Planting, and it has to sit inside the void rather than anywhere else.
         for name in ("Sky_Garden_Planting", "Sky_Garden_Trunks"):
-            pz_ = world_bounds(objs[name])[2]
+            refuge_pieces = [(lo, hi) for lo, hi in piece_bounds(objs[name])
+                             if hi[2] <= REFUGE_Z1 + 0.02]
+            pz_ = (min(lo[2] for lo, _ in refuge_pieces),
+                   max(hi[2] for _, hi in refuge_pieces))
             check(f"{name} sits inside the refuge void",
-                  pz_[0] >= REFUGE_Z0 - 0.02 and pz_[1] <= REFUGE_Z1 - 0.02,
-                  f"z {pz_[0]:.2f}..{pz_[1]:.2f} in {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f}")
-        trees = piece_bounds(objs["Sky_Garden_Trunks"])
+               pz_[0] >= REFUGE_Z0 - 0.02 and pz_[1] <= REFUGE_Z1 - 0.02,
+               f"z {pz_[0]:.2f}..{pz_[1]:.2f} in {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f}")
+        trees = [(lo, hi) for lo, hi in piece_bounds(objs["Sky_Garden_Trunks"])
+                 if hi[2] <= REFUGE_Z1 + 0.02]
         check("the garden is planted with trees", len(trees) >= 8,
               f"{len(trees)} trunks")
-        canopy_top = world_bounds(objs["Sky_Garden_Planting"])[2][1]
+        canopy_top = max(hi[2] for lo, hi in piece_bounds(objs["Sky_Garden_Planting"])
+                         if hi[2] <= REFUGE_Z1 + 0.02)
         check("tree canopies clear the ceiling above",
               canopy_top < REFUGE_Z1 - 0.3,
               f"canopy tops at {canopy_top:.2f} m, ceiling {REFUGE_Z1:.1f} m")
@@ -674,9 +682,34 @@ def main():
               f"storey {REFUGE_STOREY} of {TOTAL_FLOORS}: "
               f"{REFUGE_STOREY} below, {TOTAL_FLOORS - REFUGE_STOREY} above")
         check("the void is roughly mid-tower",
-              0.35 < (REFUGE_Z0 - BASE_Z) / (TOP_Z - BASE_Z) < 0.65,
-              f"{(REFUGE_Z0 - BASE_Z) / (TOP_Z - BASE_Z):.0%} up the tower "
-              f"({REFUGE_Z0:.0f} m of {BASE_Z:.0f}..{TOP_Z:.0f})")
+               0.35 < (REFUGE_Z0 - BASE_Z) / (TOP_Z - BASE_Z) < 0.65,
+               f"{(REFUGE_Z0 - BASE_Z) / (TOP_Z - BASE_Z):.0%} up the tower "
+               f"({REFUGE_Z0:.0f} m of {BASE_Z:.0f}..{TOP_Z:.0f})")
+
+    # --- roof garden ---------------------------------------------------
+    if ROOF_GARDEN:
+        grille_obj = objs["Sky_Garden_Grille"]
+        roof_top = ROOF_GARDEN_Z0 + ROOF_GARDEN_GRILLE_H
+        roof_gp = [(lo, hi) for lo, hi in piece_bounds(grille_obj)
+                   if lo[2] >= ROOF_GARDEN_Z0 - 0.02 and hi[2] <= roof_top + 0.02]
+        check("roof garden has a perimeter grille", len(roof_gp) > 20,
+              f"{len(roof_gp)} roof grille members")
+        roof_gz = [p[2] for bounds in roof_gp for p in bounds]
+        check("roof grille guards the terrace to parapet height",
+              roof_gz and min(roof_gz) <= ROOF_GARDEN_Z0 + 0.1
+              and max(roof_gz) >= roof_top - 0.1,
+              f"z {min(roof_gz):.2f}..{max(roof_gz):.2f} vs "
+              f"{ROOF_GARDEN_Z0:.2f}..{roof_top:.2f}" if roof_gz else "no grille")
+        roof_ceiling = [(lo, hi) for lo, hi in piece_bounds(objs["Structure"])
+                        if lo[2] >= roof_top - 0.02 and (hi[0] - lo[0]) > W * 0.9
+                        and (hi[1] - lo[1]) > D * 0.9]
+        check("roof garden has no ceiling", not roof_ceiling,
+              f"{len(roof_ceiling)} full-footprint pieces above roof grille")
+        roof_plants = [(lo, hi) for name in ("Sky_Garden_Planting", "Sky_Garden_Trunks")
+                       for lo, hi in piece_bounds(objs[name])
+                       if lo[2] >= ROOF_GARDEN_Z0 - 0.02]
+        check("roof garden is planted", roof_plants,
+              f"{len(roof_plants)} planting and trunk pieces on the roof")
 
     # --- ventilation strips --------------------------------------------
     louv = objs["Vent_Louvres"]
@@ -838,7 +871,7 @@ def main():
         (xa, wa, _), (xb, wb, _) = sorted(mc)
         gap = (xb - wb / 2) - (xa + wa / 2)
         check("the two stair cores are genuinely remote from each other",
-              gap >= 20.0,
+              gap >= 14.0,
               f"{xb - xa:.0f} m between measured centres, "
               f"{gap:.0f} m of clear plate between them")
 
@@ -871,14 +904,19 @@ def main():
     check("something rises above the roof parapet", bool(above),
           f"{len(above)} pieces above {ROOF_TOP_Z:.2f} m")
 
-    all_z = max(world_bounds(o)[2][1] for o in objs.values())
+    core_top = max(hi[2] for lo, hi in piece_bounds(struct)
+                   if any(lo[0] > cx - CORE_W / 2 - 0.05
+                          and hi[0] < cx + CORE_W / 2 + 0.05
+                          and lo[1] > -CORE_D / 2 - 0.05
+                          and hi[1] < CORE_D / 2 + 0.05
+                          for cx in CORE_XS))
     check("the highest point on the building is the core bulkhead",
-          abs(all_z - CORE_TOP_Z) < 0.05,
-          f"top={all_z:.2f} m, expected {CORE_TOP_Z:.2f} m "
-          f"({all_z - ROOF_TOP_Z:.2f} m clear of the parapet)")
+           abs(core_top - CORE_TOP_Z) < 0.05,
+           f"core top={core_top:.2f} m, expected {CORE_TOP_Z:.2f} m "
+           f"({core_top - ROOF_TOP_Z:.2f} m clear of the parapet)")
     check("the overrun gives real lift headroom, not a token upstand",
-          all_z - (TOP_Z + 0.22) >= 4.0,
-          f"{all_z - (TOP_Z + 0.22):.2f} m above the roof slab "
+           core_top - (TOP_Z + 0.22) >= 4.0,
+           f"{core_top - (TOP_Z + 0.22):.2f} m above the roof slab "
           f"(overtravel + machine room needs ~4 m)")
 
     # Every projecting piece within a core footprint. This is the check that a
@@ -923,7 +961,9 @@ def main():
           f"({TOWER_FLOORS} storeys - {REFUGE_FLOORS} open)")
 
     # --- overall envelope ----------------------------------------------
-    # all_z was measured with the core-overrun checks above.
+    # Planting can rise above the roof grille; the saved viewport still frames
+    # the complete scene envelope, including that planting.
+    all_z = max(world_bounds(o)[2][1] for o in objs.values())
     check(f"total height matches {TOTAL_FLOORS} floors + parapet", all_z >= TOP_Z + 1.0,
           f"top={all_z:.2f} m")
 

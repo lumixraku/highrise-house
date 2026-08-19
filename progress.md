@@ -1,5 +1,43 @@
 # Progress
 
+## 2026-08-19 — main — rooftop open sky garden
+
+Added a roof-level sky garden above the roof slab with perimeter grille, planting,
+and trees. The terrace deliberately has no ceiling; the lift/stair bulkheads remain
+the only volumes rising above it. The grille exactly matches the refuge garden:
+full two-storey height (8.0 m), with 0.10 m blades at 0.50 m centres and 0.34 m deep.
+Added roof-garden geometry checks and a dedicated `out/view_roof_garden.png` render.
+
+Verification: `python3 -m py_compile build_house.py verify_house.py render_views.py`,
+Blender rebuild, and `blender -b --python verify_house.py -- out/highrise_house.blend`:
+**136/136 checks passed**. The refuge and roof grilles are both 8.0 m high. Remaining issues: None.
+
+## 2026-08-19 — main — connect roof grille corners
+
+Extended the roof garden fins across the full building perimeter, including all
+four corners. The refuge grille remains limited to its opening span because its
+corner piers already close that level.
+
+Verification: `python3 -m py_compile build_house.py verify_house.py` and
+`blender -b --python verify_house.py -- out/highrise_house.blend`:
+**136/136 checks passed**. Remaining issues: None.
+
+## 2026-08-19 — main — elongated, narrower service cores
+
+Changed each core from 12 x 12 m to 16 x 9 m: longer along the facade and narrower
+into the apartments, preserving 144 m2 per core while giving the rooms 3 m more depth.
+Core centrelines are x = +/-16 m, with 16 m clear separation and 8 m corner bays.
+
+## 2026-08-19 — main — regenerated current build artifacts
+
+Regenerated `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`
+from the current `build_house.py`, then regenerated all five supplemental views:
+`view_front.png`, `view_base_pilotis.png`, `view_floor_detail.png`, `view_corner.png`,
+and `view_sky_garden.png`.
+
+Verification: `verify_house.py` against the newly saved `.blend`: **132/132 checks
+passed**. Remaining issues: None.
+
 ## 2026-08-19 — main — 0.25 m ventilation bands
 
 Reduced each ventilation louvre band from 0.30 m to 0.25 m. The centred 1.50 m

@@ -249,7 +249,7 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # the middle of the plate, forcing single-loaded corridors either side. H-cores
 # suit office towers wanting deep lettable space; residential wants a continuous
 # corridor loop.
-CORE_W, CORE_D = 12.0, 12.0   # each core, plan size
+CORE_W, CORE_D = 16.0, 9.0    # longer along facade, narrower into apartment depth
 CORE_T = 0.28                 # core wall thickness
 # Offset from the building centreline. Even metres, so the core walls land on
 # mullion lines and interior partitions can follow the facade rhythm. Held clear
@@ -271,7 +271,7 @@ CORE_T = 0.28                 # core wall thickness
 # sky garden reads across and the depth available to the middle units. 24 m is
 # still well over the 20 m needed to keep the two stairs remote from each other,
 # and worst-case egress is unchanged at 24.0 m.
-CORE_OFFSET = 18.0
+CORE_OFFSET = 16.0
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 
 assert CORE_OFFSET + CORE_W / 2 <= W / 2 - PIER_LONG, \
@@ -299,6 +299,13 @@ CORE_ROOF_PARAPET = 0.9  # low upstand around each bulkhead roof
 
 BASE_Z = PILOTIS_FLOORS * H          # underside of the tower = 12.0
 TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 160.0
+# The roof repeats the planted refuge-level language, but remains entirely open
+# to the sky: its grille replaces the solid perimeter parapet and no canopy is
+# added over the terrace. The lift/stair overruns remain the only roof volumes.
+ROOF_GARDEN = True
+ROOF_GARDEN_Z0 = TOP_Z + 0.22
+# Match the refuge garden's full two-storey grille height, not the roof parapet.
+ROOF_GARDEN_GRILLE_H = 2 * H
 # Top of the bulkhead upstand, which is the highest point on the building.
 CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
 
@@ -605,7 +612,7 @@ def col_bay(axis_len, pitch):
     return per_bay * PANE_W
 
 
-def grille(name, z0, height, mat):
+def grille(name, z0, height, mat, style=None, cell=None, full_corners=False):
     """Screen across the open refuge level.
 
     Holds the facade plane where the glazing stops, without closing the level in:
@@ -616,6 +623,8 @@ def grille(name, z0, height, mat):
     other pitch makes the garden read as a separate object stuck into the tower.
     """
     parts = []
+    style = style or GRILLE_STYLE
+    cell = cell or GRILLE_CELL
     off = WALL_T / 2.0
 
     def divisions(axis_len, pitch):
@@ -624,17 +633,19 @@ def grille(name, z0, height, mat):
         step = axis_len / n
         return [-axis_len / 2 + i * step for i in range(n + 1)]
 
-    if GRILLE_STYLE == "FINS":
+    if style == "FINS":
         # Vertical blades only, full height of the void.
+        span_w = W if full_corners else OPEN_W
+        span_d = D if full_corners else OPEN_D
         zc = z0 + height / 2.0
         for sy in (-1, 1):
-            for i, x in enumerate(divisions(OPEN_W, FIN_PITCH)):
+            for i, x in enumerate(divisions(span_w, FIN_PITCH)):
                 parts.append(box(
                     f"{name}_fin_ns_{i}_{sy}",
                     (x, sy * (D / 2 - off), zc),
                     (FIN_W, FIN_DEPTH, height), mat))
         for sx in (-1, 1):
-            for i, y in enumerate(divisions(OPEN_D, FIN_PITCH)):
+            for i, y in enumerate(divisions(span_d, FIN_PITCH)):
                 parts.append(box(
                     f"{name}_fin_ew_{i}_{sx}",
                     (sx * (W / 2 - off), y, zc),
@@ -643,12 +654,12 @@ def grille(name, z0, height, mat):
 
     # GRID: verticals on the pane pitch, plus horizontals making square cells.
     zc = z0 + height / 2.0
-    n_rows = max(1, int(round(height / GRILLE_CELL)))
+    n_rows = max(1, int(round(height / cell)))
     row_pitch = height / n_rows
 
     for sy in (-1, 1):
         y = sy * (D / 2 - off)
-        for i, x in enumerate(divisions(OPEN_W, GRILLE_CELL)):
+        for i, x in enumerate(divisions(OPEN_W, cell)):
             parts.append(box(
                 f"{name}_v_ns_{i}_{sy}", (x, y, zc),
                 (GRILLE_MEMBER, GRILLE_DEPTH, height), mat))
@@ -662,7 +673,7 @@ def grille(name, z0, height, mat):
 
     for sx in (-1, 1):
         x = sx * (W / 2 - off)
-        for i, y in enumerate(divisions(OPEN_D, GRILLE_CELL)):
+        for i, y in enumerate(divisions(OPEN_D, cell)):
             parts.append(box(
                 f"{name}_v_ew_{i}_{sx}", (x, y, zc),
                 (GRILLE_DEPTH, GRILLE_MEMBER, height), mat))
@@ -892,23 +903,34 @@ def build():
             slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
                              (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
 
-    # --- roof ----------------------------------------------------------
+    # --- roof garden ---------------------------------------------------
     structure.append(box("RoofSlab", (0.0, 0.0, TOP_Z + 0.11),
                          (W, D, 0.22), concrete))
-    structure += ring("Parapet", TOP_Z + 0.22, PARAPET_H, PARAPET_T, spandrel)
+    if ROOF_GARDEN:
+        # Reuse the refuge level's slim, dense fins so the two sky gardens read
+        # as one consistent facade language, while the roof stays uncovered.
+        grilles += grille("RoofGarden_Grille", ROOF_GARDEN_Z0,
+                          ROOF_GARDEN_GRILLE_H, spandrel, full_corners=True)
+        g_struct, g_plant, g_trunk = sky_garden(
+            "RoofGarden", ROOF_GARDEN_Z0, concrete, foliage_mat, trunk_mat, metal)
+        structure += g_struct
+        plants += g_plant
+        trunks += g_trunk
+    else:
+        structure += ring("Parapet", ROOF_GARDEN_Z0, PARAPET_H, PARAPET_T, spandrel)
 
     # Lift motor rooms / stair bulkheads: the cores continuing above the roof.
     # Sized and placed by the cores themselves rather than by eye, so they sit
     # over the shafts they serve and move if the cores ever move.
-    structure += cores("CoreOverrun", TOP_Z + 0.22, CORE_OVERRUN, concrete)
+    structure += cores("CoreOverrun", ROOF_GARDEN_Z0, CORE_OVERRUN, concrete)
     for k, cx in enumerate(CORE_XS):
         # Cap slab, then a low upstand around it.
         structure.append(box(
             f"CoreOverrunRoof_{k}",
-            (cx, 0.0, TOP_Z + 0.22 + CORE_OVERRUN + 0.11),
+            (cx, 0.0, ROOF_GARDEN_Z0 + CORE_OVERRUN + 0.11),
             (CORE_W, CORE_D, 0.22), concrete))
     structure += cores("CoreOverrunParapet",
-                       TOP_Z + 0.22 + CORE_OVERRUN + 0.22,
+                       ROOF_GARDEN_Z0 + CORE_OVERRUN + 0.22,
                        CORE_ROOF_PARAPET, spandrel)
 
     ground = box("Ground", (0.0, 0.0, -0.32), (600.0, 600.0, 0.04), ground_mat)
