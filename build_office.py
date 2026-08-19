@@ -38,6 +38,7 @@ MULLION_D = 0.14
 GLASS_T = 0.025
 FLOOR_T = 0.24
 INTERIOR_SETBACK = 0.65
+PILOTIS_RADIUS = 1.20
 PILOTIS_FLOORS = 3
 LOWER_BLANK_FLOORS = 2
 TOP_BLANK_FLOORS = 2
@@ -169,7 +170,9 @@ def make_floor_edges(profile, material):
     vertices, faces = [], []
     n = len(profile)
     scale = (FOOTPRINT / 2 - INTERIOR_SETBACK) / (FOOTPRINT / 2)
-    for floor in range(int(round(TOWER_HEIGHT / FLOOR_HEIGHT)) + 1):
+    # The pilotis is intentionally open: do not leave detached floor-edge
+    # rings floating between the columns.
+    for floor in range(PILOTIS_FLOORS, int(round(TOWER_HEIGHT / FLOOR_HEIGHT)) + 1):
         z = floor * FLOOR_HEIGHT
         base = len(vertices)
         vertices.extend((x, y, z) for x, y in profile)
@@ -197,18 +200,35 @@ def make_profile_solid(name, profile, z0, z1, material, cap=True):
     faces = [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
     if cap:
         faces += [tuple(range(n - 1, -1, -1)), tuple(range(n, 2 * n))]
-    return mesh_object(name, vertices, faces, material, smooth=True)
+    # Keep the roof and blank facade bands flat-shaded. Smoothing the top cap
+    # into the curved wall creates an artificial grey gradient at the edge.
+    return mesh_object(name, vertices, faces, material)
 
 
 def make_pilotis(material):
     vertices, faces = [], []
     height = PILOTIS_FLOORS * FLOOR_HEIGHT
-    for x in (-15.0, -5.0, 5.0, 15.0):
-        for y in (-15.0, -5.0, 5.0, 15.0):
-            center = Vector((x, y, 0.0))
-            normal = Vector((1.0, 0.0, 0.0))
-            tangent = Vector((0.0, 1.0, 0.0))
-            append_prism(vertices, faces, center, tangent, normal, 1.2, 1.2, 0.0, height)
+    segments = 24
+    half = FOOTPRINT / 2.0
+    corner_radius = half * (2.0 ** (-1.0 / SQUIRCLE_EXPONENT))
+    support_offset = corner_radius * 0.75
+    for x, y in ((-support_offset, -support_offset),
+                 (-support_offset, support_offset),
+                 (support_offset, -support_offset),
+                 (support_offset, support_offset)):
+            base = len(vertices)
+            radius = PILOTIS_RADIUS
+            for z in (0.0, height):
+                for i in range(segments):
+                    angle = 2.0 * math.pi * i / segments
+                    vertices.append((x + radius * math.cos(angle),
+                                     y + radius * math.sin(angle), z))
+            faces.append(tuple(base + i for i in range(segments - 1, -1, -1)))
+            faces.append(tuple(base + segments + i for i in range(segments)))
+            for i in range(segments):
+                j = (i + 1) % segments
+                faces.append((base + i, base + j,
+                              base + segments + j, base + segments + i))
     return mesh_object("Office_Pilotis", vertices, faces, material)
 
 
