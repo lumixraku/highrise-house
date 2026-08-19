@@ -172,7 +172,7 @@ GRILLE_DEPTH = 0.34        # GRID only: how far it stands proud
 # FINS: slim vertical blades, no horizontals. The pitch divides PANE_W exactly, so
 # every second blade lands on a window mullion and the vertical lines still carry
 # through from the glazing below to the glazing above.
-FIN_PITCH = PANE_W / 4     # 1.00 m — close-spaced, reads as a fine screen
+FIN_PITCH = 0.50           # preserve the original dense refuge screen spacing
 FIN_W = 0.10               # slim: a blade, not a pier
 FIN_DEPTH = 0.34           # depth gives it shadow and solidity at a raking angle
 # Columns carrying the tower across the void. The fins are 0.10 m blades — a
@@ -215,9 +215,10 @@ assert abs(WINDOWS_SHORT * PANE_W - OPEN_D) < 1e-9
 assert abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9, \
     "footprint should land on whole metres"
 
-COL_SIZE = 1.60       # pilotis column footprint (sized for a 40-storey load)
+COL_SIZE = 1.60       # continuous column footprint (sized for a 40-storey load)
 COL_SPACING = 9.0     # target column grid spacing
-COL_MARGIN = 2.2      # inset of the outer column line from the facade
+COL_CLEAR_INSET = 2.0 # clear distance from facade plane to outer column face
+COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 
 # --- service cores ----------------------------------------------------------
 # TWO cores rather than one central slab, and the reason is capacity and egress,
@@ -604,42 +605,6 @@ def col_bay(axis_len, pitch):
     return per_bay * PANE_W
 
 
-def refuge_columns(name, z0, height, mat):
-    """Structural columns carrying the tower through the open refuge level.
-
-    The screen fins are 0.10 m blades and carry nothing. These do the work: the
-    facade columns of the floors above and below continue through the void on the
-    same line, so the load path is unbroken and the upper tower is visibly stood
-    on something rather than floating over a 60 m gap.
-
-    Placed on REFUGE_COL_PITCH, which is a whole number of window panes, so each
-    column lands on a mullion line. The end positions are dropped — the corner
-    piers already occupy them.
-    """
-    parts = []
-    zc = z0 + height / 2.0
-    s = REFUGE_COL_SIZE
-
-    def interior(axis_len, pitch):
-        """Column centres across an opening, ends dropped."""
-        step = col_bay(axis_len, pitch)
-        n = int(round(axis_len / step))
-        return [-axis_len / 2 + i * step for i in range(1, n)]
-
-    # Flush with the outer face of the footprint, so they sit on the facade line.
-    for sy in (-1, 1):
-        for i, x in enumerate(interior(OPEN_W, REFUGE_COL_PITCH)):
-            parts.append(box(
-                f"{name}_ns_{i}_{sy}", (x, sy * (D / 2 - s / 2.0), zc),
-                (s, s, height), mat))
-    for sx in (-1, 1):
-        for i, y in enumerate(interior(OPEN_D, REFUGE_COL_PITCH)):
-            parts.append(box(
-                f"{name}_ew_{i}_{sx}", (sx * (W / 2 - s / 2.0), y, zc),
-                (s, s, height), mat))
-    return parts
-
-
 def grille(name, z0, height, mat):
     """Screen across the open refuge level.
 
@@ -832,7 +797,7 @@ def build():
     foliage_mat = mats["foliage"]
     trunk_mat = mats["trunk"]
 
-    # --- pilotis: open, raised base ------------------------------------
+    # --- continuous structural column grid ------------------------------
     structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 14.0, D + 14.0, 0.30), concrete)]
 
     for i, x in enumerate(col_grid(W)):
@@ -843,8 +808,8 @@ def build():
                    and abs(y) < CORE_D / 2 + COL_SIZE for cx in CORE_XS):
                 continue
             structure.append(box(
-                f"Column_{i}_{j}", (x, y, BASE_Z / 2.0),
-                (COL_SIZE, COL_SIZE, BASE_Z), concrete))
+                f"Column_{i}_{j}", (x, y, TOP_Z / 2.0),
+                (COL_SIZE, COL_SIZE, TOP_Z), concrete))
 
     # Service cores rising through the open floors (stairs / lifts).
     structure += cores("Core", 0.0, BASE_Z, concrete)
@@ -876,10 +841,6 @@ def build():
             # The corner piers still turn the corners, holding the building line.
             walls += corner_piers(f"{tag}_Pier", z0, H, spandrel)
             if f == REFUGE_START:
-                # Columns carrying the floors above across the void. These are
-                # structure; the grille behind them is only a screen.
-                structure += refuge_columns(
-                    "SkyGarden_Column", z0, REFUGE_FLOORS * H, concrete)
                 walls += balustrade(f"{tag}_Balustrade", z0, spandrel)
                 # Screen across the whole void, holding the facade plane.
                 grilles += grille("SkyGarden_Grille", z0, REFUGE_FLOORS * H,
@@ -1056,8 +1017,8 @@ def report(objects):
     print(f"storeys              : {TOTAL_FLOORS} total")
     print(f"open pilotis floors  : {PILOTIS_FLOORS} (0.0 -> {BASE_Z:.1f} m)")
     print(f"occupied floors      : {TOWER_FLOORS} ({BASE_Z:.1f} -> {TOP_Z:.1f} m)")
-    print(f"columns at pilotis   : {len(col_grid(W))} x {len(col_grid(D))} grid, "
-          f"{COL_SIZE:.2f} m square")
+    print(f"continuous columns   : {len(col_grid(W))} x {len(col_grid(D))} grid, "
+          f"{COL_SIZE:.2f} m square, >= {COL_CLEAR_INSET:.1f} m inside facade")
     print(f"roof parapet top     : {TOP_Z + PARAPET_H + 0.22:.2f} m")
     print(f"total height         : {CORE_TOP_Z:.2f} m to the top of the core "
           f"bulkheads ({CORE_TOP_Z - (TOP_Z + PARAPET_H + 0.22):.2f} m above "
@@ -1076,16 +1037,7 @@ def report(objects):
               f"= {REFUGE_FLOORS * H:.1f} m double height")
         print(f"refuge spacing       : {REFUGE_STOREY} storeys up, "
               f"{TOTAL_FLOORS - REFUGE_STOREY} above (SCDF: max 20 apart)")
-        # Count without building: refuge_columns() makes real geometry, and this
-        # runs after the join, so calling it here would leave loose boxes behind.
-        bay_w = col_bay(OPEN_W, REFUGE_COL_PITCH)
-        bay_d = col_bay(OPEN_D, REFUGE_COL_PITCH)
-        n_refuge_cols = 2 * (round(OPEN_W / bay_w) - 1) \
-            + 2 * (round(OPEN_D / bay_d) - 1)
-        print(f"columns across void  : {n_refuge_cols}, "
-              f"{REFUGE_COL_SIZE:.2f} m square at {bay_w:.1f} m centres "
-              f"({bay_w / PANE_W:.0f} panes) on the long face, {bay_d:.1f} m "
-              f"({bay_d / PANE_W:.0f} panes) on the short")
+        print("columns across void  : same continuous full-height structural grid")
         if GRILLE_STYLE == "GRID":
             n_rows = max(1, round(REFUGE_FLOORS * H / GRILLE_CELL))
             print(f"garden screen        : GRID, {WINDOWS_LONG} x {n_rows} cells "

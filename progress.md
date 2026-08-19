@@ -1,5 +1,16 @@
 # Progress
 
+## 2026-08-19 — main — continuous full-height inset column grid
+
+Replaced the separate pilotis and sky-garden column sets with one independent
+structural grid running continuously from ground to roof. Every column outer
+face is at least 2.00 m inside the facade; windows and refuge grille geometry are
+unchanged.
+
+Verification: `python3 -m py_compile build_house.py floor_plan.py verify_house.py`,
+Blender rebuild with `--no-render`, and `verify_house.py`: **132/132 checks passed**.
+Remaining issues: None.
+
 ## 2026-08-18 — main — recessed vertical window mullions
 
 Recessed only the vertical `Window_Mullions` caps by 120 mm from the facade
@@ -19,6 +30,13 @@ segmentation so the gap remains visually open.
 
 Verification: Python compilation, Blender rebuild with `--no-render`, and
 `verify_house.py`: **135/135 checks passed**. Remaining issues: None.
+
+## 2026-08-19 — main — restore dense refuge garden grille
+
+Restored the sky-garden fin spacing to the original absolute `0.50 m` pitch.
+The window module change no longer changes the refuge grille density.
+
+Verification: pending rebuild and geometry checks. Remaining issues: None known.
 
 ## 2026-08-18 — main — one 4 x 1.5 m window per room, footprint unchanged
 

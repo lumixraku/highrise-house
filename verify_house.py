@@ -53,6 +53,9 @@ GARDEN_SLAB_T = 0.45
 # Columns carrying the tower across the void. The fins screen it; these hold it up.
 REFUGE_COL_SIZE = 1.20
 REFUGE_COL_PITCH = PANE_W * 3
+FIN_PITCH = 0.50
+COL_SIZE = 1.60
+COL_CLEAR_INSET = 2.0
 # Twin service cores. Duplicated from build_house.py, like every constant here.
 CORE_W, CORE_D, CORE_T = 12.0, 12.0, 0.28
 CORE_OFFSET = 18.0
@@ -593,19 +596,26 @@ def main():
         # left with 33.1 m2 of concrete under 486605 kN = 14.7 MPa, 82% of C40.
         st_ = piece_bounds(objs["Structure"])
         cols = [(lo, hi) for lo, hi in st_
-                if abs(lo[2] - REFUGE_Z0) < 0.05
-                and abs(hi[2] - REFUGE_Z1) < 0.05
-                and abs((hi[0] - lo[0]) - REFUGE_COL_SIZE) < 0.02
-                and abs((hi[1] - lo[1]) - REFUGE_COL_SIZE) < 0.02]
-        check("structural columns cross the refuge void", len(cols) >= 20,
-              f"{len(cols)} columns of {REFUGE_COL_SIZE:.2f} m square "
-              f"spanning {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f} m")
+                if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
+                and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+                and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
+        check("one continuous structural column grid crosses the whole tower",
+              len(cols) >= 16,
+              f"{len(cols)} columns of {COL_SIZE:.2f} m square spanning "
+              f"ground..{TOP_Z:.0f} m")
+
+        clearances = [min(W / 2 - max(abs(lo[0]), abs(hi[0])),
+                          D / 2 - max(abs(lo[1]), abs(hi[1])))
+                      for lo, hi in cols]
+        check("every continuous column is at least 2 m inside the facade",
+              clearances and min(clearances) >= COL_CLEAR_INSET - 0.02,
+              f"minimum clear inset={min(clearances):.3f} m")
 
         # Utilisation, so the section cannot silently be shaved to nothing.
         pier_area = 4 * (PIER_LONG * WALL_T + (PIER_SHORT - WALL_T) * WALL_T)
         core_area = 2 * (CORE_W * CORE_D
                          - (CORE_W - 2 * CORE_T) * (CORE_D - 2 * CORE_T))
-        col_area = len(cols) * REFUGE_COL_SIZE ** 2
+        col_area = len(cols) * COL_SIZE ** 2
         floors_above = TOWER_FLOORS - REFUGE_END - 1
         load = floors_above * W * D * (1.35 * 7.0 + 1.5 * 2.5)      # kN, factored
         stress = load / (pier_area + core_area + col_area) / 1e3    # MPa
@@ -613,41 +623,6 @@ def main():
               f"{load:.0f} kN over {pier_area + core_area + col_area:.1f} m2 "
               f"= {stress:.2f} MPa ({stress / 18 * 100:.0f}% of 18 MPa), "
               f"{floors_above} floors above")
-
-        # Columns must sit on the facade line and on the window module, or the
-        # vertical rhythm breaks where it matters most.
-        col_xs = sorted({round((lo[0] + hi[0]) / 2, 3) for lo, hi in cols
-                         if abs((lo[1] + hi[1]) / 2 + D / 2) < 1.0})
-        on_module = [x for x in col_xs
-                     if any(abs(x - m) < 0.02 for m in mxs)]
-        check("every refuge column lands on a window mullion line",
-              col_xs and len(on_module) == len(col_xs),
-              f"{len(on_module)} of {len(col_xs)} columns on a mullion")
-        if len(col_xs) >= 2:
-            cpitch = col_xs[1] - col_xs[0]
-            r = cpitch / PANE_PITCH
-            check("refuge column spacing is a whole number of window panes",
-                  abs(r - round(r)) < 1e-6,
-                  f"pitch {cpitch:.2f} m = {round(r)} panes")
-
-        # The SHORT face too, and it is the one that catches an off-grid pitch: the
-        # bay has to divide the pane count, not merely come close to the requested
-        # spacing. The bay must divide the room-window count, or columns land
-        # off-grid; the long-face checks alone would not catch that.
-        col_ys = sorted({round((lo[1] + hi[1]) / 2, 3) for lo, hi in cols
-                         if abs((lo[0] + hi[0]) / 2 + W / 2) < 1.0})
-        y_edges = [-OPEN_D / 2 + i * PANE_W for i in range(WINDOWS_SHORT + 1)]
-        y_on_grid = [y for y in col_ys
-                     if any(abs(y - e) < 0.02 for e in y_edges)]
-        check("every refuge column on the short face lands on a pane line",
-              col_ys and len(y_on_grid) == len(col_ys),
-              f"{len(y_on_grid)} of {len(col_ys)} columns on the {PANE_W:.2f} m grid")
-        if len(col_ys) >= 2:
-            ypitch = col_ys[1] - col_ys[0]
-            ry = ypitch / PANE_PITCH
-            check("short-face refuge column spacing is a whole number of panes",
-                  abs(ry - round(ry)) < 1e-6,
-                  f"pitch {ypitch:.2f} m = {ry:.2f} panes")
 
         # Open edges need guarding, and the corners must still turn.
         fb_ = piece_bounds(facade)
