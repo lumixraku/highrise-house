@@ -27,10 +27,16 @@ OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 OUTPUT_STEM = "office_tower"
 
 FOOTPRINT = 50.0       # final bounding-box width and depth, metres
-TOWER_HEIGHT = 120.0   # deliberately easy to change while massing is reviewed
 SQUIRCLE_EXPONENT = 2.7  # 2=circle; higher values approach a square
 PROFILE_STEPS = 128
-FLOOR_HEIGHT = 4.0
+FLOOR_HEIGHT = 5.0
+OFFICE_FLOORS_PER_GROUP = 8
+OFFICE_GROUPS = 3
+OFFICE_FLOORS = OFFICE_FLOORS_PER_GROUP * OFFICE_GROUPS
+PILOTIS_FLOORS = 3
+EQUIPMENT_FLOORS = OFFICE_GROUPS + 3
+TOTAL_LEVELS = PILOTIS_FLOORS + OFFICE_FLOORS + EQUIPMENT_FLOORS
+TOWER_HEIGHT = TOTAL_LEVELS * FLOOR_HEIGHT
 CLEAR_PANE_H = 2.50
 CLEAR_PANE_W = 1.50
 MULLION_W = 0.11
@@ -38,10 +44,21 @@ MULLION_D = 0.14
 GLASS_T = 0.025
 FLOOR_T = 0.24
 INTERIOR_SETBACK = 0.65
+CORE_W = 14.0
+CORE_D = 14.0
 PILOTIS_RADIUS = 1.20
-PILOTIS_FLOORS = 3
-LOWER_BLANK_FLOORS = 2
-TOP_BLANK_FLOORS = 2
+# Three groups of eight office floors sit above a two-level equipment podium, with
+# a single equipment/refuge level between office groups and two more at the roof.
+# Equipment levels count toward physical height, never toward office-floor count.
+OFFICE_LEVELS = set()
+EQUIPMENT_LEVELS = set()
+EQUIPMENT_LEVELS.update(range(PILOTIS_FLOORS, PILOTIS_FLOORS + 2))
+for group in range(OFFICE_GROUPS):
+    group_start = PILOTIS_FLOORS + 2 + group * (OFFICE_FLOORS_PER_GROUP + 1)
+    OFFICE_LEVELS.update(range(group_start, group_start + OFFICE_FLOORS_PER_GROUP))
+    if group < OFFICE_GROUPS - 1:
+        EQUIPMENT_LEVELS.add(group_start + OFFICE_FLOORS_PER_GROUP)
+EQUIPMENT_LEVELS.update(range(TOTAL_LEVELS - 2, TOTAL_LEVELS))
 
 RENDER = "--no-render" not in sys.argv[1:]
 
@@ -122,12 +139,10 @@ def append_prism(vertices, faces, center, tangent, normal, width, depth, z0, z1)
 
 def make_glass(profile, cumulative, perimeter, material):
     vertices, faces = [], []
-    floors = int(round(TOWER_HEIGHT / FLOOR_HEIGHT))
     modules = max(1, round(perimeter / (CLEAR_PANE_W + MULLION_W)))
     pitch = perimeter / modules
     inset = (FLOOR_HEIGHT - CLEAR_PANE_H) / 2
-    for floor in range(PILOTIS_FLOORS + LOWER_BLANK_FLOORS,
-                       floors - TOP_BLANK_FLOORS):
+    for floor in sorted(OFFICE_LEVELS):
         bottom = floor * FLOOR_HEIGHT + inset
         top = bottom + CLEAR_PANE_H
         for module in range(modules):
@@ -154,8 +169,7 @@ def make_glass(profile, cumulative, perimeter, material):
 
 def make_mullions(profile, cumulative, floors, modules, pitch, material):
     vertices, faces = [], []
-    for floor in range(PILOTIS_FLOORS + LOWER_BLANK_FLOORS,
-                       floors - TOP_BLANK_FLOORS):
+    for floor in sorted(OFFICE_LEVELS):
         for module in range(modules):
             point = profile_at(profile, cumulative, module * pitch)
             normal = profile_normal(point)
@@ -166,31 +180,57 @@ def make_mullions(profile, cumulative, floors, modules, pitch, material):
     return mesh_object("Office_Mullions", vertices, faces, material)
 
 
-def make_floor_edges(profile, material):
+def make_floor_slabs(profile, material):
     vertices, faces = [], []
     n = len(profile)
-    scale = (FOOTPRINT / 2 - INTERIOR_SETBACK) / (FOOTPRINT / 2)
-    # The pilotis is intentionally open: do not leave detached floor-edge
-    # rings floating between the columns.
-    for floor in range(PILOTIS_FLOORS, int(round(TOWER_HEIGHT / FLOOR_HEIGHT)) + 1):
+    # Every storey has a complete structural plate, including the refuge levels.
+    # The pilotis remains open below its first plate at level 3.
+    for floor in range(PILOTIS_FLOORS, TOTAL_LEVELS + 1):
         z = floor * FLOOR_HEIGHT
         base = len(vertices)
         vertices.extend((x, y, z) for x, y in profile)
-        vertices.extend((x * scale, y * scale, z - FLOOR_T) for x, y in profile)
+        vertices.extend((x, y, z - FLOOR_T) for x, y in profile)
         faces.extend((base + i, base + (i + 1) % n,
                       base + n + (i + 1) % n, base + n + i) for i in range(n))
-    return mesh_object("Office_Floor_Edges", vertices, faces, material)
+        faces.append(tuple(base + i for i in range(n - 1, -1, -1)))
+        faces.append(tuple(base + n + i for i in range(n)))
+    return mesh_object("Office_Floor_Slabs", vertices, faces, material)
 
 
 def make_interior(profile, material):
     scale = (FOOTPRINT / 2 - INTERIOR_SETBACK) / (FOOTPRINT / 2)
     n = len(profile)
-    bottom = (PILOTIS_FLOORS + LOWER_BLANK_FLOORS) * FLOOR_HEIGHT + 0.3
-    top = TOWER_HEIGHT - TOP_BLANK_FLOORS * FLOOR_HEIGHT - 0.3
-    vertices = [(x * scale, y * scale, bottom) for x, y in profile]
-    vertices += [(x * scale, y * scale, top) for x, y in profile]
-    faces = [(i, (i + 1) % n, n + (i + 1) % n, n + i) for i in range(n)]
+    vertices, faces = [], []
+    for group in range(OFFICE_GROUPS):
+        first = PILOTIS_FLOORS + 2 + group * (OFFICE_FLOORS_PER_GROUP + 1)
+        base = len(vertices)
+        bottom = first * FLOOR_HEIGHT + 0.3
+        top = (first + OFFICE_FLOORS_PER_GROUP) * FLOOR_HEIGHT - 0.3
+        vertices.extend((x * scale, y * scale, bottom) for x, y in profile)
+        vertices.extend((x * scale, y * scale, top) for x, y in profile)
+        faces.extend((base + i, base + (i + 1) % n,
+                      base + n + (i + 1) % n, base + n + i)
+                     for i in range(n))
     return mesh_object("Office_Interior_Lining", vertices, faces, material, smooth=True)
+
+
+def make_equipment_bands(profile, material):
+    """Make the two equipment/refuge levels read as solid blank facade bands."""
+    return [make_profile_solid(f"Office_Equipment_Refuge_{floor}", profile,
+                               floor * FLOOR_HEIGHT,
+                               (floor + 1) * FLOOR_HEIGHT, material)
+            for floor in sorted(EQUIPMENT_LEVELS)]
+
+
+def make_core(material):
+    """Create one continuous solid service core for lifts, stairs, and risers."""
+    bpy.ops.mesh.primitive_cube_add(location=(0.0, 0.0, TOWER_HEIGHT / 2.0))
+    core = bpy.context.object
+    core.name = "Office_Core"
+    core.dimensions = (CORE_W, CORE_D, TOWER_HEIGHT)
+    core.data.materials.append(material)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    return core
 
 
 def make_profile_solid(name, profile, z0, z1, material, cap=True):
@@ -297,23 +337,20 @@ def main():
     reset_scene()
     glass = materials.make_glass(name="OfficeGlass", engine="CYCLES")
     metal = materials.make_metal(name="OfficeMullions")
-    concrete = materials.make_concrete(name="OfficeFloorEdges")
+    concrete = materials.make_concrete(name="OfficeConcrete")
     interior = materials.make_interior(name="OfficeInterior")
     ground = materials.make_ground(name="OfficeGround")
     profile = squircle_profile()
     cumulative, perimeter = profile_path(profile)
-    floors = int(round(TOWER_HEIGHT / FLOOR_HEIGHT))
+    floors = TOTAL_LEVELS
     tower, modules, pitch = make_glass(profile, cumulative, perimeter, glass)
     make_mullions(profile, cumulative, floors, modules, pitch, metal)
-    make_floor_edges(profile, concrete)
+    make_floor_slabs(profile, concrete)
     make_interior(profile, interior)
+    make_equipment_bands(profile, concrete)
+    make_core(concrete)
     pilotis_top = PILOTIS_FLOORS * FLOOR_HEIGHT
     make_pilotis(concrete)
-    make_profile_solid("Office_Lower_Blank_Band", profile, pilotis_top,
-                       pilotis_top + LOWER_BLANK_FLOORS * FLOOR_HEIGHT, concrete)
-    make_profile_solid("Office_Top_Blank_Band", profile,
-                       TOWER_HEIGHT - TOP_BLANK_FLOORS * FLOOR_HEIGHT,
-                       TOWER_HEIGHT, concrete)
     make_profile_solid("Office_Roof", profile, TOWER_HEIGHT,
                        TOWER_HEIGHT + FLOOR_T, concrete)
     add_ground(ground)
@@ -324,6 +361,10 @@ def main():
     ys = [y for _, y in profile]
     assert abs((max(xs) - min(xs)) - FOOTPRINT) < 1e-4
     assert abs((max(ys) - min(ys)) - FOOTPRINT) < 1e-4
+    assert TOWER_HEIGHT == TOTAL_LEVELS * FLOOR_HEIGHT
+    assert len(OFFICE_LEVELS) == OFFICE_FLOORS
+    assert len(EQUIPMENT_LEVELS) == EQUIPMENT_FLOORS
+    assert not (OFFICE_LEVELS & EQUIPMENT_LEVELS)
 
     os.makedirs(OUT_DIR, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT_DIR, OUTPUT_STEM + ".blend"))
@@ -336,6 +377,10 @@ def main():
     if RENDER:
         bpy.ops.render.render(write_still=True)
     print(f"Office tower: {FOOTPRINT:.1f} x {FOOTPRINT:.1f} x {TOWER_HEIGHT:.1f} m")
+    print(f"Office floors: {OFFICE_FLOORS} in {OFFICE_GROUPS} groups of "
+          f"{OFFICE_FLOORS_PER_GROUP}")
+    print(f"Equipment/refuge levels: {sorted(EQUIPMENT_LEVELS)}")
+    print(f"Physical levels: {TOTAL_LEVELS} at {FLOOR_HEIGHT:.1f} m floor-to-floor")
     print(f"Profile vertices: {len(profile)}")
 
 

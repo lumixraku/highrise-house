@@ -1,5 +1,73 @@
 # Progress
 
+## 2026-08-21 — main — correct office tower to three eight-floor groups
+
+Corrected the prior four-group mistake. The office tower now has exactly three
+groups of eight office floors (24 total) and exactly two inter-group equipment /
+refuge levels. It retains two equipment levels above the pilotis and two at the
+top, all excluded from the office count. The resulting 33 physical 5.0 m levels
+put the roof at 165.0 m above ground.
+
+Verification: `blender --background --factory-startup --python build_office.py --
+--no-render` completed successfully. The model reports 24 office floors in three
+groups of eight, equipment/refuge levels `[3, 4, 13, 22, 31, 32]`, and a 165.0 m
+roof elevation. Remaining issues: None.
+
+## 2026-08-21 — main — regroup office tower into eight-floor zones
+
+Reconfigured `build_office.py` into four groups of eight office floors (32 office
+floors total). Added the requested solid equipment bands: two directly above the
+three-level pilotis, one between each pair of office groups, and two at the top.
+All equipment bands have full floor slabs and remain excluded from the office-floor
+count. The 42 physical levels at 5.0 m put the roof at 210.0 m above ground.
+
+Verification: `python3 -m py_compile build_office.py`,
+`blender --background --factory-startup --python build_office.py -- --no-render`,
+and saved-Blend geometry inspection all passed. The model has 32 office glass bands,
+seven equipment bands spanning 15.0–25.0 m, 65.0–70.0 m, 110.0–115.0 m,
+155.0–160.0 m, and 200.0–210.0 m; the core is continuous at 14.0 x 14.0 x 210.0 m.
+Remaining issues: None.
+
+## 2026-08-21 — main — group office floors around equipment refuge levels
+
+Corrected the office-tower count: the three pilotis levels and two equipment/refuge
+levels no longer count as office floors. The tower now contains three groups of 10
+glazed office floors, separated by solid 5.0 m equipment/refuge bands at physical
+levels 13 and 24. With the three pilotis levels, this makes 35 physical levels and
+a 175.0 m roof elevation.
+
+Verification: `python3 -m py_compile build_office.py`,
+`blender --background --factory-startup --python build_office.py -- --no-render`,
+and saved-Blend geometry inspection all passed. The model contains exactly 30 glass
+bands, and the equipment/refuge bands span z=65.0–70.0 m and z=120.0–125.0 m.
+Remaining issues: None.
+
+## 2026-08-21 — main — complete office floor plates and service core
+
+Replaced the office facade-edge-only floor geometry with full solid concrete slabs
+at every level from the pilotis roof through the 30th storey, including both
+refuge levels. Added a 14.0 x 14.0 m solid concrete `Office_Core` continuously
+from ground level to the 150.0 m roof, eliminating the hollow tower interior.
+
+Verification: `python3 -m py_compile build_office.py`,
+`blender --background --factory-startup --python build_office.py -- --no-render`,
+and an inspection of `out/office_tower.blend` all passed. Slabs exist at every
+5.0 m level from 15.0 m through 150.0 m; the core measures 14.0 x 14.0 x 150.0 m
+with z bounds 0.0–150.0 m. Remaining issues: None.
+
+## 2026-08-21 — main — revise office tower storeys and refuge floors
+
+Updated `build_office.py` to derive a 150.0 m tower from 30 storeys at 5.0 m
+floor-to-floor. Storeys 10 and 20 are now open refuge levels: their glazing,
+mullions, floor-edge rings, and interior lining are omitted, while continuous
+open vertical fins retain the facade profile and natural ventilation.
+
+Verification: `python3 -m py_compile build_office.py`,
+`blender --background --factory-startup --python build_office.py -- --no-render`,
+and a saved-Blend geometry probe all passed. The generated model reports 30
+storeys at 5.0 m and refuge storeys 10 and 20; the refuge screens span
+z=45.0–50.0 m and z=95.0–100.0 m. Remaining issues: None.
+
 ## 2026-08-19 — main — rooftop open sky garden
 
 Added a roof-level sky garden above the roof slab with perimeter grille, planting,
