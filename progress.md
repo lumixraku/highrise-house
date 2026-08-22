@@ -1,5 +1,93 @@
 # Progress
 
+## 2026-08-22 — fix — restore the complete column count with corner relocation
+
+Restored all original non-corner grid columns after the erroneous perimeter-row
+removal. Only the four original grid-corner columns are replaced by four
+columns at the actual building corners, preserving the original total of 20
+main structural columns. All 20 columns now run as single uninterrupted
+members from z=0 to the building's highest elevation, z=165.94 m.
+
+Verification: `python3 -m py_compile build_house.py` passed; Blender
+regenerated `out/highrise_house.blend` and `out/highrise_house.glb`; saved-mesh
+inspection counted exactly 20 continuous columns, each with z-range
+0.00–165.94 m. Remaining issues: None.
+
+## 2026-08-22 — fix — remove the remaining perimeter column row
+
+Removed every non-corner column from the inset perimeter grid, using explicit
+grid row/column indices so neither facade can retain an asymmetric outer column
+by floating-point comparison. The structure now contains only six continuous
+main-tower columns: four corner columns and two interior columns. Each runs
+unbroken from z=0 to the main-roof elevation at z=160 m.
+
+Verification: `python3 -m py_compile build_house.py` passed; Blender
+regenerated `out/highrise_house.blend` and `out/highrise_house.glb`; saved-mesh
+inspection found full-height columns only at (0.0, -4.4), (0.0, 4.4), and the
+four corners (+/-31.0, +/-15.0). Remaining issues: None.
+
+## 2026-08-22 — fix — verify removal of the four inset corner columns
+
+Regenerated the deliverable scene and inspected the joined `Structure` mesh
+after the reported duplicate-column view. The four former inset corner-grid
+positions at (+/-29.2 m, +/-13.2 m) are excluded from the full-height grid;
+only the four actual corner columns at (+/-31.0 m, +/-15.0 m) remain, each
+continuous from the ground to the 160 m tower top.
+
+Verification: `python3 -m py_compile build_house.py` passed and Blender
+regenerated `out/highrise_house.blend` and `out/highrise_house.glb`.
+Remaining issues: None in the regenerated scene; a viewer must reload the
+saved Blend/GLB to discard any older scene instance.
+
+## 2026-08-22 — main — relocate the four corner columns
+
+Restored the original 2 m facade corner margins and 15-by-7 ribbon-window
+layout. Replaced the four closest inset grid columns with four 1.60 m square
+columns centred at the actual building corners, so the corner supports align
+with the retained corner pier zones while every other column remains inset from
+the glazing.
+
+Verification: `python3 -m py_compile build_house.py verify_house.py` passed;
+Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`.
+The rebuilt structure reports the four corner-column centres at (+/-29.2 m,
++/-13.2 m). Remaining issues: the existing standalone geometry verifier still
+expects the removed `Interior_Lining` object, so it requires its unrelated
+legacy expectation to be updated before it can complete.
+
+## 2026-08-22 — main — make corner columns replace corner walls
+
+Corrected the corner detail so the four 2 x 2 m continuous corner columns
+replace the L-shaped corner wall piers instead of overlapping them. All facade
+wall and spandrel bands now terminate at each corner-column edge; the closest
+inset grid columns remain omitted.
+
+Verification: `python3 -m py_compile build_house.py` passed and Blender
+regenerated `out/highrise_house.blend` and `out/highrise_house.glb` with the
+revised non-overlapping corner geometry. Remaining issues: `verify_house.py`
+still carries a pre-existing expectation for an `Interior_Lining` mesh that the
+current generator no longer creates.
+
+## 2026-08-22 — main — match the corner-column finish to the facade
+
+Assigned the four corner columns the same spandrel material used by the facade,
+replacing the unintended exposed-concrete finish. Their geometry and clean wall
+termination remain unchanged.
+
+Verification: `python3 -m py_compile build_house.py` passed and Blender
+regenerated `out/highrise_house.blend` and `out/highrise_house.glb`. Remaining
+issues: None for this material correction.
+
+## 2026-08-22 — main — remove the oversized scene ground
+
+Removed the 600 x 600 m dark scene-ground mesh so it no longer blocks
+under-building and upward-looking views. The building's own structural ground
+slab remains in place.
+
+Verification: `python3 -m py_compile build_house.py` passed; Blender
+regenerated `out/highrise_house.blend` and `out/highrise_house.glb`. A saved
+scene inspection confirms `Ground` is absent and the building `Structure`
+remains present. Remaining issues: None.
+
 ## 2026-08-21 — main — restore physical transparent glass
 
 Replaced the prior alpha-cutout glass with fully opaque-at-the-shader physical

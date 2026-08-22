@@ -216,6 +216,7 @@ assert abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9, \
     "footprint should land on whole metres"
 
 COL_SIZE = 1.60       # continuous column footprint (sized for a 40-storey load)
+CORNER_COL_SIZE = 2.00  # exactly fills each retained 2 m corner facade margin
 COL_SPACING = 9.0     # target column grid spacing
 COL_CLEAR_INSET = 2.0 # clear distance from facade plane to outer column face
 COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
@@ -431,6 +432,13 @@ def col_grid(span):
     return [start + i * step for i in range(bays + 1)]
 
 
+def corner_columns():
+    """Four 2 m columns that replace, rather than overlap, corner wall piers."""
+    return [(sx * (W / 2 - CORNER_COL_SIZE / 2),
+             sy * (D / 2 - CORNER_COL_SIZE / 2))
+            for sx in (-1, 1) for sy in (-1, 1)]
+
+
 def ring(name, z0, height, thickness, mat, outer_w=W, outer_d=D):
     """Closed rectangular band of wall, hugging the footprint edges."""
     zc = z0 + height / 2.0
@@ -442,6 +450,22 @@ def ring(name, z0, height, thickness, mat, outer_w=W, outer_d=D):
         box(f"{name}_E", (+(outer_w / 2 - t / 2), 0.0, zc), (t, outer_d - 2 * t, height), mat),
     ]
     return parts
+
+
+def facade_ring(name, z0, height, thickness, mat):
+    """Facade wall band terminating cleanly against the four corner columns."""
+    zc = z0 + height / 2.0
+    t = thickness
+    return [
+        box(f"{name}_S", (0.0, -(D / 2 - t / 2), zc),
+            (W - 2 * CORNER_COL_SIZE, t, height), mat),
+        box(f"{name}_N", (0.0, +(D / 2 - t / 2), zc),
+            (W - 2 * CORNER_COL_SIZE, t, height), mat),
+        box(f"{name}_W", (-(W / 2 - t / 2), 0.0, zc),
+            (t, D - 2 * CORNER_COL_SIZE, height), mat),
+        box(f"{name}_E", (+(W / 2 - t / 2), 0.0, zc),
+            (t, D - 2 * CORNER_COL_SIZE, height), mat),
+    ]
 
 
 def cores(name, z0, height, mat):
@@ -518,29 +542,8 @@ def interior_ring(name, z0, height, mat):
 
 
 def corner_piers(name, z0, height, mat):
-    """L-shaped solid wall at each corner, filling the window and vent bands.
-
-    Two runs per corner: one along the long facade, one along the short one,
-    the second shortened by the wall thickness so they meet without overlapping.
-    """
-    zc = z0 + height / 2.0
-    t = WALL_T
-    parts = []
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            # Leg along the long facade: PIER_LONG measured from the corner.
-            parts.append(box(
-                f"{name}_x_{sx}_{sy}",
-                (sx * (W / 2 - PIER_LONG / 2.0), sy * (D / 2 - t / 2.0), zc),
-                (PIER_LONG, t, height), mat))
-            # Leg along the short facade: PIER_SHORT, less the thickness already
-            # taken by the leg above, so the two meet without overlapping.
-            parts.append(box(
-                f"{name}_y_{sx}_{sy}",
-                (sx * (W / 2 - t / 2.0),
-                 sy * (D / 2 - t - (PIER_SHORT - t) / 2.0), zc),
-                (t, PIER_SHORT - t, height), mat))
-    return parts
+    """Corner support is provided by the continuous square corner columns."""
+    return []
 
 
 def mullions(name, z0, height, mat):
@@ -799,7 +802,6 @@ def build():
     glass = mats["glass"]
     metal = mats["metal"]
     dark = mats["dark"]
-    ground_mat = mats["ground"]
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
     linings = []
@@ -807,19 +809,29 @@ def build():
     foliage_mat = mats["foliage"]
     trunk_mat = mats["trunk"]
 
-    # --- continuous structural column grid ------------------------------
+    # --- interior structural column grid --------------------------------
     structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 14.0, D + 14.0, 0.30), concrete)]
 
-    for i, x in enumerate(col_grid(W)):
-        for j, y in enumerate(col_grid(D)):
+    x_grid, y_grid = col_grid(W), col_grid(D)
+    for i, x in enumerate(x_grid):
+        for j, y in enumerate(y_grid):
+            # Move only the four former grid-corner columns to the actual
+            # building corners below; retain every other original grid column.
+            if i in (0, len(x_grid) - 1) and j in (0, len(y_grid) - 1):
+                continue
             # Skip columns that would land inside a service core wall. Two cores
             # now, so this tests both.
             if any(abs(x - cx) < CORE_W / 2 + COL_SIZE
                    and abs(y) < CORE_D / 2 + COL_SIZE for cx in CORE_XS):
                 continue
             structure.append(box(
-                f"Column_{i}_{j}", (x, y, TOP_Z / 2.0),
-                (COL_SIZE, COL_SIZE, TOP_Z), concrete))
+                f"Column_{i}_{j}", (x, y, CORE_TOP_Z / 2.0),
+                (COL_SIZE, COL_SIZE, CORE_TOP_Z), concrete))
+
+    for i, (x, y) in enumerate(corner_columns()):
+        structure.append(box(
+            f"CornerColumn_{i}", (x, y, CORE_TOP_Z / 2.0),
+            (CORNER_COL_SIZE, CORNER_COL_SIZE, CORE_TOP_Z), spandrel))
 
     # Service cores rising through the open floors (stairs / lifts).
     structure += cores("Core", 0.0, BASE_Z, concrete)
@@ -871,15 +883,15 @@ def build():
 
         if f in blank_floors:
             # Blank floor: solid wall the whole storey height, no openings.
-            walls += ring(f"{tag}_Blank", z0, H, WALL_T, spandrel)
+            walls += facade_ring(f"{tag}_Blank", z0, H, WALL_T, spandrel)
             if not (SKY_GARDEN and f == REFUGE_START - 1):
                 slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
                                  (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
             continue
 
-        walls += ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
-        walls += ring(f"{tag}_SpandrelHi", z0 + SPANDREL_HI_Z, H - SPANDREL_HI_Z,
-                      WALL_T, spandrel)
+        walls += facade_ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
+        walls += facade_ring(f"{tag}_SpandrelHi", z0 + SPANDREL_HI_Z,
+                             H - SPANDREL_HI_Z, WALL_T, spandrel)
 
         # Corner piers close the vent+window+vent zone at all four corners.
         walls += corner_piers(f"{tag}_Pier", z0 + VENT_LO_Z,
@@ -930,8 +942,6 @@ def build():
                        ROOF_GARDEN_Z0 + CORE_OVERRUN + 0.22,
                        CORE_ROOF_PARAPET, spandrel)
 
-    ground = box("Ground", (0.0, 0.0, -0.32), (600.0, 600.0, 0.04), ground_mat)
-
     # The cores run UNBROKEN from the ground to the overrun above the roof. They
     # were previously built only at the pilotis and refuge levels, which left the
     # tower hollow between them — the lift shafts stopped and started again, and
@@ -956,7 +966,6 @@ def build():
         "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
         "Floor_Plates": join(slabs, "Floor_Plates"),
         "Structure": join(structure, "Structure"),
-        "Ground": ground,
     }
     return merged
 
