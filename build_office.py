@@ -37,7 +37,7 @@ PILOTIS_FLOORS = 3
 EQUIPMENT_FLOORS = OFFICE_GROUPS + 3
 TOTAL_LEVELS = PILOTIS_FLOORS + OFFICE_FLOORS + EQUIPMENT_FLOORS
 TOWER_HEIGHT = TOTAL_LEVELS * FLOOR_HEIGHT
-CLEAR_PANE_H = 2.50
+CLEAR_PANE_H = 3.50
 CLEAR_PANE_W = 1.50
 MULLION_W = 0.11
 MULLION_D = 0.14
@@ -59,6 +59,10 @@ for group in range(OFFICE_GROUPS):
     if group < OFFICE_GROUPS - 1:
         EQUIPMENT_LEVELS.add(group_start + OFFICE_FLOORS_PER_GROUP)
 EQUIPMENT_LEVELS.update(range(TOTAL_LEVELS - 2, TOTAL_LEVELS))
+REFUGE_LEVELS = EQUIPMENT_LEVELS - set(range(PILOTIS_FLOORS, PILOTIS_FLOORS + 2)) - set(range(TOTAL_LEVELS - 2, TOTAL_LEVELS))
+REFUGE_GRILLE_PITCH = 0.50
+REFUGE_GRILLE_W = 0.08
+REFUGE_GRILLE_LENGTH = 1.20
 
 RENDER = "--no-render" not in sys.argv[1:]
 
@@ -141,9 +145,8 @@ def make_glass(profile, cumulative, perimeter, material):
     vertices, faces = [], []
     modules = max(1, round(perimeter / (CLEAR_PANE_W + MULLION_W)))
     pitch = perimeter / modules
-    inset = (FLOOR_HEIGHT - CLEAR_PANE_H) / 2
     for floor in sorted(OFFICE_LEVELS):
-        bottom = floor * FLOOR_HEIGHT + inset
+        bottom = floor * FLOOR_HEIGHT
         top = bottom + CLEAR_PANE_H
         for module in range(modules):
             s0 = module * pitch + MULLION_W / 2
@@ -215,11 +218,29 @@ def make_interior(profile, material):
 
 
 def make_equipment_bands(profile, material):
-    """Make the two equipment/refuge levels read as solid blank facade bands."""
+    """Make the podium and roof equipment levels read as solid blank facade bands."""
     return [make_profile_solid(f"Office_Equipment_Refuge_{floor}", profile,
                                floor * FLOOR_HEIGHT,
                                (floor + 1) * FLOOR_HEIGHT, material)
-            for floor in sorted(EQUIPMENT_LEVELS)]
+            for floor in sorted(EQUIPMENT_LEVELS - REFUGE_LEVELS)]
+
+
+def make_refuge_grilles(profile, cumulative, perimeter, material):
+    """Use thin radial blades at the ventilated refuge levels."""
+    vertices, faces = [], []
+    count = max(1, round(perimeter / REFUGE_GRILLE_PITCH))
+    pitch = perimeter / count
+    for floor in sorted(REFUGE_LEVELS):
+        for index in range(count):
+            point = profile_at(profile, cumulative, index * pitch)
+            normal = profile_normal(point)
+            tangent = Vector((-normal.y, normal.x, 0.0))
+            # The long axis points inward, like a clock tick aimed at the centre.
+            append_prism(vertices, faces,
+                         point - normal * (REFUGE_GRILLE_LENGTH / 2),
+                         tangent, normal, REFUGE_GRILLE_W, REFUGE_GRILLE_LENGTH,
+                         floor * FLOOR_HEIGHT, (floor + 1) * FLOOR_HEIGHT)
+    return mesh_object("Office_Refuge_Grilles", vertices, faces, material)
 
 
 def make_core(material):
@@ -289,6 +310,12 @@ def setup_render():
     scene.render.engine = "CYCLES"
     scene.cycles.samples = 32
     scene.cycles.use_denoising = True
+    scene.cycles.max_bounces = 12
+    scene.cycles.transmission_bounces = 12
+    scene.cycles.transparent_max_bounces = 12
+    scene.cycles.glossy_bounces = 6
+    if hasattr(scene.cycles, "blur_glossy"):
+        scene.cycles.blur_glossy = 0.0
     scene.render.resolution_x = 900
     scene.render.resolution_y = 900
     scene.render.resolution_percentage = 100
@@ -338,7 +365,6 @@ def main():
     glass = materials.make_glass(name="OfficeGlass", engine="CYCLES")
     metal = materials.make_metal(name="OfficeMullions")
     concrete = materials.make_concrete(name="OfficeConcrete")
-    interior = materials.make_interior(name="OfficeInterior")
     ground = materials.make_ground(name="OfficeGround")
     profile = squircle_profile()
     cumulative, perimeter = profile_path(profile)
@@ -346,8 +372,8 @@ def main():
     tower, modules, pitch = make_glass(profile, cumulative, perimeter, glass)
     make_mullions(profile, cumulative, floors, modules, pitch, metal)
     make_floor_slabs(profile, concrete)
-    make_interior(profile, interior)
     make_equipment_bands(profile, concrete)
+    make_refuge_grilles(profile, cumulative, perimeter, metal)
     make_core(concrete)
     pilotis_top = PILOTIS_FLOORS * FLOOR_HEIGHT
     make_pilotis(concrete)

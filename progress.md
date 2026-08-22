@@ -1,5 +1,90 @@
 # Progress
 
+## 2026-08-21 — main — restore physical transparent glass
+
+Replaced the prior alpha-cutout glass with fully opaque-at-the-shader physical
+glass: alpha is again 1.00, while transmission remains 1.00 and roughness 0.00.
+This restores Fresnel reflection and clear refraction instead of the frosted
+look caused by alpha blending. Kept the interior linings removed, and aligned
+the office tower's Cycles ray budgets with the house: 12 total, transmission,
+and transparent bounces plus 6 glossy bounces.
+
+Verification: `python3 -m py_compile materials.py build_office.py build_house.py`,
+both headless Blender builds, and saved-Blend inspections passed. Both generated
+glass materials report alpha 1.00; neither model contains interior lining
+geometry; both scenes use 12 transmission bounces. Remaining issues: None.
+
+## 2026-08-21 — main — make both tower facades visibly transparent
+
+Changed the shared glass material to a 0.38-alpha pale green architectural
+glass and enabled Blender's dithered surface transparency. Removed the opaque
+interior lining generated directly behind glazing in both `build_office.py`
+and `build_house.py`, so floor plates, service cores, and the far-side facade
+remain visible through the windows.
+
+Verification: `python3 -m py_compile materials.py build_office.py build_house.py`,
+both headless Blender builds, and saved-Blend inspections passed. Both glass
+materials report alpha 0.38, and neither generated model contains an interior
+lining object. Remaining issues: None.
+
+## 2026-08-21 — main — moderate office glazing height
+
+Reduced `CLEAR_PANE_H` in `build_office.py` from 4.00 m to 3.50 m. Green
+glazing now covers 70% of each 5.00 m office storey, balancing it against the
+1.50 m upper white band.
+
+Verification: `python3 -m py_compile build_office.py` and
+`blender --background --factory-startup --python build_office.py -- --no-render`
+completed successfully, regenerating `out/office_tower.blend` and
+`out/office_tower.glb`. Remaining issues: None.
+
+## 2026-08-21 — main — increase office glazing proportion
+
+Increased `CLEAR_PANE_H` in `build_office.py` from 2.50 m to 4.00 m within
+each 5.00 m office storey. The green glazing now occupies 80% of each office
+facade band, leaving a shallower 1.00 m upper white band.
+
+Verification: `python3 -m py_compile build_office.py` and
+`blender --background --factory-startup --python build_office.py -- --no-render`
+completed successfully, regenerating `out/office_tower.blend` and
+`out/office_tower.glb`. Remaining issues: None.
+
+## 2026-08-21 — main — orient refuge grilles toward the tower centre
+
+Reworked each refuge-level grille member in `build_office.py` as a 1.20 m long,
+0.08 m wide vertical blade. Each blade now extends along the local radial axis
+and points toward the tower's geometric centre, producing the requested
+clock-tick pattern in plan view.
+
+Verification: `python3 -m py_compile build_office.py` and
+`blender --background --factory-startup --python build_office.py -- --no-render`
+completed successfully, regenerating `out/office_tower.blend` and
+`out/office_tower.glb`. Remaining issues: None.
+
+## 2026-08-21 — main — express inter-group refuge levels as fine grilles
+
+Changed the two inter-group refuge levels in `build_office.py` from solid
+equipment facade bands to open vertical metal grilles. The grilles use 0.08 m
+wide members at approximately 0.50 m centres; podium and roof equipment levels
+remain solid.
+
+Verification: `python3 -m py_compile build_office.py` and
+`blender --background --factory-startup --python build_office.py -- --no-render`
+completed successfully, regenerating `out/office_tower.blend` and
+`out/office_tower.glb`. Remaining issues: None.
+
+## 2026-08-21 — main — make office glazing continuous below top band
+
+Changed `build_office.py` so each office glass panel starts at its floor level
+instead of being vertically centred. This removes the lower white facade strip
+and leaves the existing upper white horizontal band above each continuous green
+glass field.
+
+Verification: `python3 -m py_compile build_office.py` and
+`blender --background --factory-startup --python build_office.py -- --no-render`
+completed successfully, regenerating `out/office_tower.blend` and
+`out/office_tower.glb`. Remaining issues: None.
+
 ## 2026-08-21 — main — correct office tower to three eight-floor groups
 
 Corrected the prior four-group mistake. The office tower now has exactly three

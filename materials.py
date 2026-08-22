@@ -201,6 +201,9 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
     _set(b, "Base Color", (*tint, 1.0))
     _set(b, "Metallic", 0.0)
     _set(b, "IOR", 1.52)                    # soda-lime float glass
+    # Keep the material fully opaque at the shader level. In Cycles, physical
+    # transparency comes from transmission; lowering Alpha creates a cutout-like
+    # mix that weakens reflection and makes the facade look frosted.
     _set(b, "Alpha", 1.0)
 
     if engine == "CYCLES":

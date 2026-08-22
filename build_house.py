@@ -800,7 +800,6 @@ def build():
     metal = mats["metal"]
     dark = mats["dark"]
     ground_mat = mats["ground"]
-    interior = mats["interior"]
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
     linings = []
@@ -893,8 +892,6 @@ def build():
 
         glazing += glass_ring(f"{tag}_Glass", z0 + WIN_Z, WIN_H, glass)
         frames += mullions(f"{tag}_Mullion", z0 + WIN_Z, WIN_H, metal)
-        # Behind the glass, so the clear panes have something to show.
-        linings += interior_ring(f"{tag}_Interior", z0 + WIN_Z, WIN_H, interior)
 
         # Floor plate for the level above, visible behind the glazing. Skipped
         # directly under the refuge level, where the thicker garden slab (which
