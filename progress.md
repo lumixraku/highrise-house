@@ -1,5 +1,25 @@
 # Progress
 
+## 2026-08-23 — fix — wrap the refuge-level triangular truss ring around all facades
+
+Reworked the companion tower's refuge-level appearance after review: removed the
+extra visible cross-members from the short faces and restored the lighter,
+single-diagonal triangular pattern. Added matching alternating single diagonals
+to both long (front and rear) facades, so each refuge level now reads as one
+continuous four-sided truss ring. The hidden plan-X diaphragm and internal core
+X braces remain structural and do not alter ordinary residential sightlines.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`,
+  and `out/preview.png`; the companion now has 116 refuge-truss members (58 per
+  refuge level), including 16 short-face and 36 long-face perimeter diagonals.
+- `verify_house.py` reports `164/168`; all new perimeter-ring checks pass. The
+  four remaining failures are unchanged legacy geometry assumptions.
+
+Remaining issues: None for the requested appearance/layout change.
+
 ## 2026-08-23 — fix — add refuge-level plan X bracing and crossed short-face trusses
 
 Expanded the taller companion tower's two refuge-level truss systems without

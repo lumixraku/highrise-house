@@ -321,7 +321,8 @@ def main():
             companion_refuge_z1s = [z0 + REFUGE_FLOORS * H
                                     for z0 in companion_refuge_z0s]
             refuge_levels = len(companion_refuge_z0s)
-            expected_members = refuge_levels * 48
+            long_truss_bays = max(1, round((second_w - 2 * PIER_LONG) / COL_SPACING))
+            expected_members = refuge_levels * (40 + 2 * long_truss_bays)
             check("two refuge levels carry the complete truss layout",
                   len(truss_parts) == expected_members,
                   f"{len(truss_parts)} members, expected {expected_members}")
@@ -343,15 +344,26 @@ def main():
                       f"{len(level_members)} members in z={z0:.1f}..{z1:.1f} m")
 
             # Short-face members have a large Y and Z extent while staying on
-            # the two E/W facade planes: each panel now closes as an X.
+            # the two E/W facade planes: these are the light triangular braces.
             x_face = second_w / 2.0 - TRUSS_FACADE_INSET
             short_z = [p for p in truss_parts
                        if abs(abs((p[0][0] + p[1][0]) / 2) - x_face) < 0.8
                        and p[1][1] - p[0][1] > 5.0
                        and p[1][2] - p[0][2] > 1.0]
-            check("short facades have crossed X-shaped diagonal braces",
-                  len(short_z) == refuge_levels * 2 * 4 * 2,
+            check("short facades have alternating triangular braces",
+                  len(short_z) == refuge_levels * 2 * 4,
                   f"{len(short_z)} diagonal members on the two depth-side faces")
+
+            # Matching single-diagonal panels wrap onto both long elevations.
+            long_z = [p for p in truss_parts
+                      if p[1][0] - p[0][0] > 5.0
+                      and p[1][1] - p[0][1] < 1.0
+                      and p[1][2] - p[0][2] > 1.0
+                      and abs(abs((p[0][1] + p[1][1]) / 2) -
+                              (D / 2 - TRUSS_FACADE_INSET)) < 0.8]
+            check("long facades complete the refuge-level truss ring",
+                  len(long_z) == refuge_levels * 2 * long_truss_bays,
+                  f"{len(long_z)} diagonal members on the two front/rear faces")
 
             # Plan X members span both X and Y, but stay within the thin upper
             # refuge slab so they do not intrude into residential sightlines.

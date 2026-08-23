@@ -999,15 +999,15 @@ def vent_strip(name, z0, louver_mat, back_mat):
 
 
 def structural_trusses(name, mat):
-    """Add refuge-level outrigger, belt, plan-X and short-face X trusses.
+    """Add refuge-level outrigger, belt, plan-X and perimeter Z trusses.
 
     The two refuge voids are the natural transfer levels: horizontal outriggers
     tie each core to the north/south perimeter, while the perimeter chords and
-    alternating diagonals form a belt truss.  A second, horizontal X-braced
-    diaphragm is embedded in the upper refuge slab, and the short faces get
-    crossed diagonals instead of a single zig-zag.  The same levels get X-braces
-    on each core's long wall, keeping the solid core tube as the fire-separated
-    shaft while making its lateral role explicit in the model.
+    alternating diagonals form a belt truss.  Matching single diagonals now
+    continue around both long and short faces, while a second, horizontal
+    X-braced diaphragm is embedded in the upper refuge slab.  The same levels
+    get X-braces on each core's long wall, keeping the solid core tube as the
+    fire-separated shaft while making its lateral role explicit in the model.
     """
     parts = []
     if not REFUGE_Z0S:
@@ -1025,6 +1025,11 @@ def structural_trusses(name, mat):
         short_y0 + 3.0 * (short_y1 - short_y0) / 4.0,
         short_y1,
     ]
+    long_bays = max(1, round(OPEN_W / COL_SPACING))
+    long_nodes = [
+        long_y0 + (long_y1 - long_y0) * index / long_bays
+        for index in range(long_bays + 1)
+    ]
 
     for level, (z0, z1) in enumerate(zip(REFUGE_Z0S, REFUGE_Z1S)):
         zl = z0 + TRUSS_LEVEL_EDGE
@@ -1041,6 +1046,13 @@ def structural_trusses(name, mat):
             parts.append(beam_between(f"{tag}_LongUpper_{sy}",
                                       (long_y0, y, zh), (long_y1, y, zh),
                                       TRUSS_MEMBER, mat))
+            # Keep the light single-diagonal language and continue it across
+            # the front and rear elevations, closing the refuge truss ring.
+            for bay, (xa, xb) in enumerate(zip(long_nodes, long_nodes[1:])):
+                za, zb = ((zl, zh) if bay % 2 == 0 else (zh, zl))
+                parts.append(beam_between(f"{tag}_LongZ_{sy}_{bay}",
+                                          (xa, y, za), (xb, y, zb),
+                                          TRUSS_MEMBER, mat))
 
         # Short-face belt chords with alternating diagonals.  Each bay is a
         # Z-shaped panel; reversing the slope at the next node gives the
@@ -1056,12 +1068,6 @@ def structural_trusses(name, mat):
             for bay, (ya, yb) in enumerate(zip(short_nodes, short_nodes[1:])):
                 za, zb = ((zl, zh) if bay % 2 == 0 else (zh, zl))
                 parts.append(beam_between(f"{tag}_ShortZ_{sx}_{bay}",
-                                          (x, ya, za), (x, yb, zb),
-                                          TRUSS_MEMBER, mat))
-                # Close each panel as an X in the depth-side elevation.  These
-                # members remain in the refuge void, behind the facade screen.
-                za, zb = ((zh, zl) if bay % 2 == 0 else (zl, zh))
-                parts.append(beam_between(f"{tag}_ShortCross_{sx}_{bay}",
                                           (x, ya, za), (x, yb, zb),
                                           TRUSS_MEMBER, mat))
 

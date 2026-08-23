@@ -611,9 +611,10 @@ place the vent + glass + vent zone from 0.50 m to 2.50 m above each floor; an
 
 The taller companion adds a dedicated `Structural_Trusses` mesh. At each of its
 two double-height refuge levels, horizontal outrigger rails run from both cores
-to the long-face belt, the E/W short faces carry crossed X-shaped diagonals, and
-each core's long wall gets an X-braced panel. Four additional X panels are
-embedded in the upper refuge slab in plan, so they reinforce the diaphragm
-without crossing any ordinary residential window band or sightline. The concrete
-cores remain continuous closed tubes; the metal trusses are an added lateral-load
-path and a visible expression of the core-to-perimeter connection.
+to the long-face belt, and a light single-diagonal panel pattern wraps around all
+four refuge-level facades. Each core's long wall still gets an X-braced panel,
+while four additional X panels are embedded in the upper refuge slab in plan so
+they reinforce the diaphragm without crossing any ordinary residential window
+band or sightline. The concrete cores remain continuous closed tubes; the metal
+trusses are an added lateral-load path and a visible expression of the
+core-to-perimeter connection.
