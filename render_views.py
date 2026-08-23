@@ -11,11 +11,11 @@ import sys
 import bpy
 from mathutils import Vector
 
-# Footprint is derived from the window module in build_house.py; keep in sync.
-W, D, TOP_Z = 64.0, 32.0, 196.0
+# Read the generated dimensions from the source configuration so view framing
+# follows changes to the block and room counts automatically.
+from build_house import D, REFUGE_Z0, REFUGE_Z1, TOP_Z, W  # noqa: E402
+
 ROOF_GARDEN_Z0 = TOP_Z + 0.22
-# Refuge floor / sky garden void, from build_house.py: storeys 26-27.
-REFUGE_Z0, REFUGE_Z1 = 100.0, 108.0
 REFUGE_MID = (REFUGE_Z0 + REFUGE_Z1) / 2
 
 VIEWS = [

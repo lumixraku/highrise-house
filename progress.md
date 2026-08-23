@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-08-23 — fix — parameterize the two residential blocks and room count
+
+Made the requested massing controls explicit in `build_house.py`: each of the two
+residential blocks now uses `BLOCK_FLOORS = 17`, and the long facade uses
+`WINDOWS_LONG = 18` room-window modules per floor. `TOTAL_FLOORS` is derived from
+the two blocks plus the fixed pilotis, refuge and solid-band floors; `W` is derived
+from the long-facade module count and fixed piers. The verifier now mirrors these
+parameters and asserts the refuge divides the glazed floors into two 17-floor
+blocks. The floor-plan and extra-view scripts follow the 18-room width and derived
+172 m roof / 88–96 m refuge elevations; the README summary reflects the new 76 ×
+32 m, 43-storey configuration.
+
+Verification: `py_compile`, `git diff --check`, and a Blender rebuild passed. The
+build report confirms 43 total floors, 34 glazed floors split 17 + 17, 18 long-face
+windows per floor, a 76.0 × 32.0 m footprint, and a 172.0 m roof. The full legacy
+verifier still stops at its pre-existing missing `Interior_Lining` object assertion.
+Remaining issues: None for the requested parameter change.
+
 ## 2026-08-23 — fix — close the upper two metres of the refuge opening
 
 Added a solid facade band from z=106.0–108.0 m above the six-metre refuge grille.

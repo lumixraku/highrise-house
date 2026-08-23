@@ -51,8 +51,12 @@ WALL_COLOR = materials.WARM_STONE     # or materials.COOL_STONE for pale grey
 GLASS_TINT = materials.GLASS_GREEN
 CYCLES_SAMPLES = 128
 
-TOTAL_FLOORS = 49      # 3 pilotis + 40 residential + 4 blank + 2 refuge floors
 PILOTIS_FLOORS = 3     # of which these are open and raised
+BLOCK_FLOORS = 17      # glazed residential floors in each of the two blocks
+REFUGE_FLOORS = 2      # fixed double-height refuge / sky-garden floors
+FIXED_SOLID_BAND_FLOORS = 4  # 2 blank floors at the base + 2 at the top
+TOTAL_FLOORS = (PILOTIS_FLOORS + 2 * BLOCK_FLOORS
+                + REFUGE_FLOORS + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS   # occupied floors above
 
 WALL_T = 0.30     # facade wall thickness
@@ -75,7 +79,7 @@ INTERIOR_SETBACK = 0.85
 # The room window is the fixed module: exactly PANE_W x WIN_H of clear glass.
 # EVERYTHING outside is derived from the room-window counts — never the other way round.
 PANE_W = 4.00
-WINDOWS_LONG = 15      # room windows across each long facade  (X)
+WINDOWS_LONG = 18      # room windows across each long facade  (X)
 WINDOWS_SHORT = 7       # room windows across each short facade (Y)
 WINDOW_GAP = 0.12       # real vertical joint between adjacent room windows
 PANE_GLASS_W = PANE_W - WINDOW_GAP
@@ -84,7 +88,7 @@ PANE_GLASS_W = PANE_W - WINDOW_GAP
 # glass line and overlaps the two panes it joins, so it costs NO facade length.
 # That keeps the arithmetic clean — an opening is exactly N x PANE_W, so the
 # footprint comes out on whole metres:
-#   W = 15 x 4.00 + 2 x 2.00 = 64.00 m
+#   W = 18 x 4.00 + 2 x 2.00 = 76.00 m
 #   D =  7 x 4.00 + 2 x 2.00 = 32.00 m
 MULLION_W = 0.09
 MULLION_INSET = 0.12     # recessed from the facade plane to deepen window joints
@@ -142,14 +146,13 @@ SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 # Singapore's SCDF requires a refuge floor in buildings over 24 storeys, spaced
 # no more than 20 storeys apart, and the local convention is to give it over to a
 # planted sky garden open on all sides — it doubles as the lift transfer level.
-# One two-storey void at mid-height satisfies the spacing rule for a 40-storey
-# tower and is where the garden reads best from the street.
+# One two-storey void at mid-height splits the 34 residential floors into two
+# equal 17-floor blocks and satisfies the refuge-floor spacing rule.
 #
 # REFUGE_FLOORS floors have one continuous 8 m interior void with no intermediate
 # slab. On the outside, only the lower 6 m is screened by the grille; a solid
 # 2 m facade band above it closes the visible opening without changing the void.
 SKY_GARDEN = True
-REFUGE_FLOORS = 2          # storeys given to the void
 REFUGE_GRILLE_TOP_BLANK_H = 2.0  # solid facade band above the 6 m grille
 BALUSTRADE_H = 1.20        # open-edge guarding, per SCDF minimum 1.0 m
 BALUSTRADE_T = 0.12
@@ -215,7 +218,7 @@ assert abs(WINDOWS_SHORT * PANE_W - OPEN_D) < 1e-9
 assert abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9, \
     "footprint should land on whole metres"
 
-COL_SIZE = 1.60       # continuous column footprint (sized for a 40-storey load)
+COL_SIZE = 1.60       # continuous column footprint (sized for the tower load)
 CORNER_COL_SIZE = 2.00  # exactly fills each retained 2 m corner facade margin
 COL_SPACING = 9.0     # target column grid spacing
 COL_CLEAR_INSET = 2.0 # clear distance from facade plane to outer column face
@@ -299,7 +302,7 @@ CORE_ROOF_PARAPET = 0.9  # low upstand around each bulkhead roof
 # CORE_TOP_Z is derived once TOP_Z exists, just below.
 
 BASE_Z = PILOTIS_FLOORS * H          # underside of the tower = 12.0
-TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 196.0
+TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 172.0
 # The roof repeats the planted refuge-level language, but remains entirely open
 # to the sky: its grille replaces the solid perimeter parapet and no canopy is
 # added over the terrace. The lift/stair overruns remain the only roof volumes.
@@ -337,8 +340,13 @@ assert abs(REFUGE_Z1 - REFUGE_GRILLE_Z1 - REFUGE_GRILLE_TOP_BLANK_H) < 1e-9, \
 assert not (REFUGE_FLOOR_SET & (set(range(SOLID_BASE_FLOORS))
             | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))), \
     "the refuge void must not overlap the blank bands"
-# SCDF spacing applies to the original 40-storey configuration; taller custom
-# variants keep the explicitly derived refuge position without blocking builds.
+assert SOLID_BASE_FLOORS + SOLID_TOP_FLOORS == FIXED_SOLID_BAND_FLOORS, \
+    "the fixed solid-band floor count must match its two derived bands"
+assert (REFUGE_START - _glazed_first == BLOCK_FLOORS
+        and _glazed_last - REFUGE_END == BLOCK_FLOORS), \
+    "the refuge void must split the glazed floors into two configured blocks"
+# SCDF spacing applies to this 43-storey configuration; taller custom variants
+# keep the explicitly derived refuge position without blocking builds.
 assert not SKY_GARDEN or TOTAL_FLOORS > 40 or TOTAL_FLOORS <= 24 or (
     REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20), \
     "refuge floor spacing exceeds 20 storeys"

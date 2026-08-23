@@ -75,20 +75,20 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 
 | | |
 | --- | --- |
-| footprint | 64 × 32 m (derived, see below) |
+| footprint | 76 × 32 m (derived, see below) |
 | clear internal depth | 31.40 m |
 | floor-to-floor height | 4.0 m |
-| storeys | 49 total |
+| storeys | 43 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
-| occupied floors | 46 (12.0 → 196.0 m), of which 2 are the refuge level |
-| total height | 197.32 m to top of parapet, 201.94 m to top of the core bulkheads |
+| occupied floors | 40 (12.0 → 172.0 m), of which 2 are the refuge level |
+| total height | 173.32 m to top of parapet, 177.94 m to top of the core bulkheads |
 | corner piers | 2.0 m on all four faces (one pane) |
-| clear window opening | 60 m long face / 28 m short face |
+| clear window opening | 72 m long face / 28 m short face |
 | blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
-| blank top band | 2 floors = 8.0 m (188.0 → 196.0 m) |
-| refuge floor / sky garden | storeys 26–27, 8.0 m interior void 100.0 → 108.0 m; 6.0 m grille/opening from its floor, 2.0 m solid wall above |
-| glazed floors | 40 |
-| panes per floor | 15 long face / 7 short face (44 around) |
+| blank top band | 2 floors = 8.0 m (164.0 → 172.0 m) |
+| refuge floor / sky garden | storeys 23–24, 8.0 m interior void 88.0 → 96.0 m; 6.0 m grille/opening from its floor, 2.0 m solid wall above |
+| glazed floors | 34 (17 below + 17 above the refuge level) |
+| panes per floor | 18 long face / 7 short face (50 around) |
 | pane pitch | 4.00 m mullion centres |
 | clear glass per pane | **4.00 m × 1.50 m, fixed** |
 
@@ -603,12 +603,13 @@ stays light (~40k vertices at 40 storeys):
 
 ## Changing the design
 
-All parameters sit at the top of `build_house.py`. `PANE_W` and the pane counts
-set the footprint (`W`/`D` are derived — don't set them directly),
-`TOTAL_FLOORS` the storey count and `PILOTIS_FLOORS` how many of those are open
-(`TOWER_FLOORS` is the remainder). The column grid, roof bulkheads and camera
-all derive from the footprint and the core positions, so changing the pane
-counts keeps the model coherent.
+All parameters sit at the top of `build_house.py`. `BLOCK_FLOORS` sets the height
+of each of the two residential blocks; `TOTAL_FLOORS` is derived from those blocks
+and the fixed pilotis, refuge and solid-band floors. `PANE_W` and the pane counts
+set the footprint (`W`/`D` are derived — don't set them directly), with
+`WINDOWS_LONG` controlling the width and `WINDOWS_SHORT` controlling the depth.
+The column grid, roof bulkheads and camera all derive from the footprint and the
+core positions, so changing the block or pane counts keeps the model coherent.
 Note that
 `verify_house.py` carries its own copy of `W`, `D` and the floor counts — update it
 to match, or its assertions will test the old dimensions. The five vertical bands

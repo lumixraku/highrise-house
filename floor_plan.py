@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 PANE_W = 4.0
-WINDOWS_LONG = 15
+WINDOWS_LONG = 18
 WINDOWS_SHORT = 7
 PIER_LONG = 2.0
 PIER_SHORT = 2.0

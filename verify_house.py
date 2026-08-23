@@ -12,8 +12,12 @@ import bpy
 from mathutils import Vector
 
 H = 4.0
-TOTAL_FLOORS = 49
 PILOTIS_FLOORS = 3
+BLOCK_FLOORS = 17
+REFUGE_FLOORS = 2
+FIXED_SOLID_BAND_FLOORS = 4
+TOTAL_FLOORS = (PILOTIS_FLOORS + 2 * BLOCK_FLOORS
+                + REFUGE_FLOORS + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.25
 SLAB_T = 0.22
@@ -28,7 +32,7 @@ SPANDREL_HI_H = H - (VENT_HI_Z + VENT_H)
 MULLION_W = 0.09
 MULLION_INSET = 0.12
 PANE_W = 4.00
-WINDOWS_LONG = 15
+WINDOWS_LONG = 18
 WINDOWS_SHORT = 7
 WINDOW_GAP = 0.12
 PANE_GLASS_W = PANE_W - WINDOW_GAP
@@ -49,7 +53,6 @@ FIRST_GLAZED = SOLID_BASE_FLOORS
 LAST_GLAZED = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
 # Refuge floor / sky garden: an open double-height void, mirroring build_house.py.
 SKY_GARDEN = True
-REFUGE_FLOORS = 2
 REFUGE_GRILLE_TOP_BLANK_H = 2.0
 BALUSTRADE_H = 1.20
 GARDEN_SLAB_T = 0.45
@@ -354,7 +357,8 @@ def main():
     check("end mullions sit on the opening edges, against the piers",
           abs(min(xs) + edge) < 1e-3 and abs(max(xs) - edge) < 1e-3,
           f"first={min(xs):.4f}, last={max(xs):.4f}, expected +/-{edge:.4f}")
-    check("15 room windows of 4 m fill the opening exactly (mullions add no length)",
+    check(f"{WINDOWS_LONG} room windows of 4 m fill the opening exactly "
+          "(mullions add no length)",
           abs(WINDOWS_LONG * PANE_W - OPEN_W) < 1e-9,
           f"{WINDOWS_LONG} x {PANE_W} = {OPEN_W:.4f} m")
 
@@ -697,8 +701,13 @@ def main():
         # Placement rules.
         check("the void does not overlap the blank bands",
               not (REFUGE_SET & (set(range(SOLID_BASE_FLOORS))
-                   | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))),
+                       | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))),
               f"refuge floors {sorted(REFUGE_SET)}")
+        check("the refuge splits the glazed floors into two configured blocks",
+              REFUGE_START - FIRST_GLAZED == BLOCK_FLOORS
+              and LAST_GLAZED - REFUGE_END == BLOCK_FLOORS,
+              f"{REFUGE_START - FIRST_GLAZED} floors below + "
+              f"{LAST_GLAZED - REFUGE_END} above, configured {BLOCK_FLOORS} each")
         check("refuge floor spacing is within 20 storeys (SCDF)",
               TOTAL_FLOORS > 40 or REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20,
               f"storey {REFUGE_STOREY} of {TOTAL_FLOORS}: "
@@ -1036,10 +1045,11 @@ def main():
           f"{views[0][0].region_3d.view_distance:.0f} m view distance"
           if views else "no viewports")
 
-    # Footprint must remain 64 x 32 m after changing only the window count.
+    # Footprint follows the configured room-window counts.
     facade = objs["Facade_Spandrels"]
     fb = world_bounds(facade)
-    check(f"footprint width is {W:.2f} m (15 room windows + 2 x {PIER_LONG:.0f} m pier)",
+    check(f"footprint width is {W:.2f} m ({WINDOWS_LONG} room windows + 2 x "
+          f"{PIER_LONG:.0f} m pier)",
           abs((fb[0][1] - fb[0][0]) - W) < 0.02, f"{fb[0][1] - fb[0][0]:.3f} m")
     check(f"footprint depth is {D:.2f} m ({WINDOWS_SHORT} room windows + 2 x "
           f"{PIER_SHORT:.0f} m pier)",
