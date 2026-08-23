@@ -13,6 +13,7 @@ from mathutils import Vector
 
 # Read the generated dimensions from the source configuration so view framing
 # follows changes to the block and room counts automatically.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_house import D, REFUGE_Z0, REFUGE_Z1, TOP_Z, W  # noqa: E402
 
 ROOF_GARDEN_Z0 = TOP_Z + 0.22

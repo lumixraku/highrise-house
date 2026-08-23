@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-08-23 — fix — widen and move the twin service cores
+
+Responding to the wider 76 m plate, changed each service core from 16 × 9 m at
+x = ±16 m to 20 × 9 m at x = ±18 m. This reduces the outboard clearance to each
+short end from 14 m to 10 m while preserving a 16 m clear span between cores and
+keeping every core edge on the 4 m pane grid. Synchronized `build_house.py`,
+`verify_house.py`, `floor_plan.py`, and the service-core section of `README.md`.
+
+Verification: Python compilation, floor-plan regeneration, diff whitespace check,
+and Blender rebuild passed. The build report confirms two 20 × 9 m cores at ±18 m
+with 360 m² total provision. Six low-sample Blender views rendered successfully,
+including the pilotis close-up. The legacy verifier still stops at its pre-existing
+missing `Interior_Lining` object assertion. Remaining issues: None for this change.
+
 ## 2026-08-23 — fix — parameterize the two residential blocks and room count
 
 Made the requested massing controls explicit in `build_house.py`: each of the two

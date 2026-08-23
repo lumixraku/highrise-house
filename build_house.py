@@ -237,15 +237,15 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # roughly 172 m2 gross; 14 x 9 = 126 m2, short by 27%. That is a 6.2%
 # core-to-plate ratio where residential towers run 10-15%.
 # CORE_PROVISION below stays at the 203.5 m2 figure derived from the wider 76 m
-# plate, deliberately: it is the stricter of the two and the measured 288 m2
+# plate, deliberately: it is the stricter of the two and the measured 360 m2
 # clears it anyway, so keeping it means the cores cannot shrink on the strength
 # of a smaller unit count.
 #
 # Splitting also fixes two things one core cannot:
 #   * Egress. Worst-case travel to a central core was 42.5 m, marginal against
-#     SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to 24 m.
+#     SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to 20 m.
 #   * Stair remoteness. Two stairs in ONE shaft are not independent — a single
-#     incident compromises both. These sit 40 m apart.
+#     incident compromises both. The two core centres stay well separated.
 #   * Lift zoning, which a 551-unit tower wants anyway: low zone in the west
 #     core, high zone in the east, ~65 units per lift in each.
 #
@@ -253,29 +253,14 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # the middle of the plate, forcing single-loaded corridors either side. H-cores
 # suit office towers wanting deep lettable space; residential wants a continuous
 # corridor loop.
-CORE_W, CORE_D = 16.0, 9.0    # longer along facade, narrower into apartment depth
+CORE_W, CORE_D = 20.0, 9.0    # longer along facade, narrower into apartment depth
 CORE_T = 0.28                 # core wall thickness
-# Offset from the building centreline. Even metres, so the core walls land on
-# mullion lines and interior partitions can follow the facade rhythm. Held clear
-# of the corner pier zone (outer edge at 24 m, pier starts at 30 m), which is
-# what rules out pushing the cores right to the ends of the plate.
-#
-# 18 rather than 20, and the reason is the CORNER APARTMENT. It sits outboard of
-# a core, so its width is W/2 - (CORE_OFFSET + CORE_W/2). With W now 64 m, 20
-# would leave 6 m against a 10 m depth — a corridor, not a flat — and still only
-# 2 panes on the long facade, because the outer end falls beyond the fixed
-# x = +-30 glazing edge. At 18 it is 8 x 10 m with 3 panes on the long face plus
-# the short-face return, which is the two-aspect unit the plan is aiming at.
-#
-# This works WITH the 2 m PIER_LONG rather than instead of it: the pier decides
-# how much dead wall wraps the outboard end, the core offset decides how wide
-# the unit is. Both were needed.
-#
-# The cost is the clear span between the cores, 28 -> 24 m. That is the span the
-# sky garden reads across and the depth available to the middle units. 24 m is
-# still well over the 20 m needed to keep the two stairs remote from each other,
-# and worst-case egress is unchanged at 24.0 m.
-CORE_OFFSET = 16.0
+# The wider 76 m plate would otherwise leave 14 m between each core and the
+# building's short end. Widening the cores by 4 m and moving their centres 2 m
+# outward uses that added floorplate: 10 m remains outboard of each core, while
+# the clear span between the two cores stays at 16 m. Core edges at 8 m and 28 m
+# land on the 4 m pane grid so partitions can still follow the facade rhythm.
+CORE_OFFSET = 18.0
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 
 assert CORE_OFFSET + CORE_W / 2 <= W / 2 - PIER_LONG, \
@@ -975,7 +960,7 @@ def build():
     # Within the refuge level they stay visible, which is what makes that void
     # read as a level you arrive at rather than a gap. With two of them the garden
     # reads as running BETWEEN two solid piers, which is a better reading than one
-    # lump in the middle — the 28 m of clear span between them is the view.
+    # lump in the middle — the clear span between them remains the view.
     structure += cores("TowerCore", BASE_Z, TOP_Z - BASE_Z, concrete)
 
     merged = {

@@ -12,8 +12,8 @@ WINDOWS_LONG = 18
 WINDOWS_SHORT = 7
 PIER_LONG = 2.0
 PIER_SHORT = 2.0
-CORE_W, CORE_D = 16.0, 9.0
-CORE_OFFSET = 16.0
+CORE_W, CORE_D = 20.0, 9.0
+CORE_OFFSET = 18.0
 W = WINDOWS_LONG * PANE_W + 2 * PIER_LONG
 D = WINDOWS_SHORT * PANE_W + 2 * PIER_SHORT
 OUT = Path(__file__).with_name("out") / "floor_plan.svg"
@@ -85,7 +85,7 @@ def plan_svg():
 </style>
 <rect width="100%" height="100%" class="paper" />
 {text(-W / 2, D / 2 + 5.1, "APARTMENT FLOOR PLAN", "title", "start")}
-{text(-W / 2, D / 2 + 3.8, "TYPICAL RESIDENTIAL FLOOR · 2 WINDOWS = 1 ROOM · WINDOW MODULE 2.00 m", "subtitle", "start")}
+{text(-W / 2, D / 2 + 3.8, "TYPICAL RESIDENTIAL FLOOR · 1 WINDOW = 1 ROOM · WINDOW MODULE 4.00 m", "subtitle", "start")}
 {rect(-W / 2, -D / 2, W, D, "outer")}
 ''']
 
@@ -117,9 +117,12 @@ def plan_svg():
             parts.append(text(x + 4, y + 2.4, f"R{room_no:02d}", "room-label"))
             room_no += 1
 
-    parts += [rect(-12, -6, 24, 12, "corridor"),
-              rect(-30, -6, 6, 12, "corridor"),
-              rect(24, -6, 6, 12, "corridor"),
+    core_inner_edge = CORE_OFFSET - CORE_W / 2
+    core_outer_edge = CORE_OFFSET + CORE_W / 2
+    glazing_edge = W / 2 - PIER_LONG
+    parts += [rect(-core_inner_edge, -6, 2 * core_inner_edge, 12, "corridor"),
+              rect(-glazing_edge, -6, glazing_edge - core_outer_edge, 12, "corridor"),
+              rect(core_outer_edge, -6, glazing_edge - core_outer_edge, 12, "corridor"),
               text(0, -0.6, "SHARED CORRIDOR", "label")]
 
     for cx, label in zip((-CORE_OFFSET, CORE_OFFSET), ("WEST CORE", "EAST CORE")):

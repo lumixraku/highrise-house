@@ -95,14 +95,14 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 ### Bottom three floors
 
 Open and raised. An 8 × 4 grid of 1.60 m square concrete columns on ~9 m bays
-carries the tower, with **two** 12.0 × 12.0 m service cores (stairs/lifts) rising
+carries the tower, with **two** 20.0 × 9.0 m service cores (stairs/lifts) rising
 through the void and a landing at each of the three levels. Columns that would
 clash with a core are omitted. The tower's underside slab oversails the footprint
 by 0.25 m per side as a drip edge.
 
 ### Two service cores, not one
 
-The cores sit at x = ±18 m, 288 m² between them, 14.1% of the floorplate. This
+The cores sit at x = ±18 m, 360 m² between them, 14.8% of the floorplate. This
 replaced a single central 14 × 9 core, and the reason is **capacity and egress,
 not structure**.
 
@@ -110,7 +110,7 @@ The lateral system here is the perimeter, not the core. The four L-shaped corner
 piers give Iy = 1053 m⁴ against a central core's 177 m⁴, so the core carried only
 **14% of the lateral stiffness** and tip drift is H/1395 against a H/500 limit.
 Twin and H-shaped cores do win on Ix by a factor of ~20, but that is the direction
-with the *least* demand — wind on the 64 m end face works against a slenderness of
+with the *least* demand — wind on the 32 m end face works against a slenderness of
 H/W = 2.3, half the H/D = 4.6 the long face sees. Extra stiffness there buys
 nothing.
 
@@ -118,12 +118,12 @@ What the single core could not do was hold the vertical transport:
 
 | | |
 | --- | --- |
-| tower GFA | 37 × 64 × 32 = 75,776 m² |
+| tower GFA | 37 × 76 × 32 = 85,184 m² |
 | at 80% efficiency, 110 m²/unit | ~551 units, ~1,488 people |
 | lifts needed (1 per 60–90 units) | 7–9 |
 | shafts + 2 stairs + lobbies + risers | ~172 m² gross |
 | single 14 × 9 core | 126 m² — **short by 27%** |
-| two 12 × 12 cores | 288 m² — **+67% margin** |
+| two 20 × 9 cores | 360 m² — **+109% margin** |
 
 A 14 × 9 core is a 6.2% core-to-plate ratio where residential towers run 10–15%.
 The check in `verify_house.py` still asserts against **203.5 m²**, the figure the
@@ -133,9 +133,9 @@ shrink on the strength of a smaller unit count.
 Splitting also fixes three things one core cannot:
 
 * **Egress.** Worst-case travel to a central core was 42.5 m, marginal against
-  SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **24.0 m**.
+  SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **20.0 m**.
 * **Stair remoteness.** Two stairs inside one shaft are not independent — a single
-  incident compromises both. These sit 36 m apart with 24 m of clear plate between.
+  incident compromises both. These sit 36 m apart with 16 m of clear plate between.
 * **Lift zoning**, which a 551-unit tower wants anyway: low zone in the west core,
   high zone in the east, ~65 units per lift in each.
 
@@ -145,95 +145,52 @@ office towers wanting deep lettable space; residential wants a continuous corrid
 loop. The extra 36 m² does not pay for a severed plan.
 
 The cores are internal, so the facade is untouched: every pane is still 4.00 m and
-the footprint is still 64 × 32 m on whole metres. Core edges land at 12 and 24 m,
+the footprint is 76 × 32 m on whole metres. Core edges land at 8 and 28 m,
 both whole multiples of the 4.00 m pane, so interior partitions can follow the
-facade rhythm. The outer edge stops at 24 m, clear of the 30 m corner pier zone —
+facade rhythm. The outer edge stops at 28 m, clear of the 36 m corner pier zone —
 which is what rules out pushing the cores to the ends of the plate.
 
-Plan, at any occupied floor (x runs −32 → +32). `▓` is the 2 m corner pier, `━` and
+Plan, at any occupied floor (x runs −38 → +38). `▓` is the 2 m corner pier, `━` and
 `┃` the glazed runs between them, `█` a service core:
 
 ```
-        -32  -24    -12          +12    +24  +32
-         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  +16   north facade, 15 panes
+        -38  -28     -8           +8    +28  +38
+         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  +16   north facade, 18 panes
          ┃      ██████        ██████         ┃         ───────────────
          ┃      ██████        ██████         ┃         10 m unit depth
-         ┃  8m  ██████  24 m  ██████   8m    ┃   0     core band, 12 x 12
+         ┃ 10m  ██████  16 m  ██████  10m    ┃   0     core band, 20 x 9
          ┃corner██████ clear  ██████ corner  ┃         10 m unit depth
          ┃ unit ██████ span   ██████  unit   ┃         ───────────────
          ┃      ██████        ██████         ┃
-         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  -16   south facade, 15 panes
+         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  -16   south facade, 18 panes
             ↑        ↑              ↑
        corner unit  west core   east core
         8 x 10 m   (low zone)  (high zone)
 
-   64 m wide · 32 m deep (7 panes) · egress 22.0 m · stairs 36 m apart
+   76 m wide · 32 m deep (7 panes) · egress 20.0 m · stairs 36 m apart
 ```
 
 Every corner is 2 m of wall on each axis, one pane either way, so the corner unit's
-two glazed faces meet almost at the corner itself. The 8 m stub past each core to the
-building end is a dead-end corridor, well inside the ~30 m limit; the 24 m between
+two glazed faces meet almost at the corner itself. The 10 m stub past each core to the
+building end is a dead-end corridor, well inside the ~30 m limit; the 16 m between
 cores is served from both directions.
 
-### Why ±18, and why every pier is one pane
+### Core placement and the widened plate
 
-Both moves serve the same unit: the **corner apartment**, the only one in the plan
-with two aspects. They are independent levers and both were needed.
+The 76 m plate left too much unused space between the old 16 m cores and the short
+ends. Each core is now **20 × 9 m**, with centres at x = ±18 m. Its pane-grid edges
+fall at x = ±8 m and ±28 m: the clear span between cores is 16 m, and the outboard
+stub to each building end is 10 m. The 2 m corner piers remain outside the cores,
+so the facade window rhythm is unchanged while the circulation mass reads in scale
+with the widened building.
 
-`CORE_OFFSET` sets how *wide* that unit is. The piers set how much dead wall wraps
-its two outboard ends — and it is easy to get this backwards. A pier does not move
-the glass. Each glass run is fixed at N × 4.00 m, so the glazing edge stays put and
-the pier only decides how far the **building end** sits beyond it. At 8 m the corner
-unit ended in 8 m of blank wall before reaching its return, and 4 m on the return
-itself. At 2 m on both, it turns the corner after a single pane:
-
-| | 8/4 m, cores ±20 | 8/4 m, cores ±18 | 2/4 m | **2/2 m, cores ±18** |
-| --- | --- | --- | --- | --- |
-| footprint | 76 × 32 m | 76 × 32 m | 64 × 32 m | **64 × 32 m** |
-| panes, long / short | 30 / 12 | 30 / 12 | 30 / 12 | **30 / 14** |
-| corner unit | 12 × 10 m | 14 × 10 m | 8 × 10 m | **8 × 10 m** |
-| long-facade glass | 4 m — 2 panes | 6 m — 3 panes | 6 m — 3 panes | **6 m — 3 panes** |
-| blank wall past it | 8 m long / 4 m short | 8 / 4 m | 2 / 4 m | **2 / 2 m** |
-| Iy | 3,870 m⁴ | 3,870 m⁴ | 2,061 m⁴ | 1,655 m⁴ |
-| tip drift | H/2,748 | H/2,748 | H/1,738 | **H/1,395** |
-
-Thinning `PIER_SHORT` is what forced **`WINDOWS_SHORT` from 12 to 14**. `D` is
-derived, so 2 m piers with 12 panes would have given D = 28 m and dropped the unit
-depth beside the cores to 8.0 m, under the 9 m a residential plan needs. Two more
-panes hold D at exactly 32 m, so nothing but the corners moved.
-
-The corner unit is smaller than it was at 76 × 32, but it is now 8 × 10 m with glass
-on two adjacent faces and one pane of wall between them, instead of 14 × 10 m with a
-blank 8 m shoulder. That was the trade asked for.
-
-**Zero is where it stops, and not because of drift.** Most of what a pier buys is
-the lever arm of its short-facade return about the weak axis, which is why the long
-leg was the cheap one to thin. Each row is at its own footprint, since `W` is what
-the wind acts on:
-
-| | Iy | tip drift |
-| --- | --- | --- |
-| 8 long / 4 short, W 76 | 3,870 m⁴ | H/2,748 |
-| 2 long / 4 short, W 64 | 2,061 m⁴ | H/1,738 |
-| **2 long / 2 short, W 64** | **1,655 m⁴** | **H/1,395** — 2.8× the limit |
-| 0 long / 2 short, W 64 | 1,052 m⁴ | H/887 |
-| no piers at all, W 64 | 601 m⁴ | H/507 — 1% margin |
-
-Even the all-glass case scrapes past H/500 on this arithmetic, so drift is not the
-wall. What zero actually breaks is the **facade**: with nothing stopping a ribbon
-short of the corner, the corners open up. Ten checks fail. A real all-glass tower
-would not rest on this arithmetic anyway — it needs a perimeter Vierendeel frame
-(structural spandrels at every floor), and this model has walls and columns with no
-beams. `verify_house.py` computes the drift and asserts H/500 regardless, so the
-number cannot drift unnoticed.
-
-`PIER_SHORT` stays at 4 m, which is why the depth is unchanged at 32 m. Taking it
-to 2 m would narrow `D` to 28 m and leave 8.0 m of unit depth either side of the
-cores, under the 9 m a residential plan needs.
+The 2 m piers and seven short-face room modules keep the depth at 32 m. Taking one
+of those fixed variables down would make the residential depth too shallow; the
+core adjustment therefore uses the new long direction only.
 
 The cores run **unbroken from the ground to above the roof** — a shaft that stops
 is not a shaft. That includes straight through the refuge void, where they read as
-two solid piers with the 24 m garden span between them, and up past the parapet:
+two solid piers with the 16 m garden span between them, and up past the parapet:
 
 | | |
 | --- | --- |
@@ -316,7 +273,7 @@ What holds the elevation together where the facade stops:
   every column.
 * **Both lift/stair cores are exposed**, which is what makes it read as a level you
   arrive at rather than a gap. With two of them the garden reads as running
-  *between* two solid piers, with 24 m of clear span between — a better reading
+  *between* two solid piers, with 16 m of clear span between — a better reading
   than one lump in the middle.
 
 The garden slab is 0.45 m rather than the usual 0.22 m because it carries soil,
@@ -331,8 +288,8 @@ off-centre — and asserts fail the build if it lands on a blank band or breaks 
 
 ### The blank bands, and what frames the long facade
 
-Four of the 46 occupied floors carry no openings at all — two at the bottom
-(12.0 → 20.0 m) and two at the top (188.0 → 196.0 m), 8 m each. The piers left
+Four of the 40 occupied floors carry no openings at all — two at the bottom
+(12.0 → 20.0 m) and two at the top (164.0 → 172.0 m), 8 m each. The piers left
 and right are 2 m, one pane, so the frame is deliberately asymmetric: heavy top
 and bottom, nearly open at the ends.
 
@@ -340,19 +297,19 @@ and bottom, nearly open at the ends.
         8.0 m blank (2 floors)
       ┌─────────────────────────┐
  2.0  │   21 floors of          │  2.0
- pier │   15-pane windows       │  pier
+ pier │   18-pane windows       │  pier
       ├─────────────────────────┤
       │   sky garden (2)        │
       ├─────────────────────────┤
  2.0  │   21 floors of          │  2.0
- pier │   15-pane windows       │  pier
+ pier │   18-pane windows       │  pier
       └─────────────────────────┘
         8.0 m blank (2 floors)
 ```
 
 The horizontal bands read as the building's cap and base; the ends stay open so the
-corner apartments turn the corner onto their second aspect. 40 glazed floors in all:
-20 above the garden, 20 below it.
+corner apartments turn the corner onto their second aspect. 34 glazed floors in all:
+17 above the garden, 17 below it.
 
 Both bands are specified as target heights (`SOLID_BASE_TARGET`,
 `SOLID_TOP_TARGET`) and rounded to whole floors, so a break always lands on a
@@ -392,7 +349,7 @@ The window and both vent strips run the width of every facade but stop short of
 each corner, so all four corners stay solid wall: 2.0 m on both axes
 (`PIER_LONG`, `PIER_SHORT`), one pane either way. The piers are L-shaped in plan —
 a leg along each facade meeting at the corner — and fill the whole
-vent + window + vent zone. Clear openings are 60 m on the long faces and 28 m on
+vent + window + vent zone. Clear openings are 72 m on the long faces and 28 m on
 the short ones.
 
 ### Flush glazing — one facade plane
@@ -424,7 +381,7 @@ The pane is fixed at exactly **4.00 m × 1.50 m** of clear glass, on every facad
 The footprint is not an input — it is the pane count plus the piers, nothing else:
 
 ```
-W = 15 panes x 4.00 + 2 x 2.00 pier = 64 m
+W = 18 panes x 4.00 + 2 x 2.00 pier = 76 m
 D = 7 panes x 4.00 + 2 x 2.00 pier = 32 m
 pane pitch = 4.00 m (identical on all four facades)
 ```
@@ -432,12 +389,12 @@ pane pitch = 4.00 m (identical on all four facades)
 Mullions are 0.09 m **cover caps centred on each pane joint**: they overlap the
 two panes they join rather than displacing them, so they consume no facade
 length. (They are 0.14 m deep, but that depth runs *inward* from the flush face —
-see above.) That is what keeps the arithmetic clean — 15 panes of 4 m is exactly
-60 m of opening, and the footprint lands on whole metres. (An earlier version
+see above.) That is what keeps the arithmetic clean — 18 panes of 4 m is exactly
+72 m of opening, and the footprint lands on whole metres. (An earlier version
 added each mullion's width to the facade, which pushed the dimensions to
 78.79 × 30.72 m; the caps fixed that.)
 
-44 panes per floor, on 40 glazed floors. To resize the building, change
+50 panes per floor, on 34 glazed floors. To resize the building, change
 `WINDOWS_LONG` / `WINDOWS_SHORT` (or the pier widths) — never `W`/`D`, which are
 derived. Adding one pane to a facade widens the building by exactly 2 m.
 

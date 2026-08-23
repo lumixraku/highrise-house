@@ -63,8 +63,8 @@ FIN_PITCH = 0.50
 COL_SIZE = 1.60
 COL_CLEAR_INSET = 2.0
 # Twin service cores. Duplicated from build_house.py, like every constant here.
-CORE_W, CORE_D, CORE_T = 16.0, 9.0, 0.28
-CORE_OFFSET = 16.0
+CORE_W, CORE_D, CORE_T = 20.0, 9.0, 0.28
+CORE_OFFSET = 18.0
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
 PARAPET_H = 1.10
