@@ -1,5 +1,30 @@
 # Progress
 
+## 2026-08-23 — fix — add refuge-level plan X bracing and crossed short-face trusses
+
+Expanded the taller companion tower's two refuge-level truss systems without
+adding members to ordinary residential floors. Each short-face panel now has a
+second diagonal, making a complete X brace. Each refuge level also gets four
+horizontal plan-X panels, embedded in the upper refuge slab to stiffen the
+diaphragm while staying out of residential rooms and sightlines. The first tower
+is unchanged.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`,
+  and `out/preview.png`; the companion has 96 refuge-truss members (48 per
+  refuge level), including 32 crossed short-face diagonals and 16 hidden plan-X
+  members.
+- `verify_house.py` reports `163/167`; all new truss checks pass. The four
+  remaining failures are the same pre-existing geometry assumptions (`blank
+  bands land on floor lines`, refuge corner piers, roof-overrun footprint, and
+  solid corner-wall sampling).
+
+Remaining issues: None for the requested truss additions. This is still a
+conceptual geometry model, not a substitute for a project-specific structural
+analysis.
+
 ## 2026-08-23 — fix — add companion-tower refuge-level Z trusses
 
 Added a dedicated `Structural_Trusses` mesh to the taller companion tower only.

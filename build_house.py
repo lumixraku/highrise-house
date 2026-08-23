@@ -315,6 +315,7 @@ TRUSS_FACADE_INSET = 0.55
 TRUSS_CORE_FACE_OFFSET = 0.20
 TRUSS_LEVEL_EDGE = 0.75
 TRUSS_EDGE_INSET = 0.65
+TRUSS_PLAN_MEMBER = 0.20       # hidden inside the refuge-level upper slab
 # Top of the bulkhead upstand, which is the highest point on the building.
 CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
 
@@ -998,12 +999,14 @@ def vent_strip(name, z0, louver_mat, back_mat):
 
 
 def structural_trusses(name, mat):
-    """Add refuge-level outrigger, belt and short-face Z trusses.
+    """Add refuge-level outrigger, belt, plan-X and short-face X trusses.
 
     The two refuge voids are the natural transfer levels: horizontal outriggers
     tie each core to the north/south perimeter, while the perimeter chords and
-    alternating diagonals form a belt truss.  The same levels get X-braces on
-    each core's long wall, keeping the solid core tube as the fire-separated
+    alternating diagonals form a belt truss.  A second, horizontal X-braced
+    diaphragm is embedded in the upper refuge slab, and the short faces get
+    crossed diagonals instead of a single zig-zag.  The same levels get X-braces
+    on each core's long wall, keeping the solid core tube as the fire-separated
     shaft while making its lateral role explicit in the model.
     """
     parts = []
@@ -1055,6 +1058,42 @@ def structural_trusses(name, mat):
                 parts.append(beam_between(f"{tag}_ShortZ_{sx}_{bay}",
                                           (x, ya, za), (x, yb, zb),
                                           TRUSS_MEMBER, mat))
+                # Close each panel as an X in the depth-side elevation.  These
+                # members remain in the refuge void, behind the facade screen.
+                za, zb = ((zh, zl) if bay % 2 == 0 else (zl, zh))
+                parts.append(beam_between(f"{tag}_ShortCross_{sx}_{bay}",
+                                          (x, ya, za), (x, yb, zb),
+                                          TRUSS_MEMBER, mat))
+
+        # Plan X-bracing is hidden in the upper refuge floor slab.  It closes
+        # the four diaphragm panels between the cores and the perimeter without
+        # adding anything across ordinary residential window bands.
+        plan_z = z1 - SLAB_T / 2.0
+        x_west = CORE_XS[0] - CORE_W / 2.0 - TRUSS_CORE_FACE_OFFSET
+        x_east = CORE_XS[1] + CORE_W / 2.0 + TRUSS_CORE_FACE_OFFSET
+        for side, x_core, x_outer in (
+                ("West", x_west, -x_face), ("East", x_east, x_face)):
+            parts.append(beam_between(f"{tag}_PlanX_{side}_A",
+                                      (x_core, short_y0, plan_z),
+                                      (x_outer, short_y1, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_PlanX_{side}_B",
+                                      (x_core, short_y1, plan_z),
+                                      (x_outer, short_y0, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
+        for side, y_core, y_outer in (
+                ("South", -CORE_D / 2.0 - TRUSS_CORE_FACE_OFFSET,
+                 -y_face),
+                ("North", CORE_D / 2.0 + TRUSS_CORE_FACE_OFFSET,
+                 y_face)):
+            parts.append(beam_between(f"{tag}_PlanX_{side}_A",
+                                      (long_y0, y_core, plan_z),
+                                      (long_y1, y_outer, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_PlanX_{side}_B",
+                                      (long_y1, y_core, plan_z),
+                                      (long_y0, y_outer, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
 
         # Outriggers run from each core's north/south wall to the long-face
         # belt.  Two chords at different heights make the refuge void a real

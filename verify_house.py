@@ -77,6 +77,7 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 CORE_COLUMN_BAYS = 2
 COMPANION_CORE_COLUMN_BAYS = 3
 TRUSS_FACADE_INSET = 0.55
+TRUSS_PLAN_MEMBER = 0.20
 
 
 def col_grid(span):
@@ -320,7 +321,7 @@ def main():
             companion_refuge_z1s = [z0 + REFUGE_FLOORS * H
                                     for z0 in companion_refuge_z0s]
             refuge_levels = len(companion_refuge_z0s)
-            expected_members = refuge_levels * 32
+            expected_members = refuge_levels * 48
             check("two refuge levels carry the complete truss layout",
                   len(truss_parts) == expected_members,
                   f"{len(truss_parts)} members, expected {expected_members}")
@@ -342,15 +343,34 @@ def main():
                       f"{len(level_members)} members in z={z0:.1f}..{z1:.1f} m")
 
             # Short-face members have a large Y and Z extent while staying on
-            # the two E/W facade planes: these are the requested Z braces.
+            # the two E/W facade planes: each panel now closes as an X.
             x_face = second_w / 2.0 - TRUSS_FACADE_INSET
             short_z = [p for p in truss_parts
                        if abs(abs((p[0][0] + p[1][0]) / 2) - x_face) < 0.8
                        and p[1][1] - p[0][1] > 5.0
                        and p[1][2] - p[0][2] > 1.0]
-            check("short facades have alternating Z-shaped diagonal braces",
-                  len(short_z) == refuge_levels * 2 * 4,
-                  f"{len(short_z)} diagonal panels on the two depth-side faces")
+            check("short facades have crossed X-shaped diagonal braces",
+                  len(short_z) == refuge_levels * 2 * 4 * 2,
+                  f"{len(short_z)} diagonal members on the two depth-side faces")
+
+            # Plan X members span both X and Y, but stay within the thin upper
+            # refuge slab so they do not intrude into residential sightlines.
+            plan_x = [p for p in truss_parts
+                      if p[1][0] - p[0][0] > 5.0
+                      and p[1][1] - p[0][1] > 5.0
+                      and p[1][2] - p[0][2] < 0.8]
+            check("each refuge slab has four hidden plan-X panels",
+                  len(plan_x) == refuge_levels * 4 * 2,
+                  f"{len(plan_x)} horizontal diagonal members")
+            plan_z_centres = [((lo[2] + hi[2]) / 2.0) for lo, hi in plan_x]
+            expected_plan_z = [z1 - SLAB_T / 2.0
+                               for z1 in companion_refuge_z1s]
+            check("plan-X members are embedded in the upper refuge slabs",
+                  all(any(abs(z - target) < 0.05 for target in expected_plan_z)
+                      and hi - lo <= SLAB_T + 0.02
+                      for z, (lo, hi) in zip(plan_z_centres,
+                                             [(p[0][2], p[1][2]) for p in plan_x])),
+                  f"centres={sorted(round(z, 2) for z in plan_z_centres)}")
 
             # Four outriggers per core per level (north/south, lower/upper).
             outriggers = [p for p in truss_parts
