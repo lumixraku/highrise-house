@@ -461,7 +461,7 @@ putting sRGB values straight into a Blender colour socket renders washed out.
 | | |
 | --- | --- |
 | walls | warm pale stone, matte (roughness 0.72), `WALL_COLOR` |
-| glass | pale green tint, transmission 1.0, IOR 1.52, roughness 0.0, no emission |
+| glass | neutral clear, transmission 1.0, IOR 1.52, roughness 0.0, no emission |
 | interior lining | matte warm grey 0.85 m behind the glass, self-illuminated 0.75 |
 | mullions / louvres | dark anodised metal, roughness 0.38 |
 | structure | grey concrete, roughness 0.85 |
@@ -523,11 +523,13 @@ pulling transmission back and adding a glow — is what frosted the panes. The
 right fix is geometric: put a lit lining behind the glazing and leave the glass
 alone.
 
-**A pale green needs two measurements, not one.** Only what passes *through* the
-pane is tinted; the sky reflection is not, and at these viewing angles the
-reflection carries most of the brightness — and it is blue. So the tint has to
-fight the sky, and tracking "how green" alone walks straight into yellow or cyan.
-Watch both:
+**Neutral clear glass keeps the reflection neutral.** The default `GLASS_CLEAR`
+base colour is white, so the previous green cast is removed. The sky reflection
+remains visible because the pane is still physically refractive (IOR 1.52), while
+the lining and ceiling lights preserve depth behind the glazing. The legacy
+`GLASS_GREEN` constant remains available for comparison renders, but is no
+longer used by the scene builders. For a tinted comparison render, the two
+useful measurements are:
 
 * **green bias** = G − (R+B)/2 — how green
 * **warm bias** = R − B — green vs *yellow*-green vs cyan

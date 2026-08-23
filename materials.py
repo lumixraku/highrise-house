@@ -4,13 +4,13 @@ Kept separate from build_house.py so the look can be tuned without touching
 geometry. Two engines are supported and they need different glass:
 
 * Cycles — real refraction. Transmission on a thin solid pane, low roughness,
-  a faint green tint. This is the one that looks like glass.
+  and a neutral base colour. This is the one that looks like glass.
 * EEVEE  — no true refraction unless raytracing is on. Uses transmission plus a
   raised specular so the pane still reads as glazing.
 
-The tint is applied to BOTH base colour and transmission so the green shows in
-reflection as well as through the pane; glass that is only tinted in
-transmission reads grey when you see it against a bright sky.
+The default is neutral clear glass: the IOR supplies the physical reflection,
+while the interior lining and ceiling fixtures provide visible depth behind the
+pane. A legacy green tint remains available as an explicit override.
 """
 
 import bpy
@@ -49,6 +49,9 @@ CONCRETE_GREY = (0.430, 0.430, 0.415)   # structure, slightly darker
 # To adjust: raise all three together for paler; lower red for greener; if it
 # looks yellow raise blue, if it looks cyan lower blue.
 GLASS_GREEN = (0.720, 0.965, 0.760)
+# Neutral clear architectural glazing. With a white base colour, the visible
+# reflection comes from the physical IOR rather than a colour cast.
+GLASS_CLEAR = (1.000, 1.000, 1.000)
 # Lit floors, seen through the glazing. Deliberately NEUTRAL-to-cool: the lining
 # is bright and clearly visible through clear glass, so a warm grey here tints
 # every pane yellow on its own — it was half of why the windows read as olive.
@@ -171,8 +174,8 @@ def make_ground(name="Ground", color=GROUND_GREY):
 # Glass
 # ---------------------------------------------------------------------------
 
-def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
-    """Clear tinted architectural glazing — smooth, fully transmissive.
+def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
+    """Neutral clear architectural glazing — smooth, fully transmissive.
 
     Everything here is aimed at ONE thing: no frosted look. Three separate
     settings can each make glass read as ground/etched glass, and the earlier
@@ -263,7 +266,7 @@ def make_interior(name="Interior", color=INTERIOR_LINING):
     Its COLOUR matters as much as its brightness, for the same reason: at this
     brightness the lining is plainly visible through the glass, so its cast lands
     on every pane. The warm greys above pulled the glazing toward olive. Kept
-    neutral-to-cool now, which lets the green tint read as green.
+    neutral-to-cool so it remains legible through neutral clear glass.
 
     Stopping at 0.75 is deliberate: past it the emission starts to overpower the
     sky reflection (local contrast climbed 0.079 -> 0.088), and the pane drifts
@@ -375,7 +378,7 @@ def make_sky_world(name="Sky", strength=1.0):
 # One call to build the whole set
 # ---------------------------------------------------------------------------
 
-def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_GREEN):
+def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_CLEAR):
     """Returns the dict of materials build_house.py expects."""
     return {
         "concrete": make_concrete(),

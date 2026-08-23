@@ -49,7 +49,7 @@ H = 4.0           # floor-to-floor height
 # as glass rather than tinted plastic; BLENDER_EEVEE is much faster but fakes it.
 RENDER_ENGINE = "CYCLES"
 WALL_COLOR = materials.WARM_STONE     # or materials.COOL_STONE for pale grey
-GLASS_TINT = materials.GLASS_GREEN
+GLASS_TINT = materials.GLASS_CLEAR
 CYCLES_SAMPLES = 128
 
 PILOTIS_FLOORS = 3     # of which these are open and raised

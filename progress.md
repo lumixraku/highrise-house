@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-08-24 — fix — neutral clear glass
+
+Changed the default shared glazing from the pale green `GLASS_GREEN` tint to
+neutral `GLASS_CLEAR` (1.0, 1.0, 1.0). Transmission remains 1.0, roughness 0.0,
+and IOR 1.52, so the panes retain physical reflections and refraction without a
+green colour cast. The legacy green constant remains available as an explicit
+override; both the residential generator and Office now use the clear default.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`.
+- `verify_house.py` reports `166/170`; all glass material, two-tower, sparse-light,
+  core, and truss checks pass. The four failures are unchanged legacy geometry
+  assumptions.
+- `measure_glass.py` reports `R=0.577, G=0.587, B=0.599`, green bias `-0.001`,
+  contrast ratio `4.85x`, and dynamic range `0.662`; the neutral reflection is
+  visible without a green cast.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain.
+
 ## 2026-08-24 — fix — reduce the window-to-window joint
 
 Halved `WINDOW_GAP` from 0.12 m to 0.06 m. The 4.00 m room module and both tower
