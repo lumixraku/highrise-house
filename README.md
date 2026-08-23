@@ -91,6 +91,7 @@ blender --background --factory-startup --python verify_house.py -- out/highrise_
 | panes per floor | 18 long face / 7 short face (50 around) |
 | pane pitch | 4.00 m mullion centres |
 | clear glass per pane | **4.00 m × 1.50 m, fixed** |
+| ceiling lights | warm-white emissive panels behind a deterministic 36% mix of clustered and scattered lit room windows |
 
 ### Bottom three floors
 
@@ -553,7 +554,7 @@ To try the pale grey wall instead of beige, set
 Everything is generated from boxes and joined into twelve objects, so the scene
 stays light (~40k vertices at 40 storeys):
 
-`Facade_Spandrels` · `Windows_Glass` · `Interior_Lining` · `Window_Mullions` ·
+`Facade_Spandrels` · `Windows_Glass` · `Interior_Lining` · `Ceiling_Lights` · `Window_Mullions` ·
 `Vent_Louvres` · `Vent_Shadowboxes` · `Sky_Garden_Grille` ·
 `Sky_Garden_Planting` · `Sky_Garden_Trunks` · `Floor_Plates` · `Structure` ·
 `Ground`

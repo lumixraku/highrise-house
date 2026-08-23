@@ -47,6 +47,14 @@ W = OPEN_W + 2 * PIER_LONG
 D = OPEN_D + 2 * PIER_SHORT
 PANE_GLASS_LONG = PANE_W
 PANE_PITCH = PANE_W
+CEILING_LIGHT_W = 2.20
+CEILING_LIGHT_D = 0.36
+CEILING_LIGHT_H = 0.06
+CEILING_LIGHT_TOP_GAP = 0.05
+CEILING_LIGHT_Z = WIN_Z + WIN_H - CEILING_LIGHT_TOP_GAP - CEILING_LIGHT_H / 2.0
+CEILING_LIGHT_ON_RATIO = 0.36
+CEILING_LIGHTS_PER_FLOOR = round(2 * (WINDOWS_LONG + WINDOWS_SHORT)
+                                 * CEILING_LIGHT_ON_RATIO)
 SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
 FIRST_GLAZED = SOLID_BASE_FLOORS
@@ -189,7 +197,8 @@ def main():
 
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
                  "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
-                 "Interior_Lining", "Sky_Garden_Grille", "Structure"):
+                 "Interior_Lining", "Ceiling_Lights", "Sky_Garden_Grille",
+                 "Structure"):
         check(f"object present: {name}", name in objs)
     if failures:
         sys.exit(1)
@@ -419,7 +428,7 @@ def main():
           f"Iy {I_cores + I_piers:,.0f} m4 (cores {I_cores:,.0f} + "
           f"piers {I_piers:,.0f})")
 
-    # --- interior lining behind the glazing ----------------------------
+    # --- interior lining and ceiling lights behind the glazing ------------
     # Clear glass shows whatever is behind it; without a lining the panes look
     # through the tower to the sky and stop reading as windows.
     lining = objs["Interior_Lining"]
@@ -445,6 +454,56 @@ def main():
           abs(facade_span(lining, "S") - GLASS_OPEN_W) < 0.05
           and abs(facade_span(lining, "E") - GLASS_OPEN_D) < 0.05,
           f"{facade_span(lining, 'S'):.2f} x {facade_span(lining, 'E'):.2f} m")
+
+    lights = objs.get("Ceiling_Lights")
+    check("ceiling lights object exists", lights is not None)
+    if lights:
+        light_mat = lights.data.materials[0] if lights.data.materials else None
+        check("ceiling lights use an emissive material", light_mat is not None,
+              "no material slot")
+        if light_mat:
+            inputs = light_mat.node_tree.nodes["Principled BSDF"].inputs
+            strength = inputs["Emission Strength"].default_value
+            check("ceiling light emission is visible", strength >= 2.0,
+                  f"emission strength={strength:.2f}")
+        light_z = z_clusters(lights)
+        check("ceiling lights have one level per glazed floor",
+              len(light_z) == GLAZED_FLOORS * 2,
+              f"{len(light_z)} levels for {GLAZED_FLOORS} glazed floors")
+        light_bands = list(zip(light_z[0::2], light_z[1::2]))
+        check("ceiling lights sit at the upper edge of each window band",
+              all(abs((lo + hi) / 2 - (base + CEILING_LIGHT_Z)) < 0.02
+                  for (lo, hi), base in zip(light_bands,
+                                             [BASE_Z + f * H for f in sorted(GLAZED_SET)])),
+              f"z={min(light_z):.2f}..{max(light_z):.2f}")
+        light_bounds = piece_bounds(lights)
+        check("ceiling lights leave most room windows unlit",
+              len(light_bounds) == GLAZED_FLOORS * CEILING_LIGHTS_PER_FLOOR,
+              f"{len(light_bounds)} panels = {CEILING_LIGHTS_PER_FLOOR} per "
+              f"glazed floor ({CEILING_LIGHT_ON_RATIO:.0%} lit)")
+        patterns = {}
+        for lo, hi in light_bounds:
+            z = round((lo[2] + hi[2]) / 2, 2)
+            patterns.setdefault(z, set()).add(
+                (round((lo[0] + hi[0]) / 2, 2),
+                 round((lo[1] + hi[1]) / 2, 2)))
+        check("every glazed floor has a sparse ceiling-light pattern",
+              len(patterns) == GLAZED_FLOORS
+              and all(len(points) == CEILING_LIGHTS_PER_FLOOR
+                      for points in patterns.values()),
+              f"{len(patterns)} floors, counts="
+              f"{sorted(set(map(len, patterns.values())))}")
+        unique_patterns = {tuple(sorted(points)) for points in patterns.values()}
+        check("ceiling-light patterns vary between floors",
+              len(unique_patterns) >= GLAZED_FLOORS * 0.75,
+              f"{len(unique_patterns)} distinct patterns over "
+              f"{GLAZED_FLOORS} glazed floors")
+        check("ceiling lights stay behind the glazing",
+              max(max(abs(lo[0]), abs(hi[0])) for lo, hi in light_bounds)
+              < glass_x - 0.3
+              and max(max(abs(lo[1]), abs(hi[1])) for lo, hi in light_bounds)
+              < D / 2 - 0.3,
+              "light panels are recessed from the facade")
 
     # --- refuge floor / sky garden -------------------------------------
     if SKY_GARDEN:

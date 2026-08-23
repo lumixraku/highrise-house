@@ -53,6 +53,9 @@ GLASS_GREEN = (0.720, 0.965, 0.760)
 # is bright and clearly visible through clear glass, so a warm grey here tints
 # every pane yellow on its own — it was half of why the windows read as olive.
 INTERIOR_LINING = (0.630, 0.650, 0.655)
+# Small warm-white ceiling fixtures. They are deliberately warmer and brighter
+# than the neutral interior lining so occupied rooms read through the glazing.
+CEILING_LIGHT = (1.000, 0.550, 0.250)
 MULLION_METAL = (0.155, 0.160, 0.165)   # dark anodised
 GROUND_GREY = (0.115, 0.120, 0.110)
 # Sky-garden planting. Foliage is much darker than it looks to the eye — a leaf
@@ -278,6 +281,18 @@ def make_interior(name="Interior", color=INTERIOR_LINING):
     return mat
 
 
+def make_ceiling_light(name="CeilingLight", color=CEILING_LIGHT):
+    """Warm emissive panels mounted just inside the top of each window bay."""
+    mat = _new(name)
+    b = _bsdf(mat)
+    _set(b, "Base Color", (*color, 1.0))
+    _set(b, "Roughness", 0.25)
+    _set(b, "Specular IOR Level", 0.1)
+    _set(b, "Emission Color", (*color, 1.0))
+    _set(b, "Emission Strength", 6.0)
+    return mat
+
+
 def make_glass_variant(name, engine, tint, roughness=None):
     """A glass with a different tint — for trying alternatives side by side."""
     mat = make_glass(name=name, engine=engine, tint=tint)
@@ -367,6 +382,7 @@ def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_GREEN):
         "spandrel": make_wall(color=wall_color),
         "glass": make_glass(engine=engine, tint=glass_tint),
         "interior": make_interior(),
+        "ceiling_light": make_ceiling_light(),
         "foliage": make_foliage(),
         "trunk": make_trunk(),
         "metal": make_metal(),

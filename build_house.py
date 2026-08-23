@@ -28,6 +28,7 @@ Vertical band layout per floor, measured from the floor level:
 
 import math
 import os
+import random
 import sys
 
 import bpy
@@ -349,6 +350,20 @@ SPANDREL_HI_H = H - SPANDREL_HI_Z               # 1.50
 
 assert abs(SPANDREL_LO_H + VENT_H + WIN_H + VENT_H + SPANDREL_HI_H - H) < 1e-9
 
+# Compact warm ceiling fixtures sit just inside the upper edge of each window
+# bay. Their top remains below the opaque spandrel, so the glow reads as a room
+# light through the glass rather than as a new facade band.
+CEILING_LIGHT_W = 2.20
+CEILING_LIGHT_D = 0.36
+CEILING_LIGHT_H = 0.06
+CEILING_LIGHT_TOP_GAP = 0.05
+CEILING_LIGHT_Z = WIN_Z + WIN_H - CEILING_LIGHT_TOP_GAP - CEILING_LIGHT_H / 2.0
+# A night-time residential facade should never have every room occupied and lit.
+# Keep the pattern deterministic so rebuilding the same scheme does not change
+# its appearance, while leaving enough adjacent windows on to read as homes.
+CEILING_LIGHT_SEED = 20260823
+CEILING_LIGHT_ON_RATIO = 0.36
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -542,6 +557,43 @@ def interior_ring(name, z0, height, mat):
             parts.append(box(f"{name}_ns_{i}_{sy}",
                              (x, sy * (D / 2 - off), zc),
                              (PANE_GLASS_W, t, height), mat))
+    return parts
+
+
+def lit_window_indices(floor_index, facade_index, window_count):
+    """Fixed night-time occupancy: one small cluster plus scattered homes."""
+    rng = random.Random(CEILING_LIGHT_SEED + floor_index * 101
+                        + facade_index * 10007)
+    target = round(window_count * CEILING_LIGHT_ON_RATIO)
+    cluster_length = min(3, max(2, target // 2))
+    start = rng.randrange(window_count - cluster_length + 1)
+    lit = set(range(start, start + cluster_length))
+    while len(lit) < target:
+        isolated = [i for i in range(window_count) if i not in lit
+                    and i - 1 not in lit and i + 1 not in lit]
+        choices = isolated or [i for i in range(window_count) if i not in lit]
+        lit.add(rng.choice(choices))
+    return lit
+
+
+def ceiling_lights(name, z0, floor_index, mat):
+    """Warm ceiling panels in a deterministic mix of lit and unlit homes."""
+    zc = z0 + CEILING_LIGHT_Z
+    parts = []
+    for facade_index, sx in enumerate((-1, 1)):
+        for i in lit_window_indices(floor_index, facade_index, WINDOWS_SHORT):
+            y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
+            x = sx * (W / 2 - INTERIOR_SETBACK + CEILING_LIGHT_D / 2)
+            parts.append(box(f"{name}_ew_{i}_{sx}", (x, y, zc),
+                             (CEILING_LIGHT_D, CEILING_LIGHT_W,
+                              CEILING_LIGHT_H), mat))
+    for facade_index, sy in enumerate((-1, 1), start=2):
+        for i in lit_window_indices(floor_index, facade_index, WINDOWS_LONG):
+            x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
+            y = sy * (D / 2 - INTERIOR_SETBACK + CEILING_LIGHT_D / 2)
+            parts.append(box(f"{name}_ns_{i}_{sy}", (x, y, zc),
+                             (CEILING_LIGHT_W, CEILING_LIGHT_D,
+                              CEILING_LIGHT_H), mat))
     return parts
 
 
@@ -804,11 +856,14 @@ def build():
     concrete = mats["concrete"]
     spandrel = mats["spandrel"]
     glass = mats["glass"]
+    interior = mats["interior"]
+    ceiling_light = mats["ceiling_light"]
     metal = mats["metal"]
     dark = mats["dark"]
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
     linings = []
+    ceiling_lights_mesh = []
     plants, trunks, grilles = [], [], []
     foliage_mat = mats["foliage"]
     trunk_mat = mats["trunk"]
@@ -912,6 +967,9 @@ def build():
             (backs if "_back_" in o.name else louvres).append(o)
 
         glazing += glass_ring(f"{tag}_Glass", z0 + WIN_Z, WIN_H, glass)
+        linings += interior_ring(f"{tag}_Interior", z0 + WIN_Z, WIN_H, interior)
+        ceiling_lights_mesh += ceiling_lights(f"{tag}_CeilingLight", z0, f,
+                                              ceiling_light)
         frames += mullions(f"{tag}_Mullion", z0 + WIN_Z, WIN_H, metal)
 
         # Floor plate for the level above, visible behind the glazing. Skipped
@@ -967,6 +1025,7 @@ def build():
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),
         "Windows_Glass": join(glazing, "Windows_Glass"),
         "Interior_Lining": join(linings, "Interior_Lining"),
+        "Ceiling_Lights": join(ceiling_lights_mesh, "Ceiling_Lights"),
         "Sky_Garden_Grille": join(grilles, "Sky_Garden_Grille"),
         "Sky_Garden_Planting": join(plants, "Sky_Garden_Planting"),
         "Sky_Garden_Trunks": join(trunks, "Sky_Garden_Trunks"),

@@ -1,5 +1,72 @@
 # Progress
 
+## 2026-08-23 — fix — add clustered office ceiling lights
+
+Added warm emissive ceiling panels behind the Office tower curtain wall. Each
+of the 24 office floors now lights 31 of 103 facade modules (30.1%): most lights
+form deterministic 3–6-module work-zone clusters, with a smaller number of
+isolated late-working bays. The fixed seed gives every office floor a different
+pattern while keeping rebuilds stable. Pilotis, equipment, refuge, and roof
+levels receive no lights.
+
+Verification:
+- `python3 -m py_compile build_office.py materials.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/office_tower.blend` and
+  `out/office_tower.glb` successfully, producing 744 ceiling panels across the
+  24 office floors only.
+- Inspected the saved blend: `Office_Ceiling_Lights` has the expected 5,952
+  vertices / 4,464 faces, stays inside the 50 m curtain-wall envelope, and uses
+  `OfficeCeilingLight` with emission strength 6.0.
+- Re-rendered and visually checked `out/office_preview.png`; clustered and
+  scattered lights are visible through the glazing without lighting the blank
+  or ventilated bands.
+
+Remaining issues: None.
+
+## 2026-08-23 — fix — randomize occupied-room ceiling lights
+
+Changed the residential ceiling lights from every room window being on to a
+deterministic 36% occupancy pattern. Each facade is generated independently on
+each glazed floor: one short adjacent cluster is kept for a natural occupied
+patch, while the remaining lights are scattered. The fixed seed makes rebuilds
+stable, but all 34 glazed floors receive distinct patterns. Updated the README
+and verifier with sparse-count, per-floor, and pattern-variation checks.
+
+Verification: Python compilation and diff whitespace checks passed. Blender
+rebuilt the `.blend` and `.glb`, all six 16-sample views rendered, and front,
+corner, and floor-detail images were inspected. The model contains 612 light
+panels: 18 of 50 room-window positions per glazed floor. All new light checks
+pass; the full verifier remains at 144/148 because of the same four pre-existing
+geometry assumptions. Remaining issues for this change: None.
+
+## 2026-08-23 — fix — verify emissive ceiling-light diagnostics
+
+Corrected the ceiling-light verifier diagnostic so a present material slot is
+reported accurately when the emissive material check passes. Rebuilt the house,
+exported glTF, rendered all six low-sample views, and inspected the front,
+corner, and floor-detail views; the recessed warm light panels are visible
+behind the glazing and remain inside the facade.
+
+Verification: Python compilation, Blender rebuild, six-view render, and
+verifier checks completed. The verifier reports 141/145 checks because four
+pre-existing geometry assumptions still fail; all ceiling-light checks pass.
+Remaining issues for this change: None.
+
+## 2026-08-23 — fix — add recessed emissive ceiling lights
+
+Added one small warm-white emissive ceiling panel per room-window bay on every
+glazed floor. The panels sit just inside the existing window band, between the
+glass and the interior lining, so they read as real ceiling fixtures through the
+facade without changing the 76 x 32 m envelope. Added the `Ceiling_Lights` mesh
+object, a dedicated emissive material, and verifier checks for count, height,
+recess, and emission strength.
+
+Verification: Python compilation, Blender rebuild, low-sample render of all six
+views, and image inspection passed. The legacy verifier still reports its
+pre-existing four geometry assumptions unrelated to these lights. Remaining
+issues for this change: None.
+
 ## 2026-08-23 — fix — widen and move the twin service cores
 
 Responding to the wider 76 m plate, changed each service core from 16 × 9 m at
