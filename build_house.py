@@ -85,8 +85,8 @@ INTERIOR_SETBACK = 0.85
 # EVERYTHING outside is derived from the room-window counts — never the other way round.
 PANE_W = 4.00
 WINDOWS_LONG = 18      # room windows across each long facade  (X)
-WINDOWS_SHORT = 7       # room windows across each short facade (Y)
-WINDOW_GAP = 0.12       # real vertical joint between adjacent room windows
+WINDOWS_SHORT = 9       # room windows across each short facade (Y)
+WINDOW_GAP = 0.06       # real vertical joint between adjacent room windows
 PANE_GLASS_W = PANE_W - WINDOW_GAP
 
 # The mullion is a cover cap centred on each pane joint: it sits proud of the
@@ -94,7 +94,7 @@ PANE_GLASS_W = PANE_W - WINDOW_GAP
 # That keeps the arithmetic clean — an opening is exactly N x PANE_W, so the
 # footprint comes out on whole metres:
 #   W = 18 x 4.00 + 2 x 2.00 = 76.00 m
-#   D =  7 x 4.00 + 2 x 2.00 = 32.00 m
+#   D =  9 x 4.00 + 2 x 2.00 = 40.00 m
 MULLION_W = 0.09
 MULLION_INSET = 0.12     # recessed from the facade plane to deepen window joints
 
@@ -110,10 +110,9 @@ MULLION_INSET = 0.12     # recessed from the facade plane to deepen window joint
 # return. At 2 m on both, it turns the corner after a single pane and has a real
 # second aspect, which is the whole point of putting it there.
 #
-# Thinning PIER_SHORT is what forced WINDOWS_SHORT from 12 to 14. D is derived, so
-# 2 m piers with 12 panes would have given D = 28 m and 8.0 m of unit depth beside
-# the cores, under the 9 m residential minimum. Two more panes hold D at 32 m, so
-# the depth is unchanged and only the corners moved.
+# D is derived from the short-face pane count. The current nine-pane depth gives
+# 40 m overall. The cores are thickened to 11 m, leaving 14.5 m of clear unit
+# depth on either side.
 #
 # The cost is lateral stiffness, and it is affordable. Each figure below is at its
 # own footprint, since W is what the wind acts on:
@@ -237,13 +236,13 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # 11% of the lateral stiffness and tip drift is H/1738 against a H/500 limit.
 # Nothing about the core choice buys stiffness this building needs.
 #
-# What a single 14 x 9 core could NOT do was hold the vertical transport. 37
-# floors x 64 x 32 m is 75776 m2 GFA, about 551 units and 1488 people, needing
+# What a single 14 x 11 core could NOT do was hold the vertical transport. 37
+# floors x 76 x 40 m is 112480 m2 GFA, about 818 units and 2209 people, needing
 # 7-9 lifts. Shafts, two stairs, lobbies, smoke-stop lobbies and risers come to
-# roughly 172 m2 gross; 14 x 9 = 126 m2, short by 27%. That is a 6.2%
+# roughly 172 m2 gross; 14 x 11 = 154 m2, short by 24%. That is a 5.1%
 # core-to-plate ratio where residential towers run 10-15%.
 # CORE_PROVISION below stays at the 203.5 m2 figure derived from the wider 76 m
-# plate, deliberately: it is the stricter of the two and the measured 360 m2
+# plate, deliberately: it is the stricter of the two and the measured 422 m2
 # clears it anyway, so keeping it means the cores cannot shrink on the strength
 # of a smaller unit count.
 #
@@ -252,7 +251,7 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 #     SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to 20 m.
 #   * Stair remoteness. Two stairs in ONE shaft are not independent — a single
 #     incident compromises both. The two core centres stay well separated.
-#   * Lift zoning, which a 551-unit tower wants anyway: low zone in the west
+#   * Lift zoning, which an 818-unit tower wants anyway: low zone in the west
 #     core, high zone in the east, ~65 units per lift in each.
 #
 # Deliberately NOT an H-core: the spine that makes it an H would run a wall down
@@ -266,7 +265,7 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # refreshes them for the active footprint.
 CORE_COLUMN_BAYS = 2
 COMPANION_CORE_COLUMN_BAYS = 3
-CORE_W, CORE_D = 20.0, 9.0    # derived long length / fixed apartment-depth width
+CORE_W, CORE_D = 20.0, 11.0   # derived long length / thickened apartment-depth width
 CORE_T = 0.28                 # core wall thickness
 # The active tower derives CORE_OFFSET and CORE_W from its long-face column grid.
 # The outermost core boundary stays one column line in from each end of the
@@ -308,14 +307,16 @@ ROOF_GARDEN_GRILLE_H = 2 * H
 # --- refuge-level lateral trusses ------------------------------------------
 # The taller companion tower gets a visible outrigger / belt-truss system at
 # each double-height refuge level.  Members stay inside the facade line and
-# use the same dark metal as the mullions so the structure reads as a deliberate
-# architectural layer rather than a second concrete wall.
+# use the same pale exterior finish so the structure reads as part of the facade
+# rather than a dark metal overlay.
 TRUSS_MEMBER = 0.38
 TRUSS_FACADE_INSET = 0.55
 TRUSS_CORE_FACE_OFFSET = 0.20
 TRUSS_LEVEL_EDGE = 0.75
 TRUSS_EDGE_INSET = 0.65
 TRUSS_PLAN_MEMBER = 0.20       # hidden inside the refuge-level upper slab
+TRUSS_CLAW_GROUPS = 3           # three two-triangle groups on each short facade
+TRUSS_TRIANGLES_PER_CLAW = 2
 # Top of the bulkhead upstand, which is the highest point on the building.
 CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
 
@@ -1018,17 +1019,21 @@ def structural_trusses(name, mat):
     long_y0, long_y1 = -OPEN_W / 2.0, OPEN_W / 2.0
     short_y0 = -OPEN_D / 2.0 + TRUSS_EDGE_INSET
     short_y1 = OPEN_D / 2.0 - TRUSS_EDGE_INSET
+    short_claw_groups = TRUSS_CLAW_GROUPS
+    short_perimeter_bays = short_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+    # Keep the same claw silhouette on the wider elevations without letting a
+    # single diagonal grow into a visually implausible 12 m span. The long-face
+    # group count follows the long/short opening ratio, rounded to whole claws.
+    long_claw_groups = max(short_claw_groups,
+                           round(OPEN_W / OPEN_D * short_claw_groups))
+    long_perimeter_bays = long_claw_groups * TRUSS_TRIANGLES_PER_CLAW
     short_nodes = [
-        short_y0,
-        short_y0 + (short_y1 - short_y0) / 4.0,
-        short_y0 + (short_y1 - short_y0) / 2.0,
-        short_y0 + 3.0 * (short_y1 - short_y0) / 4.0,
-        short_y1,
+        short_y0 + (short_y1 - short_y0) * index / short_perimeter_bays
+        for index in range(short_perimeter_bays + 1)
     ]
-    long_bays = max(1, round(OPEN_W / COL_SPACING))
     long_nodes = [
-        long_y0 + (long_y1 - long_y0) * index / long_bays
-        for index in range(long_bays + 1)
+        long_y0 + (long_y1 - long_y0) * index / long_perimeter_bays
+        for index in range(long_perimeter_bays + 1)
     ]
 
     for level, (z0, z1) in enumerate(zip(REFUGE_Z0S, REFUGE_Z1S)):
@@ -1053,6 +1058,14 @@ def structural_trusses(name, mat):
                 parts.append(beam_between(f"{tag}_LongZ_{sy}_{bay}",
                                           (xa, y, za), (xb, y, zb),
                                           TRUSS_MEMBER, mat))
+            # One upright separates every pair of triangles, giving the
+            # requested three-claw / chicken-foot silhouette.
+            for claw in range(1, long_claw_groups):
+                node = claw * TRUSS_TRIANGLES_PER_CLAW
+                x = long_nodes[node]
+                parts.append(beam_between(f"{tag}_LongUpright_{sy}_{claw}",
+                                          (x, y, zl), (x, y, zh),
+                                          TRUSS_MEMBER, mat))
 
         # Short-face belt chords with alternating diagonals.  Each bay is a
         # Z-shaped panel; reversing the slope at the next node gives the
@@ -1069,6 +1082,12 @@ def structural_trusses(name, mat):
                 za, zb = ((zl, zh) if bay % 2 == 0 else (zh, zl))
                 parts.append(beam_between(f"{tag}_ShortZ_{sx}_{bay}",
                                           (x, ya, za), (x, yb, zb),
+                                          TRUSS_MEMBER, mat))
+            for claw in range(1, short_claw_groups):
+                node = claw * TRUSS_TRIANGLES_PER_CLAW
+                y = short_nodes[node]
+                parts.append(beam_between(f"{tag}_ShortUpright_{sx}_{claw}",
+                                          (x, y, zl), (x, y, zh),
                                           TRUSS_MEMBER, mat))
 
         # Plan X-bracing is hidden in the upper refuge floor slab.  It closes
@@ -1317,7 +1336,8 @@ def build(reset=True, mats=None, add_trusses=False):
     structure += cores("TowerCore", BASE_Z, TOP_Z - BASE_Z, concrete)
 
     if add_trusses:
-        trusses += structural_trusses("RefugeTruss", metal)
+        # Match the exterior exactly; mullions and louvres keep their dark metal.
+        trusses += structural_trusses("RefugeTruss", spandrel)
 
     merged = {
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),

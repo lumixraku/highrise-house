@@ -1,5 +1,94 @@
 # Progress
 
+## 2026-08-24 — fix — reduce the window-to-window joint
+
+Halved `WINDOW_GAP` from 0.12 m to 0.06 m. The 4.00 m room module and both tower
+footprints remain unchanged; each clear pane widens from 3.88 m to 3.94 m on all
+four facades.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`.
+- `verify_house.py` reports `166/170`; the pane-width and 0.06 m-joint assertions pass.
+
+Remaining issues: four legacy verifier assumptions remain unchanged.
+
+## 2026-08-24 — fix — match refuge trusses to the exterior finish
+
+Changed the companion tower's visible refuge-level trusses from the dark mullion
+metal to the exact exterior `Spandrel` material, so the long-face claw pattern reads
+as a white facade structure. Added a verifier assertion tying the truss material to
+the companion facade material, and excluded 1.60 x 1.60 m boundary columns from the
+core-wall measurement filters so the thickened 11 m cores are measured correctly.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`.
+- `verify_house.py` reports `166/170`; the truss material, 176-member layout, seven-claw
+  long faces, core dimensions, and all new geometry checks pass.
+
+Remaining issues: four legacy verifier assumptions remain (`blank bands land on floor
+lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling).
+
+## 2026-08-23 — fix — tighten the wide-face refuge truss rhythm
+
+Kept the 40 m depth and 11 m core thickness, but scaled the visible refuge-truss
+claw count by facade width. Each 40 m short face remains three two-triangle claws;
+the 80 m companion long faces now use seven claws (fourteen diagonals and six
+uprights per face), keeping each diagonal bay near 6 m rather than the previous
+12 m span. The hidden plan-X diaphragm, core-X braces, outriggers and belts remain
+unchanged.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender rebuild and the full verifier are pending for this updated long-face
+  truss layout.
+
+Remaining issues: pending Blender rebuild and verification.
+
+## 2026-08-23 — fix — widen both towers to 40 m and thicken the cores
+
+Applied the latest geometry request on top of the prior 36 m revision: both towers
+now use `WINDOWS_SHORT = 9`, so the derived depth is `D = 40.0 m` (76 x 40 m
+reference and 84 x 40 m companion). Increased the fixed core depth from `9.0 m` to
+`11.0 m` while keeping each core's long dimension derived from its defining column
+grid. The three-claw refuge trusses remain unchanged: six diagonal members and two
+vertical uprights per facade, wrapping all four sides of both refuge levels.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender rebuild and the full verifier are pending for this latest 40 m / 11 m-core
+  configuration.
+
+Remaining issues: pending Blender rebuild and verification.
+
+## 2026-08-23 — fix — widen both towers to 36 m and add three-claw refuge trusses
+
+Widened both procedural towers by one short-face room module: `WINDOWS_SHORT = 8`,
+so the derived depth is `D = 36.0 m` (76 x 36 m reference tower and 84 x 36 m
+companion). Long-face room counts, floor groups, core spacing and the 18 m site gap
+remain unchanged. Reworked each refuge-level facade of the taller companion into
+three two-triangle claws: six diagonal members plus two vertical uprights per face,
+wrapping all four sides while keeping the hidden plan-X and core-X braces inside
+the refuge structure.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`,
+  and `out/preview.png`; the build report confirmed both towers at 36 m depth.
+- `verify_house.py` reports `165/169`; the three-claw diagonal and upright checks,
+  36 m footprint checks, plan-X checks and core-X checks all pass.
+
+Remaining issues: four legacy geometry assumptions remain (`blank bands land on
+floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall
+sampling); none is caused by this change. This remains a conceptual geometry model,
+not a project-specific structural analysis.
+
 ## 2026-08-23 — fix — wrap the refuge-level triangular truss ring around all facades
 
 Reworked the companion tower's refuge-level appearance after review: removed the

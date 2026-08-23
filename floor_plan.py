@@ -9,7 +9,7 @@ from pathlib import Path
 
 PANE_W = 4.0
 WINDOWS_LONG = 18
-WINDOWS_SHORT = 7
+WINDOWS_SHORT = 9
 PIER_LONG = 2.0
 PIER_SHORT = 2.0
 COL_SIZE = 1.60
@@ -33,7 +33,7 @@ _west_center = _mid - CORE_COLUMN_BAYS
 _west_lo, _west_hi = _grid[_west_center - 1], _grid[_west_center + 1]
 CORE_W = (_west_hi - _west_lo) + COL_SIZE
 CORE_OFFSET = abs((_west_lo + _west_hi) / 2.0)
-CORE_D = 9.0
+CORE_D = 11.0
 OUT = Path(__file__).with_name("out") / "floor_plan.svg"
 SCALE = 18
 MARGIN_X = 155

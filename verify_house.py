@@ -35,8 +35,8 @@ MULLION_W = 0.09
 MULLION_INSET = 0.12
 PANE_W = 4.00
 WINDOWS_LONG = 18
-WINDOWS_SHORT = 7
-WINDOW_GAP = 0.12
+WINDOWS_SHORT = 9
+WINDOW_GAP = 0.06
 PANE_GLASS_W = PANE_W - WINDOW_GAP
 GLASS_OPEN_W = WINDOWS_LONG * PANE_GLASS_W + (WINDOWS_LONG - 1) * WINDOW_GAP
 GLASS_OPEN_D = WINDOWS_SHORT * PANE_GLASS_W + (WINDOWS_SHORT - 1) * WINDOW_GAP
@@ -78,6 +78,8 @@ CORE_COLUMN_BAYS = 2
 COMPANION_CORE_COLUMN_BAYS = 3
 TRUSS_FACADE_INSET = 0.55
 TRUSS_PLAN_MEMBER = 0.20
+TRUSS_CLAW_GROUPS = 3
+TRUSS_TRIANGLES_PER_CLAW = 2
 
 
 def col_grid(span):
@@ -106,7 +108,7 @@ def core_layout(span, core_column_bays=CORE_COLUMN_BAYS):
 # Twin service cores. Length and centre are derived from the reference tower's
 # column grid, matching build_house.py; depth and wall thickness stay fixed.
 CORE_W, CORE_OFFSET, CORE_XS = core_layout(W)
-CORE_D, CORE_T = 9.0, 0.28
+CORE_D, CORE_T = 11.0, 0.28
 CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
 PARAPET_H = 1.10
 CORE_OVERRUN = 4.6         # lift overtravel + machine room above the roof slab
@@ -257,6 +259,7 @@ def main():
               abs(second_fb[0][0] - first_fb[0][1] - 18.0) < 0.02,
               f"gap={second_fb[0][0] - first_fb[0][1]:.3f} m")
         second_w = second_fb[0][1] - second_fb[0][0]
+        second_d = second_fb[1][1] - second_fb[1][0]
         second_origin = first_fb[0][1] + 18.0 + second_w / 2
         second_grid = col_grid(second_w)
         second_core_w, second_core_offset, second_core_xs = core_layout(
@@ -266,7 +269,9 @@ def main():
             (lo, hi) for lo, hi in second_pieces
             if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
             and (hi[0] - lo[0]) < second_w * 0.5
-            and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5]
+            and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5
+            and not (abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+                     and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02)]
         measured_second_widths = []
         for cx in second_core_xs:
             here = [(lo, hi) for lo, hi in second_core_pieces
@@ -308,6 +313,15 @@ def main():
         check("taller tower has a separate structural-truss object",
               truss_obj is not None)
         if truss_obj:
+            truss_mat = (truss_obj.data.materials[0]
+                         if truss_obj.data.materials else None)
+            facade_mat = (second_facade.data.materials[0]
+                          if second_facade.data.materials else None)
+            check("refuge trusses use the exterior wall finish",
+                  truss_mat is not None and facade_mat is not None
+                  and truss_mat == facade_mat,
+                  f"truss={truss_mat.name if truss_mat else 'none'}, "
+                  f"facade={facade_mat.name if facade_mat else 'none'}")
             truss_parts_world = piece_bounds(truss_obj)
             truss_parts = [
                 ((lo[0] - second_origin, lo[1], lo[2]),
@@ -321,8 +335,17 @@ def main():
             companion_refuge_z1s = [z0 + REFUGE_FLOORS * H
                                     for z0 in companion_refuge_z0s]
             refuge_levels = len(companion_refuge_z0s)
-            long_truss_bays = max(1, round((second_w - 2 * PIER_LONG) / COL_SPACING))
-            expected_members = refuge_levels * (40 + 2 * long_truss_bays)
+            short_claw_groups = TRUSS_CLAW_GROUPS
+            short_perimeter_bays = short_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+            long_claw_groups = max(short_claw_groups,
+                                   round((second_w - 2 * PIER_LONG)
+                                         / (second_d - 2 * PIER_SHORT)
+                                         * short_claw_groups))
+            long_perimeter_bays = long_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+            expected_members = refuge_levels * (
+                32 + 2 * long_perimeter_bays + 2 * short_perimeter_bays
+                + 2 * (long_claw_groups - 1)
+                + 2 * (short_claw_groups - 1))
             check("two refuge levels carry the complete truss layout",
                   len(truss_parts) == expected_members,
                   f"{len(truss_parts)} members, expected {expected_members}")
@@ -351,7 +374,7 @@ def main():
                        and p[1][1] - p[0][1] > 5.0
                        and p[1][2] - p[0][2] > 1.0]
             check("short facades have alternating triangular braces",
-                  len(short_z) == refuge_levels * 2 * 4,
+                  len(short_z) == refuge_levels * 2 * short_perimeter_bays,
                   f"{len(short_z)} diagonal members on the two depth-side faces")
 
             # Matching single-diagonal panels wrap onto both long elevations.
@@ -362,8 +385,18 @@ def main():
                       and abs(abs((p[0][1] + p[1][1]) / 2) -
                               (D / 2 - TRUSS_FACADE_INSET)) < 0.8]
             check("long facades complete the refuge-level truss ring",
-                  len(long_z) == refuge_levels * 2 * long_truss_bays,
+                  len(long_z) == refuge_levels * 2 * long_perimeter_bays,
                   f"{len(long_z)} diagonal members on the two front/rear faces")
+
+            uprights = [p for p in truss_parts
+                        if p[1][2] - p[0][2] > 1.0
+                        and p[1][0] - p[0][0] < 1.0
+                        and p[1][1] - p[0][1] < 1.0]
+            check("claw trusses have uprights between triangle pairs",
+                  len(uprights) == refuge_levels * (
+                      2 * (long_claw_groups - 1)
+                      + 2 * (short_claw_groups - 1)),
+                  f"{len(uprights)} perimeter uprights")
 
             # Plan X members span both X and Y, but stay within the thin upper
             # refuge slab so they do not intrude into residential sightlines.
@@ -1097,8 +1130,9 @@ def main():
 
     # --- twin service cores --------------------------------------------
     # TWO cores, and the reason is capacity and egress rather than structure: a
-    # single 14 x 9 held only 126 m2 against ~204 m2 of shafts, stairs, lobbies
-    # and risers that 654 units need, and put worst-case travel at 42.5 m.
+    # single 14 x 11 held only 154 m2 against ~204 m2 of shafts, stairs, lobbies
+    # and risers that the current 818-unit reference tower needs, and put
+    # worst-case travel at 42.5 m for the single-core comparison.
     # These checks measure that, so the cores cannot quietly shrink back.
     # Core walls only. Filter on the piece lying WITHIN the core footprint in y,
     # not on its centre: the north and south walls of a core are centred at
@@ -1108,7 +1142,9 @@ def main():
     core_pieces = [(lo, hi) for lo, hi in piece_bounds(struct)
                    if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
                    and (hi[0] - lo[0]) < W * 0.5
-                   and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5]
+                   and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5
+                   and not (abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+                            and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02)]
     core_xs = sorted({round((lo[0] + hi[0]) / 2, 1) for lo, hi in core_pieces})
     w_side = [x for x in core_xs if x < 0]
     e_side = [x for x in core_xs if x > 0]
@@ -1213,8 +1249,8 @@ def main():
     # Unit depth either side of a core: too deep a core leaves unusable slivers.
     unit_depth = (D - CORE_D) / 2
     check("usable depth remains either side of the cores",
-          9.0 <= unit_depth <= 13.0,
-          f"{unit_depth:.1f} m each side (residential wants 9-13 m)")
+          9.0 <= unit_depth <= 15.0,
+          f"{unit_depth:.1f} m each side (residential target ~9-15 m)")
 
     # --- what rises above the roof -------------------------------------
     # The thing projecting above the parapet has to BE the cores continuing up

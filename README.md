@@ -55,7 +55,7 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-165 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+170 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 4.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the one-pane long-facade pier and the drift it
 costs, solid corners,
@@ -72,7 +72,7 @@ that opens inside the model is a defect you notice every single time:
 
 The verifier targets the existing tower at the origin and also checks the companion
 mesh for its 84 m width, 51 glazed floors, 18 m clear gap and the new truss system.
-The current run is `161/165`: the four remaining failures are legacy corner/roof-
+The current run is `166/170`: the four remaining failures are legacy corner/roof-
 boundary assumptions that do not affect the two-tower configuration.
 
 ```bash
@@ -85,36 +85,36 @@ The scene contains two procedural residential towers with separate configuration
 
 | tower | residential groups | long-facade rooms/floor | footprint | roof / core top |
 | --- | ---: | ---: | ---: | ---: |
-| existing tower (at x = 0) | 2 × 17 glazed floors | 18 | 76 × 32 m | 172.0 / 177.94 m |
-| adjacent tower | 3 × 17 glazed floors | 20 | 84 × 32 m | 248.0 / 253.94 m |
+| existing tower (at x = 0) | 2 × 17 glazed floors | 18 | 76 × 40 m | 172.0 / 177.94 m |
+| adjacent tower | 3 × 17 glazed floors | 20 | 84 × 40 m | 248.0 / 253.94 m |
 
-They share the fixed 4.0 m floor height, 7 short-facade rooms, 2.0 m corner
+They share the fixed 4.0 m floor height, 9 short-facade rooms, 2.0 m corner
 piers and an 18.0 m clear site gap. Core length and centre are derived
 independently from each tower's long-face column grid: the reference uses two
-bays, or 19.20 × 9.00 m at x = ±17.60 m; the companion uses three bays, or
-27.73 × 9.00 m at x = ±17.42 m, leaving one clear column bay between its cores.
-The overall envelope is 178 × 32 m. The sections below use the existing tower as
+bays, or 19.20 × 11.00 m at x = ±17.60 m; the companion uses three bays, or
+27.73 × 11.00 m at x = ±17.42 m, leaving one clear column bay between its cores.
+The overall envelope is 178 × 40 m. The sections below use the existing tower as
 the reference plan; the companion repeats the same geometry rules with its wider
 facade and one additional residential group.
 
 | | |
 | --- | --- |
-| reference footprint | 76 × 32 m (derived, see below) |
-| clear internal depth | 31.40 m |
+| reference footprint | 76 × 40 m (derived, see below) |
+| clear internal depth | 39.40 m |
 | floor-to-floor height | 4.0 m |
 | reference storeys | 43 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
 | reference occupied floors | 40 (12.0 → 172.0 m), of which 2 are the refuge level |
 | reference total height | 173.32 m to top of parapet, 177.94 m to top of the core bulkheads |
 | corner piers | 2.0 m on all four faces (one pane) |
-| clear window opening | 72 m long face / 28 m short face |
+| clear window opening | 72 m long face / 36 m short face |
 | blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
 | blank top band | 2 floors = 8.0 m (164.0 → 172.0 m) |
 | reference refuge floor / sky garden | storeys 23–24, 8.0 m interior void 88.0 → 96.0 m; 6.0 m grille/opening from its floor, 2.0 m solid wall above |
 | glazed floors | 34 (17 below + 17 above the refuge level) |
-| reference panes per floor | 18 long face / 7 short face (50 around) |
+| reference panes per floor | 18 long face / 9 short face (54 around) |
 | pane pitch | 4.00 m mullion centres |
-| clear glass per pane | **4.00 m × 1.50 m, fixed** |
+| window module / clear glass | **4.00 m × 1.50 m module; 3.94 m × 1.50 m glass** |
 | ceiling lights | warm-white emissive panels behind a deterministic 36% mix of clustered and scattered lit room windows |
 
 ### Bottom three floors
@@ -127,8 +127,8 @@ underside slab oversails the footprint by 0.25 m per side as a drip edge.
 
 ### Two service cores, not one
 
-The reference cores sit at x = ±17.60 m and provide 345.6 m² in total; the
-companion derives x = ±17.42 m, provides 499.2 m², and leaves only a 7.11 m
+The reference cores sit at x = ±17.60 m and provide 422.4 m² in total; the
+companion derives x = ±17.42 m, provides 610.1 m², and leaves only a 7.11 m
 clear bay between the tubes. Their reason is **capacity and egress, not
 structure**.
 
@@ -136,22 +136,22 @@ The lateral system here is the perimeter, not the core. The four L-shaped corner
 piers give Iy = 1053 m⁴ against a central core's 177 m⁴, so the core carried only
 **14% of the lateral stiffness** and tip drift is H/1395 against a H/500 limit.
 Twin and H-shaped cores do win on Ix by a factor of ~20, but that is the direction
-with the *least* demand — wind on the 32 m end face works against a slenderness of
-H/W = 2.3, half the H/D = 4.6 the long face sees. Extra stiffness there buys
+with the *least* demand — wind on the 40 m end face works against a slenderness of
+H/W = 2.3, while the long face sees H/D = 4.0. Extra stiffness there buys
 nothing.
 
 What the single core could not do was hold the vertical transport:
 
 | | |
 | --- | --- |
-| tower GFA | 37 × 76 × 32 = 85,184 m² |
-| at 80% efficiency, 110 m²/unit | ~551 units, ~1,488 people |
+| tower GFA | 37 × 76 × 40 = 112,480 m² |
+| at 80% efficiency, 110 m²/unit | ~818 units, ~2,209 people |
 | lifts needed (1 per 60–90 units) | 7–9 |
 | shafts + 2 stairs + lobbies + risers | ~172 m² gross |
-| single 14 × 9 core | 126 m² — **short by 27%** |
-| two derived ~19 × 9 reference cores | ~346 m² — **+70% margin** |
+| single 14 × 11 core | 154 m² — **short by 24%** |
+| two derived ~19 × 11 reference cores | ~422 m² — **+108% margin** |
 
-A 14 × 9 core is a 6.2% core-to-plate ratio where residential towers run 10–15%.
+A 14 × 11 core is a 5.1% core-to-plate ratio where residential towers run 10–15%.
 The check in `verify_house.py` still asserts against **203.5 m²**, the figure the
 wider 76 m plate needed — the stricter of the two, kept so the cores cannot
 shrink on the strength of a smaller unit count.
@@ -159,14 +159,14 @@ shrink on the strength of a smaller unit count.
 Splitting also fixes three things one core cannot:
 
 * **Egress.** Worst-case travel to a central core was 42.5 m, marginal against
-  SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **20.0 m**.
+  SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **25.3 m**.
 * **Stair remoteness.** Two stairs inside one shaft are not independent — a single
   incident compromises both. The reference cores sit 35.20 m apart with 16.00 m
   of clear plate between; the taller companion brings its tubes closer, leaving
   one 7.11 m clear column bay between them while its end columns move with the
   facade.
-* **Lift zoning**, which a 551-unit tower wants anyway: low zone in the west core,
-  high zone in the east, ~65 units per lift in each.
+* **Lift zoning**, which an 818-unit tower wants anyway: low zone in the west core,
+  high zone in the east, ~82 units per lift in each.
 
 Deliberately **not an H-core**. The spine that makes it an H would run a wall down
 the middle of the plate, forcing single-loaded corridors either side. H-cores suit
@@ -174,10 +174,10 @@ office towers wanting deep lettable space; residential wants a continuous corrid
 loop. The extra 36 m² does not pay for a severed plan.
 
 The cores are internal, so the facade is untouched: every pane is still 4.00 m and
-the footprint is 76 × 32 m on whole metres. Core edges are the outer faces of the
+the footprint is 76 × 40 m on whole metres. Core edges are the outer faces of the
 column lines that define them, so the long-face column grid and the core walls
 remain connected as the footprint changes. The outer edge stops at 27.20 m on the
-reference tower, clear of the 36 m corner pier zone.
+reference tower, clear of the 40 m corner pier zone.
 
 Plan, at any occupied floor (x runs −38 → +38). `▓` is the 2 m corner pier, `━` and
 `┃` the glazed runs between them, `█` a service core:
@@ -187,16 +187,16 @@ Plan, at any occupied floor (x runs −38 → +38). `▓` is the 2 m corner pier
          ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  +16   north facade, 18 panes
          ┃      ██████        ██████         ┃         ───────────────
          ┃      ██████        ██████         ┃         10 m unit depth
-         ┃10.8m  ██████  16 m  ██████  10.8m  ┃   0     core band, 19.2 x 9
+         ┃10.8m  ██████  16 m  ██████  10.8m  ┃   0     core band, 19.2 x 11
          ┃corner██████ clear  ██████ corner  ┃         10 m unit depth
          ┃ unit ██████ span   ██████  unit   ┃         ───────────────
          ┃      ██████        ██████         ┃
          ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  -16   south facade, 18 panes
             ↑        ↑              ↑
        corner unit  west core   east core
-       10.8 x 11.5 m (low zone) (high zone)
+       10.8 x 14.5 m (low zone) (high zone)
 
-   76 m wide · 32 m deep (7 panes) · egress 22.3 m · stairs 35.2 m apart
+   76 m wide · 40 m deep (9 panes) · egress 25.3 m · stairs 35.2 m apart
 ```
 
 Every corner is 2 m of wall on each axis, one pane either way, so the corner unit's
@@ -209,14 +209,13 @@ between cores is served from both directions.
 The core layout is parameterized per `configure_tower()` call. It reads the
 long-face column grid, takes the configured number of bays per tube, and adds the
 1.60 m column faces to get the tube length. The reference uses two bays, yielding
-19.20 × 9.00 m cores at ±17.60 m; the 84 m companion uses three bays, yielding
-27.73 × 9.00 m cores at ±17.42 m. The companion's inner core faces leave one
+19.20 × 11.00 m cores at ±17.60 m; the 84 m companion uses three bays, yielding
+27.73 × 11.00 m cores at ±17.42 m. The companion's inner core faces leave one
 7.11 m clear column bay, while the outboard stub remains about 10.7 m. Defining
 columns touch the core walls instead of stopping short.
 
-The 2 m piers and seven short-face room modules keep the depth at 32 m. Taking one
-of those fixed variables down would make the residential depth too shallow; the
-core adjustment therefore uses the new long direction only.
+The 2 m piers and nine short-face room modules set the depth at 40 m. The cores
+are widened to 11 m, leaving 14.5 m of clear residential depth on either side.
 
 The cores run **unbroken from the ground to above the roof** — a shaft that stops
 is not a shaft. That includes straight through the refuge void, where they read as
@@ -345,12 +344,9 @@ Both bands are specified as target heights (`SOLID_BASE_TARGET`,
 floor line instead of cutting a window in half. At a 4 m floor height each is
 exactly 2 floors.
 
-The short facade uses the same 2.0 m pier, leaving 28 m of window in a 32 m face.
+The short facade uses the same 2.0 m pier, leaving 36 m of window in a 40 m face.
 The companion's long facade expands from 18 to 20 room modules (80 m of clear
-opening in the same 84 m envelope); its depth remains 32 m.
-Getting there took two extra panes rather than a narrower building: `D` sets the
-unit depth either side of the cores, and thinning the pier alone would have dropped
-that depth to 8.0 m, under the 9 m a residential plan needs.
+opening in the same 84 m envelope); both towers use the same 40 m depth.
 
 ### Facade band layout
 
@@ -381,7 +377,7 @@ each corner, so all four corners stay solid wall: 2.0 m on both axes
 (`PIER_LONG`, `PIER_SHORT`), one pane either way. The piers are L-shaped in plan —
 a leg along each facade meeting at the corner — and fill the whole
 vent + window + vent zone. Clear openings are 72 m on the reference tower's long
-faces and 80 m on the companion's; both have 28 m on the short ones.
+faces and 80 m on the companion's; both have 36 m on the short ones.
 
 ### Flush glazing — one facade plane
 
@@ -408,13 +404,15 @@ with a reported `+90.0 mm`.
 
 ### The window is the module — the footprint follows from it
 
-The pane is fixed at exactly **4.00 m × 1.50 m** of clear glass, on every facade.
+The window module is fixed at **4.00 m × 1.50 m** on every facade. Each clear glass
+pane is **3.94 m × 1.50 m**, leaving a 0.06 m joint between adjacent rooms; the
+module pitch remains 4.00 m, so the building footprint is unchanged.
 The footprint is not an input — it is the pane count plus the piers, nothing else:
 
 ```
 reference W = 18 panes x 4.00 + 2 x 2.00 pier = 76 m
 companion W = 20 panes x 4.00 + 2 x 2.00 pier = 84 m
-both towers D = 7 panes x 4.00 + 2 x 2.00 pier = 32 m
+both towers D = 9 panes x 4.00 + 2 x 2.00 pier = 40 m
 pane pitch = 4.00 m (identical on all four facades)
 ```
 
@@ -426,8 +424,8 @@ see above.) That is what keeps the arithmetic clean — 18 panes of 4 m is exact
 added each mullion's width to the facade, which pushed the dimensions to
 78.79 × 30.72 m; the caps fixed that.)
 
-The reference tower has 50 panes per floor on 34 glazed floors; the companion has
-54 panes per floor on 51 glazed floors. To resize a tower, change its
+The reference tower has 52 panes per floor on 34 glazed floors; the companion has
+56 panes per floor on 51 glazed floors. To resize a tower, change its
 `configure_tower(groups, windows_long)` call (or the shared `WINDOWS_SHORT` / pier
 widths) — never `W`/`D`, which are derived. Adding one pane to a long facade widens
 that tower by exactly 4 m.
@@ -611,10 +609,13 @@ place the vent + glass + vent zone from 0.50 m to 2.50 m above each floor; an
 
 The taller companion adds a dedicated `Structural_Trusses` mesh. At each of its
 two double-height refuge levels, horizontal outrigger rails run from both cores
-to the long-face belt, and a light single-diagonal panel pattern wraps around all
-four refuge-level facades. Each core's long wall still gets an X-braced panel,
+to the long-face belt, and the same claw pattern wraps around all four refuge-level
+facades. The 40 m short faces use three claws (six diagonals and two uprights);
+the 80 m long faces scale to seven claws (fourteen diagonals and six uprights),
+keeping each diagonal bay near 6 m instead of leaving a giant visual span. Each
+core's long wall still gets an X-braced panel,
 while four additional X panels are embedded in the upper refuge slab in plan so
 they reinforce the diaphragm without crossing any ordinary residential window
-band or sightline. The concrete cores remain continuous closed tubes; the metal
-trusses are an added lateral-load path and a visible expression of the
-core-to-perimeter connection.
+band or sightline. The concrete cores remain continuous closed tubes; the white
+trusses reuse the exterior wall finish, adding a visible lateral-load path and
+expression of the core-to-perimeter connection without introducing a dark overlay.
