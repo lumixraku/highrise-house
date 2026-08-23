@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-08-23 — fix — extend the companion cores to one-bay separation
+
+Adjusted only the taller companion tower's service cores from two long-face
+column bays to three. The outer boundary remains on the first inset column line,
+so each core grows inward while its defining columns stay connected to the wall.
+The companion now uses `27.73 x 9.00 m` cores at x = +/-17.42 m, leaving a
+`7.11 m` clear single-column bay between them. The original 76 m tower remains
+at two bays and `19.20 x 9.00 m` cores at x = +/-17.60 m. Updated the procedural
+configuration, verifier, and README.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; the companion report confirmed 27.73 m cores and a 7.11 m gap.
+- `verify_house.py` passed the new companion core-length, end-column, and one-bay separation assertions and reports `151/155` overall.
+
+Remaining issues: four pre-existing verifier assumptions remain (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling); none is caused by this core extension.
+
 ## 2026-08-23 — fix — derive service-core length from each tower's columns
 
 Replaced the shared fixed core length with a per-tower layout derived from the

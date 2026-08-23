@@ -260,15 +260,18 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # suit office towers wanting deep lettable space; residential wants a continuous
 # corridor loop.
 # The core length is derived per tower from the long-face column grid below.
-# Each tube spans two column bays; the column outer faces become the tube ends.
+# Each tube spans a configured number of column bays; the column outer faces
+# become the tube ends.
 # These bootstrap values describe the reference tower until configure_tower()
 # refreshes them for the active footprint.
 CORE_COLUMN_BAYS = 2
+COMPANION_CORE_COLUMN_BAYS = 3
 CORE_W, CORE_D = 20.0, 9.0    # derived long length / fixed apartment-depth width
 CORE_T = 0.28                 # core wall thickness
 # The active tower derives CORE_OFFSET and CORE_W from its long-face column grid.
-# Two column bays define each tube, so the outboard stub stays balanced as the
-# facade widens and the end columns remain physically joined to the core walls.
+# The outermost core boundary stays one column line in from each end of the
+# usable grid. Increasing the bay count therefore lengthens each tube inward,
+# preserving the outboard stub while reducing the gap between the cores.
 CORE_OFFSET = 18.0       # bootstrap value; refreshed by configure_tower()
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 
@@ -546,26 +549,30 @@ def col_grid(span):
     return [start + i * step for i in range(bays + 1)]
 
 
-def core_layout(span):
+def core_layout(span, core_column_bays=None):
     """Derive the twin-core long dimension from the active column grid.
 
-    Each core occupies two long-face column bays. Its outer bounds are the
-    outside faces of the two columns at those bay ends, so the columns remain
-    visible and structurally meet the core walls instead of stopping short.
+    Each core occupies ``core_column_bays`` long-face column bays. Its outer
+    boundary remains one grid line in from each end, and its inner boundary
+    moves inward as bays are added. The outside faces of the boundary columns
+    become the tube ends, so those columns remain visible and structurally meet
+    the core walls instead of stopping short.
     """
     grid = col_grid(span)
-    if CORE_COLUMN_BAYS != 2:
-        raise ValueError("core layout currently expects two column bays")
-    mid = (len(grid) - 1) // 2
-    west_center_index = mid - CORE_COLUMN_BAYS
-    east_center_index = len(grid) - 1 - west_center_index
-    if west_center_index - 1 < 0 or east_center_index + 1 >= len(grid):
+    bays = CORE_COLUMN_BAYS if core_column_bays is None else int(core_column_bays)
+    if bays < 1:
+        raise ValueError("core layout needs at least one column bay")
+    west_lo_index = 1
+    west_hi_index = west_lo_index + bays
+    east_hi_index = len(grid) - 2
+    east_lo_index = east_hi_index - bays
+    if west_hi_index >= east_lo_index:
         raise ValueError("tower is too narrow for the configured core column bays")
 
-    west_lo = grid[west_center_index - 1]
-    west_hi = grid[west_center_index + 1]
-    east_lo = grid[east_center_index - 1]
-    east_hi = grid[east_center_index + 1]
+    west_lo = grid[west_lo_index]
+    west_hi = grid[west_hi_index]
+    east_lo = grid[east_lo_index]
+    east_hi = grid[east_hi_index]
     core_w = (west_hi - west_lo) + COL_SIZE
     west_center = (west_lo + west_hi) / 2.0
     east_center = (east_lo + east_hi) / 2.0
@@ -1359,7 +1366,7 @@ def main():
     first_w, first_d, first_top = W, D, CORE_TOP_Z
     report(first_objects, "existing tower (2 groups x 17 floors, 18 rooms)")
 
-    configure_tower(3, 20, core_column_bays=2)
+    configure_tower(3, 20, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
     second_objects = build(reset=False, mats=shared_mats)
     second_w, second_d, second_top = W, D, CORE_TOP_Z
     second_center_x = first_w / 2.0 + TOWER_GAP + second_w / 2.0

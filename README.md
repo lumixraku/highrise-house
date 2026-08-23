@@ -88,12 +88,13 @@ The scene contains two procedural residential towers with separate configuration
 | adjacent tower | 3 × 17 glazed floors | 20 | 84 × 32 m | 248.0 / 253.94 m |
 
 They share the fixed 4.0 m floor height, 7 short-facade rooms, 2.0 m corner
-piers, two-column-bay cores and an 18.0 m clear gap. The core length and centre
-are derived independently from each tower's long-face column grid: the reference
-is 19.20 × 9.00 m at x = ±17.60 m, while the companion is 19.02 × 9.00 m at
-x = ±21.78 m. The overall envelope is 178 × 32 m. The sections below use the
-existing tower as the reference plan; the companion repeats the same geometry
-rules with its wider facade and one additional residential group.
+piers and an 18.0 m clear site gap. Core length and centre are derived
+independently from each tower's long-face column grid: the reference uses two
+bays, or 19.20 × 9.00 m at x = ±17.60 m; the companion uses three bays, or
+27.73 × 9.00 m at x = ±17.42 m, leaving one clear column bay between its cores.
+The overall envelope is 178 × 32 m. The sections below use the existing tower as
+the reference plan; the companion repeats the same geometry rules with its wider
+facade and one additional residential group.
 
 | | |
 | --- | --- |
@@ -126,8 +127,9 @@ underside slab oversails the footprint by 0.25 m per side as a drip edge.
 ### Two service cores, not one
 
 The reference cores sit at x = ±17.60 m and provide 345.6 m² in total; the
-companion derives x = ±21.78 m and provides 342.4 m². Their reason is
-**capacity and egress, not structure**.
+companion derives x = ±17.42 m, provides 499.2 m², and leaves only a 7.11 m
+clear bay between the tubes. Their reason is **capacity and egress, not
+structure**.
 
 The lateral system here is the perimeter, not the core. The four L-shaped corner
 piers give Iy = 1053 m⁴ against a central core's 177 m⁴, so the core carried only
@@ -146,7 +148,7 @@ What the single core could not do was hold the vertical transport:
 | lifts needed (1 per 60–90 units) | 7–9 |
 | shafts + 2 stairs + lobbies + risers | ~172 m² gross |
 | single 14 × 9 core | 126 m² — **short by 27%** |
-| two derived ~19 × 9 cores | ~346 m² — **+70% margin** |
+| two derived ~19 × 9 reference cores | ~346 m² — **+70% margin** |
 
 A 14 × 9 core is a 6.2% core-to-plate ratio where residential towers run 10–15%.
 The check in `verify_house.py` still asserts against **203.5 m²**, the figure the
@@ -159,8 +161,9 @@ Splitting also fixes three things one core cannot:
   SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **20.0 m**.
 * **Stair remoteness.** Two stairs inside one shaft are not independent — a single
   incident compromises both. The reference cores sit 35.20 m apart with 16.00 m
-  of clear plate between; the taller companion widens that clear span while its
-  end columns move with the facade.
+  of clear plate between; the taller companion brings its tubes closer, leaving
+  one 7.11 m clear column bay between them while its end columns move with the
+  facade.
 * **Lift zoning**, which a 551-unit tower wants anyway: low zone in the west core,
   high zone in the east, ~65 units per lift in each.
 
@@ -202,12 +205,13 @@ between cores is served from both directions.
 
 ### Core placement and the widened plate
 
-The core layout is parameterized by `CORE_COLUMN_BAYS = 2`. For each tower,
-`configure_tower()` reads the long-face column grid, takes two bays per tube, and
-adds the 1.60 m column faces to get the tube length. This yields 19.20 × 9.00 m
-cores at ±17.60 m for the 76 m reference tower, and 19.02 × 9.00 m cores at
-±21.78 m for the 84 m companion. The outboard stub remains about 10.7–10.8 m,
-and the defining columns touch the core walls instead of stopping short.
+The core layout is parameterized per `configure_tower()` call. It reads the
+long-face column grid, takes the configured number of bays per tube, and adds the
+1.60 m column faces to get the tube length. The reference uses two bays, yielding
+19.20 × 9.00 m cores at ±17.60 m; the 84 m companion uses three bays, yielding
+27.73 × 9.00 m cores at ±17.42 m. The companion's inner core faces leave one
+7.11 m clear column bay, while the outboard stub remains about 10.7 m. Defining
+columns touch the core walls instead of stopping short.
 
 The 2 m piers and seven short-face room modules keep the depth at 32 m. Taking one
 of those fixed variables down would make the residential depth too shallow; the
@@ -591,11 +595,11 @@ for a 178 m-wide site:
 ## Changing the design
 
 The shared `BLOCK_FLOORS = 17` sets the height of each residential group. `main()`
-then calls `configure_tower(2, 18)` for the existing tower and
-`configure_tower(3, 20)` for the companion. `TOTAL_FLOORS`, `W` and `D` are derived
-from those group and pane counts (do not set them directly). The column grid, roof
-bulkheads and camera all derive from each footprint, and the camera frames the
-combined site envelope.
+then calls `configure_tower(2, 18, core_column_bays=2)` for the existing tower and
+`configure_tower(3, 20, core_column_bays=3)` for the companion. `TOTAL_FLOORS`,
+`W` and `D` are derived from those group and pane counts (do not set them directly).
+The column grid, core lengths, roof bulkheads and camera all derive from each
+footprint, and the camera frames the combined site envelope.
 Note that
 `verify_house.py` carries its own copy of `W`, `D` and the floor counts — update it
 to match, or its assertions will test the old dimensions. The five vertical bands

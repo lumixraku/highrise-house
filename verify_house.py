@@ -75,6 +75,7 @@ COL_CLEAR_INSET = 2.0
 COL_SPACING = 9.0
 COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 CORE_COLUMN_BAYS = 2
+COMPANION_CORE_COLUMN_BAYS = 3
 
 
 def col_grid(span):
@@ -85,12 +86,16 @@ def col_grid(span):
     return [start + index * step for index in range(bays + 1)]
 
 
-def core_layout(span):
+def core_layout(span, core_column_bays=CORE_COLUMN_BAYS):
     grid = col_grid(span)
-    mid = (len(grid) - 1) // 2
-    west_center_index = mid - CORE_COLUMN_BAYS
-    east_center_index = len(grid) - 1 - west_center_index
-    west_lo, west_hi = grid[west_center_index - 1], grid[west_center_index + 1]
+    bays = int(core_column_bays)
+    west_lo_index = 1
+    west_hi_index = west_lo_index + bays
+    east_hi_index = len(grid) - 2
+    east_lo_index = east_hi_index - bays
+    if west_hi_index >= east_lo_index:
+        raise ValueError("tower is too narrow for the configured core column bays")
+    west_lo, west_hi = grid[west_lo_index], grid[west_hi_index]
     west_center = (west_lo + west_hi) / 2.0
     return ((west_hi - west_lo) + COL_SIZE, abs(west_center),
             (-abs(west_center), abs(west_center)))
@@ -251,7 +256,9 @@ def main():
               f"gap={second_fb[0][0] - first_fb[0][1]:.3f} m")
         second_w = second_fb[0][1] - second_fb[0][0]
         second_origin = first_fb[0][1] + 18.0 + second_w / 2
-        second_core_w, second_core_offset, second_core_xs = core_layout(second_w)
+        second_grid = col_grid(second_w)
+        second_core_w, second_core_offset, second_core_xs = core_layout(
+            second_w, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
         second_pieces = piece_bounds(second_struct)
         second_core_pieces = [
             (lo, hi) for lo, hi in second_pieces
@@ -285,6 +292,12 @@ def main():
               all(min(abs(x - line) for x, _ in second_columns) < 0.02
                   for line in second_defining_lines),
               f"{len(second_columns)} continuous columns checked")
+        second_core_gap = (second_core_xs[1] - second_core_w / 2
+                           - (second_core_xs[0] + second_core_w / 2))
+        second_column_bay_clear = (second_grid[1] - second_grid[0]) - COL_SIZE
+        check("taller tower cores leave one clear column bay between them",
+              abs(second_core_gap - second_column_bay_clear) < 0.02,
+              f"clear gap={second_core_gap:.3f} m, one bay={second_column_bay_clear:.3f} m")
     if failures:
         sys.exit(1)
 
