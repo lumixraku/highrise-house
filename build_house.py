@@ -259,21 +259,21 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # the middle of the plate, forcing single-loaded corridors either side. H-cores
 # suit office towers wanting deep lettable space; residential wants a continuous
 # corridor loop.
-CORE_W, CORE_D = 20.0, 9.0    # longer along facade, narrower into apartment depth
+# The core length is derived per tower from the long-face column grid below.
+# Each tube spans two column bays; the column outer faces become the tube ends.
+# These bootstrap values describe the reference tower until configure_tower()
+# refreshes them for the active footprint.
+CORE_COLUMN_BAYS = 2
+CORE_W, CORE_D = 20.0, 9.0    # derived long length / fixed apartment-depth width
 CORE_T = 0.28                 # core wall thickness
-# The wider 76 m plate would otherwise leave 14 m between each core and the
-# building's short end. Widening the cores by 4 m and moving their centres 2 m
-# outward uses that added floorplate: 10 m remains outboard of each core, while
-# the clear span between the two cores stays at 16 m. Core edges at 8 m and 28 m
-# land on the 4 m pane grid so partitions can still follow the facade rhythm.
-CORE_OFFSET = 18.0
+# The active tower derives CORE_OFFSET and CORE_W from its long-face column grid.
+# Two column bays define each tube, so the outboard stub stays balanced as the
+# facade widens and the end columns remain physically joined to the core walls.
+CORE_OFFSET = 18.0       # bootstrap value; refreshed by configure_tower()
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 
 assert CORE_OFFSET + CORE_W / 2 <= W / 2 - PIER_LONG, \
     "core must stay clear of the corner pier zone"
-assert abs((CORE_OFFSET - CORE_W / 2) % PANE_W) < 1e-9 \
-    and abs((CORE_OFFSET + CORE_W / 2) % PANE_W) < 1e-9, \
-    "core edges should land on the pane grid"
 assert 2 * CORE_W * CORE_D >= 203.5, "cores must hold the required provision"
 
 PARAPET_H = 1.10
@@ -357,11 +357,12 @@ assert all((storey - (PILOTIS_FLOORS + _glazed_first + 1)) <= 21 + index * 20
     "refuge floor spacing exceeds the configured interval"
 
 
-def configure_tower(block_groups, windows_long):
+def configure_tower(block_groups, windows_long, core_column_bays=CORE_COLUMN_BAYS):
     """Refresh the derived geometry for one tower variant."""
-    global BLOCK_GROUPS, WINDOWS_LONG
+    global BLOCK_GROUPS, WINDOWS_LONG, CORE_COLUMN_BAYS
     global TOTAL_FLOORS, TOWER_FLOORS, OPEN_W, OPEN_D, W, D
     global PANE_GLASS_LONG, PANE_GLASS_SHORT
+    global CORE_W, CORE_OFFSET, CORE_XS
     global BASE_Z, TOP_Z, ROOF_GARDEN_Z0, CORE_TOP_Z
     global _glazed_first, _glazed_last
     global REFUGE_STARTS, REFUGE_ENDS, REFUGE_FLOOR_SET
@@ -373,6 +374,7 @@ def configure_tower(block_groups, windows_long):
 
     BLOCK_GROUPS = int(block_groups)
     WINDOWS_LONG = int(windows_long)
+    CORE_COLUMN_BAYS = int(core_column_bays)
     if BLOCK_GROUPS < 2 or WINDOWS_LONG < 1:
         raise ValueError("each tower needs at least two groups and one long-face room")
 
@@ -384,11 +386,14 @@ def configure_tower(block_groups, windows_long):
     OPEN_D = opening_for(WINDOWS_SHORT)
     W = OPEN_W + 2 * PIER_LONG
     D = OPEN_D + 2 * PIER_SHORT
+    CORE_W, CORE_OFFSET, CORE_XS = core_layout(W)
     PANE_GLASS_LONG = PANE_GLASS_W
     PANE_GLASS_SHORT = PANE_GLASS_W
 
     if CORE_OFFSET + CORE_W / 2 > W / 2 - PIER_LONG:
         raise ValueError("tower is too narrow for the configured service cores")
+    if CORE_W <= COL_SIZE:
+        raise ValueError("core length must leave room for its defining columns")
 
     BASE_Z = PILOTIS_FLOORS * H
     TOP_Z = BASE_Z + TOWER_FLOORS * H
@@ -539,6 +544,34 @@ def col_grid(span):
     step = usable / bays
     start = -usable / 2
     return [start + i * step for i in range(bays + 1)]
+
+
+def core_layout(span):
+    """Derive the twin-core long dimension from the active column grid.
+
+    Each core occupies two long-face column bays. Its outer bounds are the
+    outside faces of the two columns at those bay ends, so the columns remain
+    visible and structurally meet the core walls instead of stopping short.
+    """
+    grid = col_grid(span)
+    if CORE_COLUMN_BAYS != 2:
+        raise ValueError("core layout currently expects two column bays")
+    mid = (len(grid) - 1) // 2
+    west_center_index = mid - CORE_COLUMN_BAYS
+    east_center_index = len(grid) - 1 - west_center_index
+    if west_center_index - 1 < 0 or east_center_index + 1 >= len(grid):
+        raise ValueError("tower is too narrow for the configured core column bays")
+
+    west_lo = grid[west_center_index - 1]
+    west_hi = grid[west_center_index + 1]
+    east_lo = grid[east_center_index - 1]
+    east_hi = grid[east_center_index + 1]
+    core_w = (west_hi - west_lo) + COL_SIZE
+    west_center = (west_lo + west_hi) / 2.0
+    east_center = (east_lo + east_hi) / 2.0
+    if abs(west_center + east_center) > 1e-6:
+        raise ValueError("column grid must stay symmetric around the tower centre")
+    return core_w, abs(west_center), (-abs(west_center), abs(west_center))
 
 
 def corner_columns():
@@ -970,10 +1003,12 @@ def build(reset=True, mats=None):
             # building corners below; retain every other original grid column.
             if i in (0, len(x_grid) - 1) and j in (0, len(y_grid) - 1):
                 continue
-            # Skip columns that would land inside a service core wall. Two cores
-            # now, so this tests both.
-            if any(abs(x - cx) < CORE_W / 2 + COL_SIZE
-                   and abs(y) < CORE_D / 2 + COL_SIZE for cx in CORE_XS):
+            # Keep the two column lines that define each core's ends. Only a
+            # column whose full section is strictly inside a core is omitted;
+            # boundary columns remain visible and touch the core walls.
+            if any(abs(x - cx) + COL_SIZE / 2 < CORE_W / 2 - CORE_T
+                   and abs(y) + COL_SIZE / 2 < CORE_D / 2 - CORE_T
+                   for cx in CORE_XS):
                 continue
             structure.append(box(
                 f"Column_{i}_{j}", (x, y, CORE_TOP_Z / 2.0),
@@ -1245,13 +1280,15 @@ def report(objects, label="tower"):
     print(f"pane pitch           : {PANE_PITCH:.2f} m (= pane width; mullions are "
           f"{MULLION_W:.2f} m caps over the joints)")
     print(f"clear internal depth : {D - 2 * WALL_T:.2f} m (inside face to inside face)")
-    print(f"service cores        : 2 x {CORE_W:.0f} x {CORE_D:.0f} m at "
-          f"x = {CORE_XS[0]:+.0f} / {CORE_XS[1]:+.0f}, "
+    print(f"service cores        : 2 x {CORE_W:.2f} x {CORE_D:.2f} m at "
+          f"x = {CORE_XS[0]:+.2f} / {CORE_XS[1]:+.2f}, "
           f"{2 * CORE_W * CORE_D:.0f} m2 total "
           f"({2 * CORE_W * CORE_D / (W * D) * 100:.1f}% of the plate)")
-    print(f"core spacing         : {2 * CORE_OFFSET:.0f} m between centres, "
-          f"{2 * (CORE_OFFSET - CORE_W / 2):.0f} m clear between them, "
-          f"{W / 2 - (CORE_OFFSET + CORE_W / 2):.0f} m to each building end")
+    print(f"core spacing         : {2 * CORE_OFFSET:.2f} m between centres, "
+          f"{2 * (CORE_OFFSET - CORE_W / 2):.2f} m clear between them, "
+          f"{W / 2 - (CORE_OFFSET + CORE_W / 2):.2f} m to each building end")
+    print(f"core derivation      : {CORE_COLUMN_BAYS} long-face column bays "
+          f"plus {COL_SIZE:.2f} m column faces")
     print(f"derivation           : W = {WINDOWS_LONG} x {PANE_W:.0f} + 2 x "
           f"{PIER_LONG:.0f} = {W:.0f} m,  D = {WINDOWS_SHORT} x {PANE_W:.0f} + 2 x "
           f"{PIER_SHORT:.0f} = {D:.0f} m")
@@ -1317,12 +1354,12 @@ def main():
     reset_scene()
     shared_mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
                                       glass_tint=GLASS_TINT)
-    configure_tower(2, 18)
+    configure_tower(2, 18, core_column_bays=2)
     first_objects = build(reset=False, mats=shared_mats)
     first_w, first_d, first_top = W, D, CORE_TOP_Z
     report(first_objects, "existing tower (2 groups x 17 floors, 18 rooms)")
 
-    configure_tower(3, 20)
+    configure_tower(3, 20, core_column_bays=2)
     second_objects = build(reset=False, mats=shared_mats)
     second_w, second_d, second_top = W, D, CORE_TOP_Z
     second_center_x = first_w / 2.0 + TOWER_GAP + second_w / 2.0

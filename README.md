@@ -88,10 +88,12 @@ The scene contains two procedural residential towers with separate configuration
 | adjacent tower | 3 × 17 glazed floors | 20 | 84 × 32 m | 248.0 / 253.94 m |
 
 They share the fixed 4.0 m floor height, 7 short-facade rooms, 2.0 m corner
-piers, twin 20 × 9 m cores and an 18.0 m clear gap. The overall envelope is
-178 × 32 m. The sections below use the existing tower as the reference plan;
-the companion repeats the same geometry rules with its wider facade and one
-additional residential group.
+piers, two-column-bay cores and an 18.0 m clear gap. The core length and centre
+are derived independently from each tower's long-face column grid: the reference
+is 19.20 × 9.00 m at x = ±17.60 m, while the companion is 19.02 × 9.00 m at
+x = ±21.78 m. The overall envelope is 178 × 32 m. The sections below use the
+existing tower as the reference plan; the companion repeats the same geometry
+rules with its wider facade and one additional residential group.
 
 | | |
 | --- | --- |
@@ -115,17 +117,17 @@ additional residential group.
 
 ### Bottom three floors
 
-Open and raised. An 8 × 4 grid of 1.60 m square concrete columns on ~9 m bays
-carries the tower, with **two** 20.0 × 9.0 m service cores (stairs/lifts) rising
-through the void and a landing at each of the three levels. Columns that would
-clash with a core are omitted. The tower's underside slab oversails the footprint
-by 0.25 m per side as a drip edge.
+Open and raised. A 1.60 m square concrete column grid on ~9 m bays carries the
+tower, with two service cores (stairs/lifts) rising through the void and a landing
+at each of the three levels. The two long-face column bays at each core define its
+length; the end columns remain in the mesh and touch the core walls. The tower's
+underside slab oversails the footprint by 0.25 m per side as a drip edge.
 
 ### Two service cores, not one
 
-The cores sit at x = ±18 m, 360 m² between them, 14.8% of the floorplate. This
-replaced a single central 14 × 9 core, and the reason is **capacity and egress,
-not structure**.
+The reference cores sit at x = ±17.60 m and provide 345.6 m² in total; the
+companion derives x = ±21.78 m and provides 342.4 m². Their reason is
+**capacity and egress, not structure**.
 
 The lateral system here is the perimeter, not the core. The four L-shaped corner
 piers give Iy = 1053 m⁴ against a central core's 177 m⁴, so the core carried only
@@ -144,7 +146,7 @@ What the single core could not do was hold the vertical transport:
 | lifts needed (1 per 60–90 units) | 7–9 |
 | shafts + 2 stairs + lobbies + risers | ~172 m² gross |
 | single 14 × 9 core | 126 m² — **short by 27%** |
-| two 20 × 9 cores | 360 m² — **+109% margin** |
+| two derived ~19 × 9 cores | ~346 m² — **+70% margin** |
 
 A 14 × 9 core is a 6.2% core-to-plate ratio where residential towers run 10–15%.
 The check in `verify_house.py` still asserts against **203.5 m²**, the figure the
@@ -156,7 +158,9 @@ Splitting also fixes three things one core cannot:
 * **Egress.** Worst-case travel to a central core was 42.5 m, marginal against
   SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **20.0 m**.
 * **Stair remoteness.** Two stairs inside one shaft are not independent — a single
-  incident compromises both. These sit 36 m apart with 16 m of clear plate between.
+  incident compromises both. The reference cores sit 35.20 m apart with 16.00 m
+  of clear plate between; the taller companion widens that clear span while its
+  end columns move with the facade.
 * **Lift zoning**, which a 551-unit tower wants anyway: low zone in the west core,
   high zone in the east, ~65 units per lift in each.
 
@@ -166,44 +170,44 @@ office towers wanting deep lettable space; residential wants a continuous corrid
 loop. The extra 36 m² does not pay for a severed plan.
 
 The cores are internal, so the facade is untouched: every pane is still 4.00 m and
-the footprint is 76 × 32 m on whole metres. Core edges land at 8 and 28 m,
-both whole multiples of the 4.00 m pane, so interior partitions can follow the
-facade rhythm. The outer edge stops at 28 m, clear of the 36 m corner pier zone —
-which is what rules out pushing the cores to the ends of the plate.
+the footprint is 76 × 32 m on whole metres. Core edges are the outer faces of the
+column lines that define them, so the long-face column grid and the core walls
+remain connected as the footprint changes. The outer edge stops at 27.20 m on the
+reference tower, clear of the 36 m corner pier zone.
 
 Plan, at any occupied floor (x runs −38 → +38). `▓` is the 2 m corner pier, `━` and
 `┃` the glazed runs between them, `█` a service core:
 
 ```
-        -38  -28     -8           +8    +28  +38
+        -38 -27.2    -8           +8   +27.2  +38
          ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  +16   north facade, 18 panes
          ┃      ██████        ██████         ┃         ───────────────
          ┃      ██████        ██████         ┃         10 m unit depth
-         ┃ 10m  ██████  16 m  ██████  10m    ┃   0     core band, 20 x 9
+         ┃10.8m  ██████  16 m  ██████  10.8m  ┃   0     core band, 19.2 x 9
          ┃corner██████ clear  ██████ corner  ┃         10 m unit depth
          ┃ unit ██████ span   ██████  unit   ┃         ───────────────
          ┃      ██████        ██████         ┃
          ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  -16   south facade, 18 panes
             ↑        ↑              ↑
        corner unit  west core   east core
-        8 x 10 m   (low zone)  (high zone)
+       10.8 x 11.5 m (low zone) (high zone)
 
-   76 m wide · 32 m deep (7 panes) · egress 20.0 m · stairs 36 m apart
+   76 m wide · 32 m deep (7 panes) · egress 22.3 m · stairs 35.2 m apart
 ```
 
 Every corner is 2 m of wall on each axis, one pane either way, so the corner unit's
-two glazed faces meet almost at the corner itself. The 10 m stub past each core to the
-building end is a dead-end corridor, well inside the ~30 m limit; the 16 m between
-cores is served from both directions.
+two glazed faces meet almost at the corner itself. The 10.8 m stub past each core to
+the building end is a dead-end corridor, well inside the ~30 m limit; the 16 m
+between cores is served from both directions.
 
 ### Core placement and the widened plate
 
-The 76 m plate left too much unused space between the old 16 m cores and the short
-ends. Each core is now **20 × 9 m**, with centres at x = ±18 m. Its pane-grid edges
-fall at x = ±8 m and ±28 m: the clear span between cores is 16 m, and the outboard
-stub to each building end is 10 m. The 2 m corner piers remain outside the cores,
-so the facade window rhythm is unchanged while the circulation mass reads in scale
-with the widened building.
+The core layout is parameterized by `CORE_COLUMN_BAYS = 2`. For each tower,
+`configure_tower()` reads the long-face column grid, takes two bays per tube, and
+adds the 1.60 m column faces to get the tube length. This yields 19.20 × 9.00 m
+cores at ±17.60 m for the 76 m reference tower, and 19.02 × 9.00 m cores at
+±21.78 m for the 84 m companion. The outboard stub remains about 10.7–10.8 m,
+and the defining columns touch the core walls instead of stopping short.
 
 The 2 m piers and seven short-face room modules keep the depth at 32 m. Taking one
 of those fixed variables down would make the residential depth too shallow; the
@@ -211,7 +215,7 @@ core adjustment therefore uses the new long direction only.
 
 The cores run **unbroken from the ground to above the roof** — a shaft that stops
 is not a shaft. That includes straight through the refuge void, where they read as
-two solid piers with the 16 m garden span between them, and up past the parapet:
+two solid piers with the derived clear span between them, and up past the parapet:
 
 | | |
 | --- | --- |
@@ -223,7 +227,8 @@ two solid piers with the 16 m garden span between them, and up past the parapet:
 The thing projecting at the top **is** the cores, sized and placed by them, not a
 plant box positioned by eye — which is what an earlier version had, a 22.8 × 10.9 m
 box offset to x = +9.12 that sat over nothing. Two cores means two bulkheads at
-x = ±18, which is also what tells you from the street where the lifts are.
+the derived column-grid centres, which is also what tells you from the street
+where the lifts are.
 
 ### Refuge floor / sky garden
 

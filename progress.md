@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-08-23 — fix — derive service-core length from each tower's columns
+
+Replaced the shared fixed core length with a per-tower layout derived from the
+long-face column grid. Each core now spans two column bays and extends to the
+outer faces of its defining columns, so those columns remain in the structural
+mesh and meet both core ends. The reference tower now uses 19.20 x 9.00 m cores
+at x = +/-17.60 m; the taller companion independently uses 19.02 x 9.00 m cores
+at x = +/-21.78 m. Synchronized the floor plan, README, build report, and
+geometry checks with the derived dimensions.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; both tower reports confirmed the derived core sizes and positions.
+- `verify_house.py` passed the new core-length and column-contact assertions for both towers and reports `150/154` overall.
+
+Remaining issues: four pre-existing verifier assumptions remain (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling); none is caused by this core-layout change.
+
 ## 2026-08-23 — fix — build two residential towers with separate configurations
 
 Kept the existing tower at the origin with `2 x 17` residential groups and `18`

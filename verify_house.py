@@ -72,10 +72,34 @@ REFUGE_COL_PITCH = PANE_W * 3
 FIN_PITCH = 0.50
 COL_SIZE = 1.60
 COL_CLEAR_INSET = 2.0
-# Twin service cores. Duplicated from build_house.py, like every constant here.
-CORE_W, CORE_D, CORE_T = 20.0, 9.0, 0.28
-CORE_OFFSET = 18.0
-CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
+COL_SPACING = 9.0
+COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
+CORE_COLUMN_BAYS = 2
+
+
+def col_grid(span):
+    usable = span - 2 * COL_MARGIN
+    bays = max(1, round(usable / COL_SPACING))
+    step = usable / bays
+    start = -usable / 2
+    return [start + index * step for index in range(bays + 1)]
+
+
+def core_layout(span):
+    grid = col_grid(span)
+    mid = (len(grid) - 1) // 2
+    west_center_index = mid - CORE_COLUMN_BAYS
+    east_center_index = len(grid) - 1 - west_center_index
+    west_lo, west_hi = grid[west_center_index - 1], grid[west_center_index + 1]
+    west_center = (west_lo + west_hi) / 2.0
+    return ((west_hi - west_lo) + COL_SIZE, abs(west_center),
+            (-abs(west_center), abs(west_center)))
+
+
+# Twin service cores. Length and centre are derived from the reference tower's
+# column grid, matching build_house.py; depth and wall thickness stay fixed.
+CORE_W, CORE_OFFSET, CORE_XS = core_layout(W)
+CORE_D, CORE_T = 9.0, 0.28
 CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
 PARAPET_H = 1.10
 CORE_OVERRUN = 4.6         # lift overtravel + machine room above the roof slab
@@ -208,9 +232,11 @@ def main():
         check(f"object present: {name}", name in objs)
     second_facade = objs.get("Facade_Spandrels.001")
     second_glass = objs.get("Windows_Glass.001")
+    second_struct = objs.get("Structure.001")
     check("second tower is generated as a separate mesh",
-          second_facade is not None and second_glass is not None)
-    if second_facade and second_glass:
+          second_facade is not None and second_glass is not None
+          and second_struct is not None)
+    if second_facade and second_glass and second_struct:
         second_fb = world_bounds(second_facade)
         first_fb = world_bounds(objs["Facade_Spandrels"])
         second_gz = z_clusters(second_glass)
@@ -223,6 +249,42 @@ def main():
         check("the two tower envelopes keep an 18 m clear gap",
               abs(second_fb[0][0] - first_fb[0][1] - 18.0) < 0.02,
               f"gap={second_fb[0][0] - first_fb[0][1]:.3f} m")
+        second_w = second_fb[0][1] - second_fb[0][0]
+        second_origin = first_fb[0][1] + 18.0 + second_w / 2
+        second_core_w, second_core_offset, second_core_xs = core_layout(second_w)
+        second_pieces = piece_bounds(second_struct)
+        second_core_pieces = [
+            (lo, hi) for lo, hi in second_pieces
+            if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
+            and (hi[0] - lo[0]) < second_w * 0.5
+            and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5]
+        measured_second_widths = []
+        for cx in second_core_xs:
+            here = [(lo, hi) for lo, hi in second_core_pieces
+                    if abs((lo[0] + hi[0]) / 2 - (second_origin + cx))
+                    < second_core_w / 2 + 0.5]
+            if here:
+                measured_second_widths.append(
+                    max(hi[0] for _, hi in here) - min(lo[0] for lo, _ in here))
+        check("taller tower core length follows its column grid",
+              len(measured_second_widths) == 2
+              and all(abs(width - second_core_w) < 0.05
+                      for width in measured_second_widths),
+              f"measured={', '.join(f'{width:.2f}' for width in measured_second_widths)} m, "
+              f"expected={second_core_w:.2f} m")
+        second_columns = [
+            ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
+            for lo, hi in second_pieces
+            if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
+            and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+            and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
+        second_defining_lines = [
+            second_origin + cx + sign * (second_core_w / 2 - COL_SIZE / 2)
+            for cx in second_core_xs for sign in (-1, 1)]
+        check("taller tower defining columns meet both core ends",
+              all(min(abs(x - line) for x, _ in second_columns) < 0.02
+                  for line in second_defining_lines),
+              f"{len(second_columns)} continuous columns checked")
     if failures:
         sys.exit(1)
 
@@ -996,11 +1058,31 @@ def main():
           f"outer edge at {CORE_OFFSET + CORE_W / 2:.0f} m, "
           f"pier zone starts at {W / 2 - PIER_LONG:.0f} m")
 
-    # Core walls on the pane grid, so interior partitions can follow the facade.
-    for edge in (CORE_OFFSET - CORE_W / 2, CORE_OFFSET + CORE_W / 2):
-        check(f"core edge at {edge:.0f} m lands on the pane grid",
-              abs(edge % PANE_W) < 1e-6,
-              f"{edge:.2f} m / {PANE_W:.2f} m = {edge / PANE_W:.3f} panes")
+    # Core walls are set by the outer faces of the two defining column lines,
+    # not by a fixed pane-grid coordinate. This is what keeps the core and the
+    # columns connected when the long facade grows from 18 to 20 room bays.
+    column_lines = col_grid(W)
+    column_faces = [line + sign * COL_SIZE / 2
+                    for line in column_lines for sign in (-1, 1)]
+    core_edges = [cx + sign * CORE_W / 2
+                  for cx in CORE_XS for sign in (-1, 1)]
+    check("core length is derived from the defining column faces",
+          all(min(abs(edge - face) for face in column_faces) < 0.02
+              for edge in core_edges),
+          f"edges={', '.join(f'{edge:+.2f}' for edge in sorted(core_edges))}")
+
+    full_height_columns = [
+        ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
+        for lo, hi in piece_bounds(struct)
+        if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
+        and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+        and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
+    defining_lines = [cx + sign * (CORE_W / 2 - COL_SIZE / 2)
+                      for cx in CORE_XS for sign in (-1, 1)]
+    check("defining columns touch both ends of each core",
+          all(min(abs(x - line) for x, _ in full_height_columns) < 0.02
+              for line in defining_lines),
+          f"{len(full_height_columns)} continuous columns checked")
 
     # Unit depth either side of a core: too deep a core leaves unusable slivers.
     unit_depth = (D - CORE_D) / 2

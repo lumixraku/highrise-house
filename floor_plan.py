@@ -12,10 +12,28 @@ WINDOWS_LONG = 18
 WINDOWS_SHORT = 7
 PIER_LONG = 2.0
 PIER_SHORT = 2.0
-CORE_W, CORE_D = 20.0, 9.0
-CORE_OFFSET = 18.0
+COL_SIZE = 1.60
+COL_SPACING = 9.0
+COL_MARGIN = 2.0 + COL_SIZE / 2.0
+CORE_COLUMN_BAYS = 2
 W = WINDOWS_LONG * PANE_W + 2 * PIER_LONG
 D = WINDOWS_SHORT * PANE_W + 2 * PIER_SHORT
+
+
+def col_grid(span):
+    usable = span - 2 * COL_MARGIN
+    bays = max(1, round(usable / COL_SPACING))
+    step = usable / bays
+    return [-usable / 2 + i * step for i in range(bays + 1)]
+
+
+_grid = col_grid(W)
+_mid = (len(_grid) - 1) // 2
+_west_center = _mid - CORE_COLUMN_BAYS
+_west_lo, _west_hi = _grid[_west_center - 1], _grid[_west_center + 1]
+CORE_W = (_west_hi - _west_lo) + COL_SIZE
+CORE_OFFSET = abs((_west_lo + _west_hi) / 2.0)
+CORE_D = 9.0
 OUT = Path(__file__).with_name("out") / "floor_plan.svg"
 SCALE = 18
 MARGIN_X = 155
