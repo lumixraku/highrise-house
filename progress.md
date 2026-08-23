@@ -1,5 +1,97 @@
 # Progress
 
+## 2026-08-23 — fix — close the upper two metres of the refuge opening
+
+Added a solid facade band from z=106.0–108.0 m above the six-metre refuge grille.
+The actual refuge void and its ceiling remain 8.0 m high, but the outside opening
+now ends at z=106.0 m and the wall is directly connected to the grille top.
+
+Verification: Python compilation, `git diff --check`, Blender rebuild, and a
+saved-Blend geometry probe passed. Remaining issue: the full verifier still stops
+at the pre-existing missing `Interior_Lining` object assertion.
+
+## 2026-08-23 — fix — revalidate the refuge grille and facade band configuration
+
+Synchronized the README with the current 49-storey model and regenerated the
+saved Blender and glTF outputs plus the five extra views. The residential
+ventilation + glass band remains 0.50–2.50 m above each floor, with the clear
+glass at 0.75–2.25 m. The 8.0 m refuge void remains z=100.0–108.0 m; its
+external grille/opening starts at z=100.0 m and ends at z=106.0 m, with a solid
+wall closing the upper 2.0 m.
+
+Verification: `py_compile`, `git diff --check`, Blender rebuild, extra-view
+renders, and a saved-Blend vertex probe passed. The full verifier still stops at
+the pre-existing missing `Interior_Lining` object assertion. The README's pane
+counts and the 20/20 glazed-floor split around the refuge are synchronized too.
+
+## 2026-08-23 — fix — bind the refuge grille to the 8 m void
+
+Made the refuge screen geometry derive from the actual 8.0 m refuge void: its
+lower edge remains at the refuge floor, its height is 8.0 minus a 2.0 m top
+blank band, and its upper edge is therefore exactly 6.0 m above the floor.
+Regenerated the `.blend`, `.glb`, preview, and extra view renders.
+
+Verification: Python compilation, `git diff --check`, and a saved-Blend probe
+passed. The refuge grille is z=100.0–106.0 m inside the z=100.0–108.0 m void;
+the next glass band resumes at z=108.75 m. The full verifier still has the
+pre-existing missing `Interior_Lining` object assertion.
+
+## 2026-08-23 — fix — expand the tower to 40 residential floors
+
+Changed the house to 49 physical storeys: 3 pilotis floors, 40 glazed
+residential floors, 4 blank floors, and a 2-storey refuge void. Regenerated
+`out/highrise_house.blend` and `out/highrise_house.glb`; the roof is now at
+196.0 m, the parapet at 197.32 m, and the core bulkheads at 201.94 m.
+
+Verification: Python compilation passed and the Blender build report confirmed
+exactly 40 glazed floors. Remaining issues: None.
+
+## 2026-08-23 — fix — shorten the refuge grille and restore glazing above
+
+Removed the 4.0 m solid separator above the refuge void, restoring the normal
+glazed facade above it. In the current 49-storey configuration the refuge
+occupies z=100.0–108.0 m; its outside grille begins at z=100.0 m and is 6.0 m
+high (z=100.0–106.0 m), leaving the upper 2.0 m open. Updated the geometry
+checks and documentation accordingly.
+
+Verification: Python compilation and `git diff --check` passed; Blender rebuilt
+`out/highrise_house.blend` and `out/highrise_house.glb`. A saved-Blend probe
+confirmed refuge grille vertices at z=100.0 and 106.0, and glass resumes above
+the refuge at z=108.75 m. The full verifier still stops at its pre-existing
+missing `Interior_Lining` object assertion.
+
+## 2026-08-23 — fix — add a solid separation floor above the refuge void
+
+Added one 4.0 m windowless facade floor directly above the double-height refuge
+garden. The refuge void remains open from z=80.0–88.0 m; its new solid separator
+band occupies z=88.0–92.0 m, with glazing and ventilation resuming above it.
+Updated the generated-floor accounting, geometry-verification constants and
+sampling heights, and the documentation. The model now has 30 glazed floors.
+
+Verification: `python3 -m py_compile build_house.py verify_house.py` and
+`git diff --check` passed; Blender regenerated `out/highrise_house.blend` and
+`out/highrise_house.glb`; a saved-Blend geometry probe confirmed z=88.0–92.0 m
+contains a full facade wall and no glass or vents. `verify_house.py` still stops
+at its pre-existing `Interior_Lining` object assertion, because the current
+generator does not create that legacy object. Remaining issues: None for the
+refuge-top separation band.
+
+## 2026-08-22 — fix — move the residential facade band down to 0.50 m above every floor
+
+Moved the per-floor ventilation + glass + ventilation assembly in `build_house.py`
+from the vertically centred position to z=0.50–2.50 m above each glazed-floor
+level. The 1.50 m glass now spans z=0.75–2.25 m; the 0.25 m louvre strips span
+z=0.50–0.75 m and z=2.25–2.50 m; the solid spandrels are 0.50 m below and
+1.50 m above. Updated `verify_house.py` and the facade-band documentation to
+assert and describe the new position.
+
+Verification: `python3 -m py_compile build_house.py verify_house.py` passed;
+Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`; a
+saved-Blend geometry probe passed for all 31 glass bands and 62 vent bands at the
+specified offsets. `verify_house.py` still stops at its pre-existing
+`Interior_Lining` object assertion, because the current generator does not create
+that object. Remaining issues: None for this facade-band change.
+
 ## 2026-08-22 — fix — restore the complete column count with corner relocation
 
 Restored all original non-corner grid columns after the erroneous perimeter-row

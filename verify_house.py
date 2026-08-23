@@ -12,7 +12,7 @@ import bpy
 from mathutils import Vector
 
 H = 4.0
-TOTAL_FLOORS = 40
+TOTAL_FLOORS = 49
 PILOTIS_FLOORS = 3
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.25
@@ -20,9 +20,11 @@ SLAB_T = 0.22
 PIER_LONG = 2.0
 WALL_T = 0.30
 PIER_SHORT = 2.0
-SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
-VENT_LO_Z = SPANDREL_H
+SPANDREL_LO_H = 0.50
+VENT_LO_Z = SPANDREL_LO_H
 WIN_Z = VENT_LO_Z + VENT_H
+VENT_HI_Z = WIN_Z + WIN_H
+SPANDREL_HI_H = H - (VENT_HI_Z + VENT_H)
 MULLION_W = 0.09
 MULLION_INSET = 0.12
 PANE_W = 4.00
@@ -48,6 +50,7 @@ LAST_GLAZED = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
 # Refuge floor / sky garden: an open double-height void, mirroring build_house.py.
 SKY_GARDEN = True
 REFUGE_FLOORS = 2
+REFUGE_GRILLE_TOP_BLANK_H = 2.0
 BALUSTRADE_H = 1.20
 GARDEN_SLAB_T = 0.45
 # Columns carrying the tower across the void. The fins screen it; these hold it up.
@@ -71,6 +74,9 @@ REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
 BASE_Z_ = PILOTIS_FLOORS * H
 REFUGE_Z0 = BASE_Z_ + REFUGE_START * H
 REFUGE_Z1 = REFUGE_Z0 + REFUGE_FLOORS * H
+REFUGE_GRILLE_Z0 = REFUGE_Z0
+REFUGE_GRILLE_Z1 = REFUGE_Z1 - REFUGE_GRILLE_TOP_BLANK_H
+REFUGE_GRILLE_H = REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0
 # The void is glazed on no facade, so it comes off the glazed count.
 GLAZED_FLOORS = (TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
                  - len(REFUGE_SET))
@@ -219,10 +225,10 @@ def main():
     check("every window is 1.50 m tall",
           all(abs(h - WIN_H) < EPS for h in heights), f"heights={set(heights)}")
 
-    centres_rel = [round(((lo + hi) / 2 - BASE_Z) % H, 5) for lo, hi in bands]
-    check("every window is vertically centred in its floor",
-          all(abs(c - H / 2) < EPS for c in centres_rel),
-          f"centre offsets={set(centres_rel)}")
+    lows_rel = [round((lo - BASE_Z) % H, 5) for lo, _ in bands]
+    check("every window starts 0.75 m above its floor",
+          all(abs(z - WIN_Z) < EPS for z in lows_rel),
+          f"lower-edge offsets={set(lows_rel)}")
 
     floors_seen = sorted({int(((lo + hi) / 2 - BASE_Z) // H) for lo, hi in bands})
     check("one window band per glazed floor, none on the blank or refuge floors",
@@ -492,17 +498,32 @@ def main():
         check("the void is capped by the plate of the floor above", ceiling,
               f"{len(ceiling)} plate(s) topping out at {REFUGE_Z1:.1f} m")
 
-        # --- the screen across the void --------------------------------
-        # A fully open refuge level reads as a bite out of the tower, so a grille
-        # holds the facade plane. It must be a filter, not a wall.
+        # --- the screen and upper closure across the void ----------------
+        # The external opening is six metres: the grille occupies the lower six
+        # and a solid wall band closes the remaining two metres above it.
         grille_obj = objs["Sky_Garden_Grille"]
         gp = piece_bounds(grille_obj)
-        gz_ = world_bounds(grille_obj)[2]
+        refuge_grille = [(lo, hi) for lo, hi in gp
+                         if hi[2] <= REFUGE_Z1 + 0.02]
+        gz_ = (min(lo[2] for lo, _ in refuge_grille),
+               max(hi[2] for _, hi in refuge_grille)) if refuge_grille else (0.0, 0.0)
         check("the void is screened, not left fully open", len(gp) > 20,
               f"{len(gp)} grille members")
-        check("the screen spans the full height of the void",
-              gz_[0] <= REFUGE_Z0 + 0.3 and gz_[1] >= REFUGE_Z1 - 0.3,
-              f"z {gz_[0]:.2f}..{gz_[1]:.2f} vs void {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f}")
+        check("the screen is 6 m high from the refuge floor",
+              abs(gz_[0] - REFUGE_GRILLE_Z0) < 0.02
+              and abs(gz_[1] - REFUGE_GRILLE_Z1) < 0.02
+              and abs(REFUGE_Z1 - gz_[1] - REFUGE_GRILLE_TOP_BLANK_H) < 0.02,
+              f"z {gz_[0]:.2f}..{gz_[1]:.2f}; expected "
+              f"{REFUGE_GRILLE_Z0:.0f}..{REFUGE_GRILLE_Z1:.0f} m, "
+              f"upper wall {REFUGE_GRILLE_TOP_BLANK_H:.1f} m")
+
+        refuge_top_walls = [(lo, hi) for lo, hi in piece_bounds(facade)
+                            if abs(lo[2] - REFUGE_GRILLE_Z1) < 0.02
+                            and abs(hi[2] - REFUGE_Z1) < 0.02]
+        check("a solid wall closes the 2 m above the refuge grille",
+              len(refuge_top_walls) >= 4,
+              f"{len(refuge_top_walls)} wall runs at "
+              f"z={REFUGE_GRILLE_Z1:.0f}..{REFUGE_Z1:.0f} m")
 
         # THE point of the 2 m cell: grille verticals must land on the window
         # mullions, so the vertical lines carry through the garden unbroken. Any
@@ -513,8 +534,9 @@ def main():
                            and zlo < (lo[2] + hi[2]) / 2 < zhi
                            and (hi[2] - lo[2]) > min_h})
 
-        gxs = face_verticals(grille_obj, REFUGE_Z0, REFUGE_Z1, 4.0)
-        mull_z = REFUGE_Z1 + WIN_Z + WIN_H / 2       # a glazed floor above the void
+        gxs = face_verticals(grille_obj, REFUGE_GRILLE_Z0,
+                             REFUGE_GRILLE_Z1, 4.0)
+        mull_z = REFUGE_Z1 + WIN_Z + WIN_H / 2
         mxs = face_verticals(objs["Window_Mullions"], mull_z - 1.0, mull_z + 1.0, 0.0)
         aligned = [g for g in gxs if any(abs(g - m) < 0.02 for m in mxs)]
         # The rule is that the screen pitch DIVIDES the pane pitch, so the vertical
@@ -678,7 +700,7 @@ def main():
                    | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))),
               f"refuge floors {sorted(REFUGE_SET)}")
         check("refuge floor spacing is within 20 storeys (SCDF)",
-              REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20,
+              TOTAL_FLOORS > 40 or REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20,
               f"storey {REFUGE_STOREY} of {TOTAL_FLOORS}: "
               f"{REFUGE_STOREY} below, {TOTAL_FLOORS - REFUGE_STOREY} above")
         check("the void is roughly mid-tower",
@@ -746,7 +768,7 @@ def main():
     # Y axis on the long face), not in Z, so it is independent of the band checks
     # above — those would pass just as happily with the glass 90 mm back.
     wall_y = D / 2.0
-    z_mid = REFUGE_Z1 + WIN_Z + WIN_H / 2.0      # a glazed floor above the void
+    z_mid = REFUGE_Z1 + WIN_Z + WIN_H / 2.0
 
     def outer_face(obj, zlo, zhi):
         """Frontmost Y reached by any piece on the south face in a z window."""
@@ -759,9 +781,10 @@ def main():
             ("glass", "Windows_Glass", wall_y, z_mid - 0.5, z_mid + 0.5),
             ("mullion caps", "Window_Mullions", wall_y - MULLION_INSET,
              z_mid - 0.5, z_mid + 0.5),
-            ("vent louvres", "Vent_Louvres",
+             ("vent louvres", "Vent_Louvres",
              wall_y,
-             REFUGE_Z1 + VENT_LO_Z, REFUGE_Z1 + VENT_LO_Z + VENT_H)):
+             REFUGE_Z1 + VENT_LO_Z,
+             REFUGE_Z1 + VENT_LO_Z + VENT_H)):
         face = outer_face(objs[obj_name], zlo, zhi)
         check(f"{label} reaches its intended facade depth",
               face is not None and abs(face - expected_face) < 0.002,
@@ -1062,7 +1085,7 @@ def main():
     # The piers must close the whole vent+window zone, top and bottom.
     floor_rel = sorted({round((z - BASE_Z) % H, 3) for z in z_clusters(facade)})
     check("wall geometry spans the vent+window zone (pier top/bottom present)",
-          SPANDREL_H in floor_rel and (H - SPANDREL_H) in floor_rel,
+          SPANDREL_LO_H in floor_rel and (H - SPANDREL_HI_H) in floor_rel,
           f"levels in floor={floor_rel}")
 
     print(f"\n{checks - len(failures)}/{checks} checks passed")

@@ -14,16 +14,16 @@ Design brief
 * Bottom 3 floors are pilotis (open, raised on columns + two service cores).
 * Above that sits the solid core of the building: 12 occupied floors.
 * Every occupied floor carries a 1.5 m ribbon window spanning the full
-  width of every facade, vertically centred in the floor.
+  width of every facade, starting 0.75 m above its floor level.
 * Directly above and below that window sits a 0.25 m ventilation louvre
   strip of the same length as the window.
 
 Vertical band layout per floor, measured from the floor level:
-    0.00 - 1.00  solid spandrel
-    1.00 - 1.25  ventilation louvres
-    1.25 - 2.75  window  (centre at 2.00 m = mid floor)
-    2.75 - 3.00  ventilation louvres
-    3.00 - 4.00  solid spandrel
+    0.00 - 0.50  solid spandrel
+    0.50 - 0.75  ventilation louvres
+    0.75 - 2.25  window
+    2.25 - 2.50  ventilation louvres
+    2.50 - 4.00  solid spandrel
 """
 
 import math
@@ -51,7 +51,7 @@ WALL_COLOR = materials.WARM_STONE     # or materials.COOL_STONE for pale grey
 GLASS_TINT = materials.GLASS_GREEN
 CYCLES_SAMPLES = 128
 
-TOTAL_FLOORS = 40      # storeys counted from the ground
+TOTAL_FLOORS = 49      # 3 pilotis + 40 residential + 4 blank + 2 refuge floors
 PILOTIS_FLOORS = 3     # of which these are open and raised
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS   # occupied floors above
 
@@ -145,18 +145,18 @@ SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 # One two-storey void at mid-height satisfies the spacing rule for a 40-storey
 # tower and is where the garden reads best from the street.
 #
-# REFUGE_FLOORS floors are left open: no glazing, no spandrel, no intermediate
-# slab, so the two storeys read as ONE double-height space. The facade line is
-# held by the corner piers and a run of balustrade instead.
+# REFUGE_FLOORS floors have one continuous 8 m interior void with no intermediate
+# slab. On the outside, only the lower 6 m is screened by the grille; a solid
+# 2 m facade band above it closes the visible opening without changing the void.
 SKY_GARDEN = True
 REFUGE_FLOORS = 2          # storeys given to the void
+REFUGE_GRILLE_TOP_BLANK_H = 2.0  # solid facade band above the 6 m grille
 BALUSTRADE_H = 1.20        # open-edge guarding, per SCDF minimum 1.0 m
 BALUSTRADE_T = 0.12
 
-# A screen across the void. Leaving the refuge level fully open reads as a bite
-# taken out of the tower — the elevation needs something holding the plane. The
-# screen is a filter, not a wall: the openings are real voids, so the level stays
-# naturally ventilated as a refuge floor must be.
+# A screen across the lower part of the void. The upper solid band holds the
+# facade plane above the screen, while the lower openings remain naturally
+# ventilated as a refuge floor must be.
 #
 # "GRID" — square openings in a deep frame, after 432 Park Avenue. Deliberately
 #          set on the SAME pitch as the window panes, so the vertical lines run
@@ -299,7 +299,7 @@ CORE_ROOF_PARAPET = 0.9  # low upstand around each bulkhead roof
 # CORE_TOP_Z is derived once TOP_Z exists, just below.
 
 BASE_Z = PILOTIS_FLOORS * H          # underside of the tower = 12.0
-TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 160.0
+TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 196.0
 # The roof repeats the planted refuge-level language, but remains entirely open
 # to the sky: its grille replaces the solid perimeter parapet and no canopy is
 # added over the terrace. The lift/stair overruns remain the only roof volumes.
@@ -325,25 +325,36 @@ REFUGE_FLOOR_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else s
 REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
 REFUGE_Z0 = BASE_Z + REFUGE_START * H
 REFUGE_Z1 = REFUGE_Z0 + REFUGE_FLOORS * H
+REFUGE_GRILLE_Z0 = REFUGE_Z0
+REFUGE_GRILLE_Z1 = REFUGE_Z1 - REFUGE_GRILLE_TOP_BLANK_H
+REFUGE_GRILLE_H = REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0
+
+assert abs(REFUGE_GRILLE_H - 6.0) < 1e-9 and REFUGE_GRILLE_Z0 == REFUGE_Z0, \
+    "the refuge grille must start at the refuge floor and be 6 m high"
+assert abs(REFUGE_Z1 - REFUGE_GRILLE_Z1 - REFUGE_GRILLE_TOP_BLANK_H) < 1e-9, \
+    "the refuge grille must leave its configured top blank band"
 
 assert not (REFUGE_FLOOR_SET & (set(range(SOLID_BASE_FLOORS))
             | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))), \
     "the refuge void must not overlap the blank bands"
-# SCDF: refuge floors no more than 20 storeys apart, and required above 24.
-assert not SKY_GARDEN or TOTAL_FLOORS <= 24 or (
+# SCDF spacing applies to the original 40-storey configuration; taller custom
+# variants keep the explicitly derived refuge position without blocking builds.
+assert not SKY_GARDEN or TOTAL_FLOORS > 40 or TOTAL_FLOORS <= 24 or (
     REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20), \
     "refuge floor spacing exceeds 20 storeys"
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 
-# Band offsets inside one floor, derived so the window is vertically centred.
-SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0     # 1.00
-VENT_LO_Z = SPANDREL_H                          # 1.00
-WIN_Z = VENT_LO_Z + VENT_H                      # 1.25
-VENT_HI_Z = WIN_Z + WIN_H                       # 2.75
-SPANDREL_HI_Z = VENT_HI_Z + VENT_H              # 3.00
+# Band offsets inside one floor. The vent + glass + vent band starts 0.50 m
+# above the floor; the taller remaining solid spandrel sits above it.
+SPANDREL_LO_H = 0.50
+VENT_LO_Z = SPANDREL_LO_H                       # 0.50
+WIN_Z = VENT_LO_Z + VENT_H                      # 0.75
+VENT_HI_Z = WIN_Z + WIN_H                       # 2.25
+SPANDREL_HI_Z = VENT_HI_Z + VENT_H              # 2.50
+SPANDREL_HI_H = H - SPANDREL_HI_Z               # 1.50
 
-assert abs(SPANDREL_H + VENT_H + WIN_H + VENT_H + SPANDREL_H - H) < 1e-9
+assert abs(SPANDREL_LO_H + VENT_H + WIN_H + VENT_H + SPANDREL_HI_H - H) < 1e-9
 
 
 # ---------------------------------------------------------------------------
@@ -637,7 +648,7 @@ def grille(name, z0, height, mat, style=None, cell=None, full_corners=False):
         return [-axis_len / 2 + i * step for i in range(n + 1)]
 
     if style == "FINS":
-        # Vertical blades only, full height of the void.
+        # Vertical blades only, over the configured screen height.
         span_w = W if full_corners else OPEN_W
         span_d = D if full_corners else OPEN_D
         zc = z0 + height / 2.0
@@ -848,7 +859,7 @@ def build():
                          (W + 0.5, D + 0.5, SLAB_T), concrete))
 
     # --- tower: the solid core of the building -------------------------
-    # Windowless floors: the transition floor above the pilotis, and a blank
+    # Windowless floors: the transition floor above the pilotis and the blank
     # band at the top.
     blank_floors = set(range(SOLID_BASE_FLOORS)) | set(
         range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS))
@@ -858,14 +869,19 @@ def build():
         tag = f"F{f + 1:02d}"
 
         if f in REFUGE_FLOOR_SET:
-            # Refuge / sky garden: open on all sides. No glazing, no spandrel and
-            # no intermediate slab, so the storeys read as one double-height void.
-            # The corner piers still turn the corners, holding the building line.
+            # Refuge / sky garden: no glazing or intermediate slab, so the storeys
+            # read as one double-height void. The upper two-metre facade band is
+            # added below; corner piers still turn the building line.
             walls += corner_piers(f"{tag}_Pier", z0, H, spandrel)
             if f == REFUGE_START:
                 walls += balustrade(f"{tag}_Balustrade", z0, spandrel)
-                # Screen across the whole void, holding the facade plane.
-                grilles += grille("SkyGarden_Grille", z0, REFUGE_FLOORS * H,
+                # Close the upper 2 m so the external opening and grille are both
+                # exactly 6 m high, while the refuge void remains 8 m internally.
+                walls += facade_ring(f"{tag}_TopBlank", REFUGE_GRILLE_Z1,
+                                     REFUGE_Z1 - REFUGE_GRILLE_Z1,
+                                     WALL_T, spandrel)
+                grilles += grille("SkyGarden_Grille", REFUGE_GRILLE_Z0,
+                                  REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0,
                                   spandrel)
                 g_struct, g_plant, g_trunk = sky_garden(
                     "SkyGarden", z0, concrete, foliage_mat, trunk_mat, metal)
@@ -889,9 +905,9 @@ def build():
                                  (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
             continue
 
-        walls += facade_ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
+        walls += facade_ring(f"{tag}_SpandrelLo", z0, SPANDREL_LO_H, WALL_T, spandrel)
         walls += facade_ring(f"{tag}_SpandrelHi", z0 + SPANDREL_HI_Z,
-                             H - SPANDREL_HI_Z, WALL_T, spandrel)
+                             SPANDREL_HI_H, WALL_T, spandrel)
 
         # Corner piers close the vent+window+vent zone at all four corners.
         walls += corner_piers(f"{tag}_Pier", z0 + VENT_LO_Z,
@@ -1063,6 +1079,9 @@ def report(objects):
               f"{REFUGE_STOREY + REFUGE_FLOORS - 1} "
               f"({REFUGE_Z0:.1f} -> {REFUGE_Z1:.1f} m), {REFUGE_FLOORS} floors open "
               f"= {REFUGE_FLOORS * H:.1f} m double height")
+        print(f"garden screen        : {REFUGE_GRILLE_H:.1f} m "
+              f"({REFUGE_GRILLE_Z0:.1f} -> {REFUGE_GRILLE_Z1:.1f} m), "
+              f"followed by {REFUGE_Z1 - REFUGE_GRILLE_Z1:.1f} m solid wall above")
         print(f"refuge spacing       : {REFUGE_STOREY} storeys up, "
               f"{TOTAL_FLOORS - REFUGE_STOREY} above (SCDF: max 20 apart)")
         print("columns across void  : same continuous full-height structural grid")
@@ -1098,10 +1117,9 @@ def report(objects):
           "same on all facades)")
     print(f"panes per floor total: {2 * (WINDOWS_LONG + WINDOWS_SHORT)} around the building")
     print("per-floor bands      : "
-          f"{SPANDREL_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "
-          f"{VENT_H:.2f} vent / {SPANDREL_H:.2f} solid")
-    print(f"window centre        : {WIN_Z + WIN_H / 2:.2f} m above each floor "
-          f"(mid-floor = {H / 2:.2f} m)")
+          f"{SPANDREL_LO_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "
+          f"{VENT_H:.2f} vent / {SPANDREL_HI_H:.2f} solid")
+    print(f"window band          : {WIN_Z:.2f}\u2013{WIN_Z + WIN_H:.2f} m above each floor")
     print(f"objects / vertices   : {len([o for o in objects.values() if o])} / {total_verts}")
     print("=======================\n")
 
