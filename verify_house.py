@@ -76,6 +76,7 @@ COL_SPACING = 9.0
 COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 CORE_COLUMN_BAYS = 2
 COMPANION_CORE_COLUMN_BAYS = 3
+TRUSS_FACADE_INSET = 0.55
 
 
 def col_grid(span):
@@ -233,7 +234,7 @@ def main():
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
                  "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
                  "Interior_Lining", "Ceiling_Lights", "Sky_Garden_Grille",
-                 "Structure"):
+                 "Structure", "Structural_Trusses"):
         check(f"object present: {name}", name in objs)
     second_facade = objs.get("Facade_Spandrels.001")
     second_glass = objs.get("Windows_Glass.001")
@@ -298,6 +299,86 @@ def main():
         check("taller tower cores leave one clear column bay between them",
               abs(second_core_gap - second_column_bay_clear) < 0.02,
               f"clear gap={second_core_gap:.3f} m, one bay={second_column_bay_clear:.3f} m")
+
+        # --- companion-tower lateral trusses ---------------------------
+        # The first tower stays unchanged; the higher companion carries the
+        # added refuge-level outrigger / belt system.
+        truss_obj = objs.get("Structural_Trusses")
+        check("taller tower has a separate structural-truss object",
+              truss_obj is not None)
+        if truss_obj:
+            truss_parts_world = piece_bounds(truss_obj)
+            truss_parts = [
+                ((lo[0] - second_origin, lo[1], lo[2]),
+                 (hi[0] - second_origin, hi[1], hi[2]))
+                for lo, hi in truss_parts_world]
+            companion_refuge_starts = [FIRST_GLAZED + (index + 1) * BLOCK_FLOORS
+                                       + index * REFUGE_FLOORS
+                                       for index in range(3 - 1)]
+            companion_refuge_z0s = [BASE_Z + start * H
+                                    for start in companion_refuge_starts]
+            companion_refuge_z1s = [z0 + REFUGE_FLOORS * H
+                                    for z0 in companion_refuge_z0s]
+            refuge_levels = len(companion_refuge_z0s)
+            expected_members = refuge_levels * 32
+            check("two refuge levels carry the complete truss layout",
+                  len(truss_parts) == expected_members,
+                  f"{len(truss_parts)} members, expected {expected_members}")
+
+            truss_zlo = min(lo[2] for lo, _ in truss_parts) if truss_parts else 0.0
+            truss_zhi = max(hi[2] for _, hi in truss_parts) if truss_parts else 0.0
+            check("truss members stay inside the refuge double-height zones",
+                  all(any(lo[2] >= z0 - 0.05 and hi[2] <= z1 + 0.05
+                          for z0, z1 in zip(companion_refuge_z0s,
+                                            companion_refuge_z1s))
+                      for lo, hi in truss_parts),
+                  f"z={truss_zlo:.2f}..{truss_zhi:.2f} m")
+            for index, (z0, z1) in enumerate(zip(companion_refuge_z0s,
+                                                  companion_refuge_z1s)):
+                level_members = [(lo, hi) for lo, hi in truss_parts
+                                 if hi[2] > z0 and lo[2] < z1]
+                check(f"refuge truss level {index + 1} has outriggers and belts",
+                      len(level_members) >= 30,
+                      f"{len(level_members)} members in z={z0:.1f}..{z1:.1f} m")
+
+            # Short-face members have a large Y and Z extent while staying on
+            # the two E/W facade planes: these are the requested Z braces.
+            x_face = second_w / 2.0 - TRUSS_FACADE_INSET
+            short_z = [p for p in truss_parts
+                       if abs(abs((p[0][0] + p[1][0]) / 2) - x_face) < 0.8
+                       and p[1][1] - p[0][1] > 5.0
+                       and p[1][2] - p[0][2] > 1.0]
+            check("short facades have alternating Z-shaped diagonal braces",
+                  len(short_z) == refuge_levels * 2 * 4,
+                  f"{len(short_z)} diagonal panels on the two depth-side faces")
+
+            # Four outriggers per core per level (north/south, lower/upper).
+            outriggers = [p for p in truss_parts
+                          if p[1][0] - p[0][0] < 1.0
+                          and 5.0 < p[1][1] - p[0][1] < 15.0
+                          and p[1][2] - p[0][2] < 1.0]
+            check("outriggers tie both cores into the long-face belt",
+                  len(outriggers) == refuge_levels * 2 * 2 * 2,
+                  f"{len(outriggers)} core-to-perimeter members")
+
+            # Core X members are long in X, shallow in Y, and span the refuge
+            # height. They are an added steel expression; the concrete tube stays
+            # continuous and closed underneath.
+            core_x_braces = [p for p in truss_parts
+                             if p[1][0] - p[0][0] > second_core_w - 2.0
+                             and p[1][1] - p[0][1] < 1.0
+                             and p[1][2] - p[0][2] > 1.0]
+            check("both core tubes get X-braced truss panels",
+                  len(core_x_braces) == refuge_levels * 2 * 2 * 2,
+                  f"{len(core_x_braces)} core-face diagonal members")
+
+            # Nothing in the added system should project beyond the facade line.
+            check("truss system stays inside the companion envelope",
+                  all(max(abs(lo[0]), abs(hi[0])) <= second_w / 2 - 0.15
+                      and max(abs(lo[1]), abs(hi[1])) <= D / 2 - 0.15
+                      for lo, hi in truss_parts),
+                  f"max extents x={max(max(abs(lo[0]), abs(hi[0])) for lo, hi in truss_parts):.2f}, "
+                  f"y={max(max(abs(lo[1]), abs(hi[1])) for lo, hi in truss_parts):.2f} m")
     if failures:
         sys.exit(1)
 

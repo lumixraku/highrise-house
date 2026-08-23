@@ -304,6 +304,17 @@ ROOF_GARDEN = True
 ROOF_GARDEN_Z0 = TOP_Z + 0.22
 # Match the refuge garden's full two-storey grille height, not the roof parapet.
 ROOF_GARDEN_GRILLE_H = 2 * H
+
+# --- refuge-level lateral trusses ------------------------------------------
+# The taller companion tower gets a visible outrigger / belt-truss system at
+# each double-height refuge level.  Members stay inside the facade line and
+# use the same dark metal as the mullions so the structure reads as a deliberate
+# architectural layer rather than a second concrete wall.
+TRUSS_MEMBER = 0.38
+TRUSS_FACADE_INSET = 0.55
+TRUSS_CORE_FACE_OFFSET = 0.20
+TRUSS_LEVEL_EDGE = 0.75
+TRUSS_EDGE_INSET = 0.65
 # Top of the bulkhead upstand, which is the highest point on the building.
 CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
 
@@ -516,6 +527,18 @@ def box(name, center, dims, mat, rot=None):
     obj.data.materials.append(mat)
     bpy.context.collection.objects.link(obj)
     return obj
+
+
+def beam_between(name, start, end, width, mat):
+    """Make a square structural member between two world-space points."""
+    start, end = Vector(start), Vector(end)
+    delta = end - start
+    length = delta.length
+    if length <= 1e-6:
+        return None
+    rotation = delta.to_track_quat("Z", "Y").to_euler()
+    return box(name, (start + end) / 2.0,
+               (width, width, length), mat, rot=rotation)
 
 
 def join(objects, name):
@@ -974,11 +997,100 @@ def vent_strip(name, z0, louver_mat, back_mat):
     return parts
 
 
+def structural_trusses(name, mat):
+    """Add refuge-level outrigger, belt and short-face Z trusses.
+
+    The two refuge voids are the natural transfer levels: horizontal outriggers
+    tie each core to the north/south perimeter, while the perimeter chords and
+    alternating diagonals form a belt truss.  The same levels get X-braces on
+    each core's long wall, keeping the solid core tube as the fire-separated
+    shaft while making its lateral role explicit in the model.
+    """
+    parts = []
+    if not REFUGE_Z0S:
+        return parts
+
+    y_face = D / 2.0 - TRUSS_FACADE_INSET
+    x_face = W / 2.0 - TRUSS_FACADE_INSET
+    long_y0, long_y1 = -OPEN_W / 2.0, OPEN_W / 2.0
+    short_y0 = -OPEN_D / 2.0 + TRUSS_EDGE_INSET
+    short_y1 = OPEN_D / 2.0 - TRUSS_EDGE_INSET
+    short_nodes = [
+        short_y0,
+        short_y0 + (short_y1 - short_y0) / 4.0,
+        short_y0 + (short_y1 - short_y0) / 2.0,
+        short_y0 + 3.0 * (short_y1 - short_y0) / 4.0,
+        short_y1,
+    ]
+
+    for level, (z0, z1) in enumerate(zip(REFUGE_Z0S, REFUGE_Z1S)):
+        zl = z0 + TRUSS_LEVEL_EDGE
+        zh = z1 - TRUSS_LEVEL_EDGE
+        tag = f"{name}_{level}"
+
+        # Long-face belt chords.  Their endpoints line up with the opening
+        # edges, so the corner piers remain clear and the belt reads as a frame.
+        for sy in (-1, 1):
+            y = sy * y_face
+            parts.append(beam_between(f"{tag}_LongLower_{sy}",
+                                      (long_y0, y, zl), (long_y1, y, zl),
+                                      TRUSS_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_LongUpper_{sy}",
+                                      (long_y0, y, zh), (long_y1, y, zh),
+                                      TRUSS_MEMBER, mat))
+
+        # Short-face belt chords with alternating diagonals.  Each bay is a
+        # Z-shaped panel; reversing the slope at the next node gives the
+        # intended zig-zag silhouette in the depth-side elevation.
+        for sx in (-1, 1):
+            x = sx * x_face
+            parts.append(beam_between(f"{tag}_ShortLower_{sx}",
+                                      (x, short_y0, zl), (x, short_y1, zl),
+                                      TRUSS_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_ShortUpper_{sx}",
+                                      (x, short_y0, zh), (x, short_y1, zh),
+                                      TRUSS_MEMBER, mat))
+            for bay, (ya, yb) in enumerate(zip(short_nodes, short_nodes[1:])):
+                za, zb = ((zl, zh) if bay % 2 == 0 else (zh, zl))
+                parts.append(beam_between(f"{tag}_ShortZ_{sx}_{bay}",
+                                          (x, ya, za), (x, yb, zb),
+                                          TRUSS_MEMBER, mat))
+
+        # Outriggers run from each core's north/south wall to the long-face
+        # belt.  Two chords at different heights make the refuge void a real
+        # truss depth rather than a single decorative line.
+        for core, cx in enumerate(CORE_XS):
+            for sy in (-1, 1):
+                y_core = sy * (CORE_D / 2.0 + TRUSS_CORE_FACE_OFFSET)
+                y_outer = sy * y_face
+                for rail, z in (("Lower", zl), ("Upper", zh)):
+                    parts.append(beam_between(
+                        f"{tag}_Outrigger_{core}_{sy}_{rail}",
+                        (cx, y_core, z), (cx, y_outer, z),
+                        TRUSS_MEMBER, mat))
+
+            # X-braces on both long faces of the core.  They sit just proud of
+            # the wall face but remain within the core's plan plus the member
+            # depth, so the shaft geometry itself is unchanged.
+            x0 = cx - CORE_W / 2.0 + TRUSS_EDGE_INSET
+            x1 = cx + CORE_W / 2.0 - TRUSS_EDGE_INSET
+            for sy in (-1, 1):
+                y = sy * (CORE_D / 2.0 + TRUSS_CORE_FACE_OFFSET)
+                parts.append(beam_between(f"{tag}_CoreX_{core}_{sy}_A",
+                                          (x0, y, zl), (x1, y, zh),
+                                          TRUSS_MEMBER, mat))
+                parts.append(beam_between(f"{tag}_CoreX_{core}_{sy}_B",
+                                          (x0, y, zh), (x1, y, zl),
+                                          TRUSS_MEMBER, mat))
+
+    return [part for part in parts if part is not None]
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
-def build(reset=True, mats=None):
+def build(reset=True, mats=None, add_trusses=False):
     if reset:
         reset_scene()
 
@@ -994,6 +1106,7 @@ def build(reset=True, mats=None):
     dark = mats["dark"]
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
+    trusses = []
     linings = []
     ceiling_lights_mesh = []
     plants, trunks, grilles = [], [], []
@@ -1158,6 +1271,9 @@ def build(reset=True, mats=None):
     # lump in the middle — the clear span between them remains the view.
     structure += cores("TowerCore", BASE_Z, TOP_Z - BASE_Z, concrete)
 
+    if add_trusses:
+        trusses += structural_trusses("RefugeTruss", metal)
+
     merged = {
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),
         "Windows_Glass": join(glazing, "Windows_Glass"),
@@ -1171,6 +1287,7 @@ def build(reset=True, mats=None):
         "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
         "Floor_Plates": join(slabs, "Floor_Plates"),
         "Structure": join(structure, "Structure"),
+        "Structural_Trusses": join(trusses, "Structural_Trusses"),
     }
     return merged
 
@@ -1367,7 +1484,7 @@ def main():
     report(first_objects, "existing tower (2 groups x 17 floors, 18 rooms)")
 
     configure_tower(3, 20, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
-    second_objects = build(reset=False, mats=shared_mats)
+    second_objects = build(reset=False, mats=shared_mats, add_trusses=True)
     second_w, second_d, second_top = W, D, CORE_TOP_Z
     second_center_x = first_w / 2.0 + TOWER_GAP + second_w / 2.0
     translate_objects(second_objects, second_center_x)

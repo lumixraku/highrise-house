@@ -1,5 +1,23 @@
 # Progress
 
+## 2026-08-23 — fix — add companion-tower refuge-level Z trusses
+
+Added a dedicated `Structural_Trusses` mesh to the taller companion tower only.
+At both of its double-height refuge / sky-garden levels, the system now has
+long-face belt chords, core-to-perimeter outriggers, alternating Z-shaped
+diagonals on both short (depth-side) facades, and X-braced panels on both faces
+of both service cores. The concrete cores remain continuous closed tubes; the
+metal members are an added lateral-load path and a visible core-to-perimeter
+connection. Updated the verifier and README with the truss geometry and scope.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; 64 truss members were generated across the two companion refuge levels.
+- `verify_house.py` passed all new truss assertions: `161/165` overall. The four remaining failures are pre-existing boundary assumptions (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling).
+
+Remaining issues: the four legacy verifier assumptions above remain; none is caused by the truss system.
+
 ## 2026-08-23 — fix — extend the companion cores to one-bay separation
 
 Adjusted only the taller companion tower's service cores from two long-face

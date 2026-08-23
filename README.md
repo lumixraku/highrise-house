@@ -55,7 +55,7 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-152 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+165 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 4.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the one-pane long-facade pier and the drift it
 costs, solid corners,
@@ -65,14 +65,15 @@ worst-case egress travel, stair remoteness, clearance from the pier zone, edges
 on the pane grid, usable depth either side), and the refuge void
 (open on all sides, undivided double height, guarded edges, planting inside it,
 core continuity, SCDF spacing, the screen's alignment with the window mullions and
-its open area, and the void's load path — column count, spacing on the pane
+its open area, the companion tower's refuge-level outrigger/belt trusses and
+short-face Z braces, and the void's load path — column count, spacing on the pane
 module, and stress against the C40 limit). Also the saved viewport, since a file
 that opens inside the model is a defect you notice every single time:
 
 The verifier targets the existing tower at the origin and also checks the companion
-mesh for its 84 m width, 51 glazed floors and the 18 m clear gap. The current run is
-`148/152`: the four remaining failures are legacy corner/roof-boundary assumptions
-that do not affect the two-tower configuration.
+mesh for its 84 m width, 51 glazed floors, 18 m clear gap and the new truss system.
+The current run is `161/165`: the four remaining failures are legacy corner/roof-
+boundary assumptions that do not affect the two-tower configuration.
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -583,13 +584,15 @@ To try the pale grey wall instead of beige, set
 
 ## Geometry organisation
 
-Each tower is generated from boxes and joined into twelve objects (the saved scene
-contains the two sets with Blender's `.001` suffixes), so the scene stays light
+Each tower is generated from boxes and joined into the base facade/structure
+objects (the saved scene contains the two sets with Blender's `.001` suffixes),
+with one additional truss mesh on the taller companion, so the scene stays light
 for a 178 m-wide site:
 
 `Facade_Spandrels` · `Windows_Glass` · `Interior_Lining` · `Ceiling_Lights` · `Window_Mullions` ·
 `Vent_Louvres` · `Vent_Shadowboxes` · `Sky_Garden_Grille` ·
 `Sky_Garden_Planting` · `Sky_Garden_Trunks` · `Floor_Plates` · `Structure` ·
+`Structural_Trusses` ·
 `Ground`
 
 ## Changing the design
@@ -605,3 +608,10 @@ Note that
 to match, or its assertions will test the old dimensions. The five vertical bands
 place the vent + glass + vent zone from 0.50 m to 2.50 m above each floor; an
 `assert` fails the build if the bands stop summing to `H`.
+
+The taller companion adds a dedicated `Structural_Trusses` mesh. At each of its
+two double-height refuge levels, horizontal outrigger rails run from both cores
+to the long-face belt, the E/W short faces carry alternating Z-shaped diagonals,
+and each core's long wall gets an X-braced panel. The concrete cores remain
+continuous closed tubes; the metal trusses are an added lateral-load path and a
+visible expression of the core-to-perimeter connection.
