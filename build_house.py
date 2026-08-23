@@ -53,12 +53,16 @@ GLASS_TINT = materials.GLASS_GREEN
 CYCLES_SAMPLES = 128
 
 PILOTIS_FLOORS = 3     # of which these are open and raised
-BLOCK_FLOORS = 17      # glazed residential floors in each of the two blocks
+BLOCK_GROUPS = 2       # residential groups in the first/current tower
+BLOCK_FLOORS = 17      # glazed residential floors in each group
 REFUGE_FLOORS = 2      # fixed double-height refuge / sky-garden floors
 FIXED_SOLID_BAND_FLOORS = 4  # 2 blank floors at the base + 2 at the top
-TOTAL_FLOORS = (PILOTIS_FLOORS + 2 * BLOCK_FLOORS
-                + REFUGE_FLOORS + FIXED_SOLID_BAND_FLOORS)
+TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
+                + (BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS   # occupied floors above
+
+TOWER_GAP = 18.0       # clear horizontal gap between the two building envelopes
 
 WALL_T = 0.30     # facade wall thickness
 SLAB_T = 0.22     # floor plate thickness
@@ -147,8 +151,9 @@ SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 # Singapore's SCDF requires a refuge floor in buildings over 24 storeys, spaced
 # no more than 20 storeys apart, and the local convention is to give it over to a
 # planted sky garden open on all sides — it doubles as the lift transfer level.
-# One two-storey void at mid-height splits the 34 residential floors into two
-# equal 17-floor blocks and satisfies the refuge-floor spacing rule.
+# Each pair of groups is separated by one two-storey void. With three groups,
+# this gives two refuge / sky-garden levels and keeps every residential group at
+# the configured 17 floors.
 #
 # REFUGE_FLOORS floors have one continuous 8 m interior void with no intermediate
 # slab. On the outside, only the lower 6 m is screened by the grille; a solid
@@ -307,16 +312,28 @@ assert CORE_TOP_Z > TOP_Z + 0.22 + PARAPET_H, \
 # being pushed off-centre by them.
 _glazed_first = SOLID_BASE_FLOORS
 _glazed_last = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
-REFUGE_START = (_glazed_first + _glazed_last + 1 - REFUGE_FLOORS) // 2
-REFUGE_END = REFUGE_START + REFUGE_FLOORS - 1        # inclusive, tower-relative
-REFUGE_FLOOR_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else set()
-# Storey number as an occupant would count it, from the ground.
-REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
-REFUGE_Z0 = BASE_Z + REFUGE_START * H
-REFUGE_Z1 = REFUGE_Z0 + REFUGE_FLOORS * H
-REFUGE_GRILLE_Z0 = REFUGE_Z0
-REFUGE_GRILLE_Z1 = REFUGE_Z1 - REFUGE_GRILLE_TOP_BLANK_H
+REFUGE_STARTS = [
+    _glazed_first + (index + 1) * BLOCK_FLOORS + index * REFUGE_FLOORS
+    for index in range(BLOCK_GROUPS - 1)
+]
+REFUGE_ENDS = [start + REFUGE_FLOORS - 1 for start in REFUGE_STARTS]
+REFUGE_FLOOR_SET = (set().union(*[
+    set(range(start, end + 1))
+    for start, end in zip(REFUGE_STARTS, REFUGE_ENDS)
+]) if SKY_GARDEN else set())
+# Keep the first refuge aliases for the extra-view and verifier scripts.
+REFUGE_START, REFUGE_END = REFUGE_STARTS[0], REFUGE_ENDS[0]
+REFUGE_STOREYS = [PILOTIS_FLOORS + start + 1 for start in REFUGE_STARTS]
+REFUGE_STOREY = REFUGE_STOREYS[0]
+REFUGE_Z0S = [BASE_Z + start * H for start in REFUGE_STARTS]
+REFUGE_Z1S = [z0 + REFUGE_FLOORS * H for z0 in REFUGE_Z0S]
+REFUGE_Z0, REFUGE_Z1 = REFUGE_Z0S[0], REFUGE_Z1S[0]
+REFUGE_GRILLE_Z0S = REFUGE_Z0S
+REFUGE_GRILLE_Z1S = [z1 - REFUGE_GRILLE_TOP_BLANK_H for z1 in REFUGE_Z1S]
+REFUGE_GRILLE_Z0, REFUGE_GRILLE_Z1 = REFUGE_GRILLE_Z0S[0], REFUGE_GRILLE_Z1S[0]
 REFUGE_GRILLE_H = REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0
+REFUGE_START_BY_FLOOR = {start: index for index, start in enumerate(REFUGE_STARTS)}
+REFUGE_END_BY_FLOOR = {end: index for index, end in enumerate(REFUGE_ENDS)}
 
 assert abs(REFUGE_GRILLE_H - 6.0) < 1e-9 and REFUGE_GRILLE_Z0 == REFUGE_Z0, \
     "the refuge grille must start at the refuge floor and be 6 m high"
@@ -328,16 +345,89 @@ assert not (REFUGE_FLOOR_SET & (set(range(SOLID_BASE_FLOORS))
     "the refuge void must not overlap the blank bands"
 assert SOLID_BASE_FLOORS + SOLID_TOP_FLOORS == FIXED_SOLID_BAND_FLOORS, \
     "the fixed solid-band floor count must match its two derived bands"
-assert (REFUGE_START - _glazed_first == BLOCK_FLOORS
-        and _glazed_last - REFUGE_END == BLOCK_FLOORS), \
-    "the refuge void must split the glazed floors into two configured blocks"
-# SCDF spacing applies to this 43-storey configuration; taller custom variants
-# keep the explicitly derived refuge position without blocking builds.
-assert not SKY_GARDEN or TOTAL_FLOORS > 40 or TOTAL_FLOORS <= 24 or (
-    REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20), \
-    "refuge floor spacing exceeds 20 storeys"
+assert len(REFUGE_STARTS) == BLOCK_GROUPS - 1
+assert all((start - (REFUGE_ENDS[index - 1] + 1 if index else _glazed_first)
+            == BLOCK_FLOORS)
+           for index, start in enumerate(REFUGE_STARTS)), \
+    "each refuge must follow its configured residential group"
+assert _glazed_last - REFUGE_ENDS[-1] == BLOCK_FLOORS, \
+    "the final residential group must retain its configured floor count"
+assert all((storey - (PILOTIS_FLOORS + _glazed_first + 1)) <= 21 + index * 20
+           for index, storey in enumerate(REFUGE_STOREYS)), \
+    "refuge floor spacing exceeds the configured interval"
+
+
+def configure_tower(block_groups, windows_long):
+    """Refresh the derived geometry for one tower variant."""
+    global BLOCK_GROUPS, WINDOWS_LONG
+    global TOTAL_FLOORS, TOWER_FLOORS, OPEN_W, OPEN_D, W, D
+    global PANE_GLASS_LONG, PANE_GLASS_SHORT
+    global BASE_Z, TOP_Z, ROOF_GARDEN_Z0, CORE_TOP_Z
+    global _glazed_first, _glazed_last
+    global REFUGE_STARTS, REFUGE_ENDS, REFUGE_FLOOR_SET
+    global REFUGE_START, REFUGE_END, REFUGE_STOREYS, REFUGE_STOREY
+    global REFUGE_Z0S, REFUGE_Z1S, REFUGE_Z0, REFUGE_Z1
+    global REFUGE_GRILLE_Z0S, REFUGE_GRILLE_Z1S
+    global REFUGE_GRILLE_Z0, REFUGE_GRILLE_Z1, REFUGE_GRILLE_H
+    global REFUGE_START_BY_FLOOR, REFUGE_END_BY_FLOOR
+
+    BLOCK_GROUPS = int(block_groups)
+    WINDOWS_LONG = int(windows_long)
+    if BLOCK_GROUPS < 2 or WINDOWS_LONG < 1:
+        raise ValueError("each tower needs at least two groups and one long-face room")
+
+    TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
+                    + (BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                    + FIXED_SOLID_BAND_FLOORS)
+    TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
+    OPEN_W = opening_for(WINDOWS_LONG)
+    OPEN_D = opening_for(WINDOWS_SHORT)
+    W = OPEN_W + 2 * PIER_LONG
+    D = OPEN_D + 2 * PIER_SHORT
+    PANE_GLASS_LONG = PANE_GLASS_W
+    PANE_GLASS_SHORT = PANE_GLASS_W
+
+    if CORE_OFFSET + CORE_W / 2 > W / 2 - PIER_LONG:
+        raise ValueError("tower is too narrow for the configured service cores")
+
+    BASE_Z = PILOTIS_FLOORS * H
+    TOP_Z = BASE_Z + TOWER_FLOORS * H
+    ROOF_GARDEN_Z0 = TOP_Z + 0.22
+    CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
+
+    _glazed_first = SOLID_BASE_FLOORS
+    _glazed_last = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
+    REFUGE_STARTS = [
+        _glazed_first + (index + 1) * BLOCK_FLOORS + index * REFUGE_FLOORS
+        for index in range(BLOCK_GROUPS - 1)
+    ]
+    REFUGE_ENDS = [start + REFUGE_FLOORS - 1 for start in REFUGE_STARTS]
+    REFUGE_FLOOR_SET = (set().union(*[
+        set(range(start, end + 1))
+        for start, end in zip(REFUGE_STARTS, REFUGE_ENDS)
+    ]) if SKY_GARDEN else set())
+    REFUGE_START, REFUGE_END = REFUGE_STARTS[0], REFUGE_ENDS[0]
+    REFUGE_STOREYS = [PILOTIS_FLOORS + start + 1 for start in REFUGE_STARTS]
+    REFUGE_STOREY = REFUGE_STOREYS[0]
+    REFUGE_Z0S = [BASE_Z + start * H for start in REFUGE_STARTS]
+    REFUGE_Z1S = [z0 + REFUGE_FLOORS * H for z0 in REFUGE_Z0S]
+    REFUGE_Z0, REFUGE_Z1 = REFUGE_Z0S[0], REFUGE_Z1S[0]
+    REFUGE_GRILLE_Z0S = REFUGE_Z0S
+    REFUGE_GRILLE_Z1S = [z1 - REFUGE_GRILLE_TOP_BLANK_H for z1 in REFUGE_Z1S]
+    REFUGE_GRILLE_Z0, REFUGE_GRILLE_Z1 = REFUGE_GRILLE_Z0S[0], REFUGE_GRILLE_Z1S[0]
+    REFUGE_GRILLE_H = REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0
+    REFUGE_START_BY_FLOOR = {start: index for index, start in enumerate(REFUGE_STARTS)}
+    REFUGE_END_BY_FLOOR = {end: index for index, end in enumerate(REFUGE_ENDS)}
+
+    assert abs(REFUGE_GRILLE_H - 6.0) < 1e-9
+    assert _glazed_last - REFUGE_ENDS[-1] == BLOCK_FLOORS
+
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+SITE_WIDTH = 2 * W + TOWER_GAP
+SITE_CENTER_X = (W + TOWER_GAP) / 2.0
+SITE_DEPTH = D
+SITE_TOP_Z = CORE_TOP_Z
 
 # Band offsets inside one floor. The vent + glass + vent band starts 0.50 m
 # above the floor; the taller remaining solid spandrel sits above it.
@@ -848,11 +938,13 @@ def vent_strip(name, z0, louver_mat, back_mat):
 # Build
 # ---------------------------------------------------------------------------
 
-def build():
-    reset_scene()
+def build(reset=True, mats=None):
+    if reset:
+        reset_scene()
 
-    mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
-                               glass_tint=GLASS_TINT)
+    if mats is None:
+        mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
+                                    glass_tint=GLASS_TINT)
     concrete = mats["concrete"]
     spandrel = mats["spandrel"]
     glass = mats["glass"]
@@ -921,22 +1013,25 @@ def build():
             # read as one double-height void. The upper two-metre facade band is
             # added below; corner piers still turn the building line.
             walls += corner_piers(f"{tag}_Pier", z0, H, spandrel)
-            if f == REFUGE_START:
+            if f in REFUGE_START_BY_FLOOR:
+                refuge_index = REFUGE_START_BY_FLOOR[f]
                 walls += balustrade(f"{tag}_Balustrade", z0, spandrel)
                 # Close the upper 2 m so the external opening and grille are both
                 # exactly 6 m high, while the refuge void remains 8 m internally.
-                walls += facade_ring(f"{tag}_TopBlank", REFUGE_GRILLE_Z1,
-                                     REFUGE_Z1 - REFUGE_GRILLE_Z1,
+                walls += facade_ring(f"{tag}_TopBlank", REFUGE_GRILLE_Z1S[refuge_index],
+                                     REFUGE_Z1S[refuge_index] - REFUGE_GRILLE_Z1S[refuge_index],
                                      WALL_T, spandrel)
-                grilles += grille("SkyGarden_Grille", REFUGE_GRILLE_Z0,
-                                  REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0,
+                grilles += grille(f"SkyGarden_Grille_{refuge_index}",
+                                  REFUGE_GRILLE_Z0S[refuge_index],
+                                  REFUGE_GRILLE_Z1S[refuge_index] - REFUGE_GRILLE_Z0S[refuge_index],
                                   spandrel)
                 g_struct, g_plant, g_trunk = sky_garden(
-                    "SkyGarden", z0, concrete, foliage_mat, trunk_mat, metal)
+                    f"SkyGarden_{refuge_index}", z0, concrete,
+                    foliage_mat, trunk_mat, metal)
                 structure += g_struct
                 plants += g_plant
                 trunks += g_trunk
-            if f == REFUGE_END:
+            if f in REFUGE_END_BY_FLOOR:
                 # Slabs are added at the TOP of each floor, so skipping the refuge
                 # storeys would leave the void with no ceiling and the floor above
                 # with nothing under it.
@@ -948,7 +1043,7 @@ def build():
         if f in blank_floors:
             # Blank floor: solid wall the whole storey height, no openings.
             walls += facade_ring(f"{tag}_Blank", z0, H, WALL_T, spandrel)
-            if not (SKY_GARDEN and f == REFUGE_START - 1):
+            if not (SKY_GARDEN and f + 1 in REFUGE_START_BY_FLOOR):
                 slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
                                  (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
             continue
@@ -975,7 +1070,7 @@ def build():
         # Floor plate for the level above, visible behind the glazing. Skipped
         # directly under the refuge level, where the thicker garden slab (which
         # shares the same top face) does the job instead.
-        if not (SKY_GARDEN and f == REFUGE_START - 1):
+        if not (SKY_GARDEN and f + 1 in REFUGE_START_BY_FLOOR):
             slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
                              (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
 
@@ -1094,21 +1189,20 @@ def setup_render():
     cam_data.lens = 40.0
     cam = bpy.data.objects.new("Camera", cam_data)
 
-    # Frame the whole building: pull back proportionally to its size so the
-    # camera keeps working when the footprint or floor count changes.
-    reach = max(W, D, TOP_Z) * 1.35
-    target = Vector((0.0, 0.0, TOP_Z * 0.52))
-    eye = Vector((reach * 0.78, -reach * 1.05, TOP_Z * 0.72))
+    # Frame the whole two-tower site: pull back proportionally to its envelope.
+    reach = max(SITE_WIDTH, SITE_DEPTH, SITE_TOP_Z) * 1.35
+    target = Vector((SITE_CENTER_X, 0.0, SITE_TOP_Z * 0.52))
+    eye = Vector((SITE_CENTER_X + reach * 0.78, -reach * 1.05, SITE_TOP_Z * 0.72))
     cam.location = eye
     cam.rotation_euler = (target - eye).normalized().to_track_quat("-Z", "Y").to_euler()
     bpy.context.collection.objects.link(cam)
     scene.camera = cam
 
 
-def report(objects):
+def report(objects, label="tower"):
     total_verts = sum(len(o.data.vertices) for o in objects.values() if o)
-    print("\n=== high-rise house ===")
-    print(f"footprint            : {W:.1f} x {D:.1f} m")
+    print(f"\n=== high-rise house: {label} ===")
+    print(f"tower footprint      : {W:.1f} x {D:.1f} m")
     print(f"floor height         : {H:.1f} m")
     print(f"storeys              : {TOTAL_FLOORS} total")
     print(f"open pilotis floors  : {PILOTIS_FLOORS} (0.0 -> {BASE_Z:.1f} m)")
@@ -1127,15 +1221,10 @@ def report(objects):
     print(f"glazed floors        : "
           f"{TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS - len(REFUGE_FLOOR_SET)}")
     if SKY_GARDEN:
-        print(f"refuge / sky garden  : storeys {REFUGE_STOREY}-"
-              f"{REFUGE_STOREY + REFUGE_FLOORS - 1} "
-              f"({REFUGE_Z0:.1f} -> {REFUGE_Z1:.1f} m), {REFUGE_FLOORS} floors open "
-              f"= {REFUGE_FLOORS * H:.1f} m double height")
-        print(f"garden screen        : {REFUGE_GRILLE_H:.1f} m "
-              f"({REFUGE_GRILLE_Z0:.1f} -> {REFUGE_GRILLE_Z1:.1f} m), "
-              f"followed by {REFUGE_Z1 - REFUGE_GRILLE_Z1:.1f} m solid wall above")
-        print(f"refuge spacing       : {REFUGE_STOREY} storeys up, "
-              f"{TOTAL_FLOORS - REFUGE_STOREY} above (SCDF: max 20 apart)")
+        print(f"refuge / sky gardens : {len(REFUGE_STARTS)} levels at storeys "
+              f"{', '.join(map(str, REFUGE_STOREYS))}; each {REFUGE_FLOORS * H:.1f} m double height")
+        print(f"garden screen        : {REFUGE_GRILLE_H:.1f} m opening + "
+              f"{REFUGE_GRILLE_TOP_BLANK_H:.1f} m solid band above")
         print("columns across void  : same continuous full-height structural grid")
         if GRILLE_STYLE == "GRID":
             n_rows = max(1, round(REFUGE_FLOORS * H / GRILLE_CELL))
@@ -1152,6 +1241,7 @@ def report(objects):
           f"{SOLID_BASE_FLOORS * H:.1f} m below, {SOLID_TOP_FLOORS * H:.1f} m above")
     print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
     print(f"room windows/floor    : {WINDOWS_LONG} long face / {WINDOWS_SHORT} short face")
+    print(f"residential groups    : {BLOCK_GROUPS} x {BLOCK_FLOORS} glazed floors per tower")
     print(f"pane pitch           : {PANE_PITCH:.2f} m (= pane width; mullions are "
           f"{MULLION_W:.2f} m caps over the joints)")
     print(f"clear internal depth : {D - 2 * WALL_T:.2f} m (inside face to inside face)")
@@ -1188,7 +1278,7 @@ def frame_viewport():
     if the footprint or floor count changes. The diagonal is the dimension that
     has to fit, not the height alone.
     """
-    diag = math.sqrt(W ** 2 + D ** 2 + CORE_TOP_Z ** 2)
+    diag = math.sqrt(SITE_WIDTH ** 2 + SITE_DEPTH ** 2 + SITE_TOP_Z ** 2)
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type != "VIEW_3D":
@@ -1199,7 +1289,7 @@ def frame_viewport():
                 r3d = space.region_3d
                 # Orbit about mid-height, so the tower sits in frame rather than
                 # running off the top with the ground at centre.
-                r3d.view_location = Vector((0.0, 0.0, CORE_TOP_Z * 0.5))
+                r3d.view_location = Vector((SITE_CENTER_X, 0.0, SITE_TOP_Z * 0.5))
                 r3d.view_distance = diag * 1.6
                 # A 3/4 view from the south-east: the lit side, matching where the
                 # render cameras sit.
@@ -1214,10 +1304,43 @@ def frame_viewport():
                 space.lens = 35.0
 
 
+def translate_objects(objects, x_offset):
+    """Move one generated tower as a group without changing its local geometry."""
+    for obj in objects.values():
+        if obj is not None:
+            obj.location.x += x_offset
+
+
 def main():
-    objects = build()
+    global SITE_WIDTH, SITE_CENTER_X, SITE_DEPTH, SITE_TOP_Z
+
+    reset_scene()
+    shared_mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
+                                      glass_tint=GLASS_TINT)
+    configure_tower(2, 18)
+    first_objects = build(reset=False, mats=shared_mats)
+    first_w, first_d, first_top = W, D, CORE_TOP_Z
+    report(first_objects, "existing tower (2 groups x 17 floors, 18 rooms)")
+
+    configure_tower(3, 20)
+    second_objects = build(reset=False, mats=shared_mats)
+    second_w, second_d, second_top = W, D, CORE_TOP_Z
+    second_center_x = first_w / 2.0 + TOWER_GAP + second_w / 2.0
+    translate_objects(second_objects, second_center_x)
+
+    SITE_WIDTH = first_w + TOWER_GAP + second_w
+    SITE_CENTER_X = (TOWER_GAP + second_w) / 2.0
+    SITE_DEPTH = max(first_d, second_d)
+    SITE_TOP_Z = max(first_top, second_top)
+
+    report(second_objects, "new adjacent tower (3 groups x 17 floors, 20 rooms)")
+    print("=== two-tower site ===")
+    print(f"clear gap            : {TOWER_GAP:.1f} m")
+    print(f"overall envelope     : {SITE_WIDTH:.1f} x {SITE_DEPTH:.1f} m")
+    print(f"site centre          : x = {SITE_CENTER_X:.1f} m")
+    print(f"highest core top     : {SITE_TOP_Z:.2f} m")
+    print("=====================\n")
     setup_render()
-    report(objects)
     frame_viewport()
 
     os.makedirs(OUT_DIR, exist_ok=True)

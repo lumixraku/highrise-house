@@ -13,11 +13,13 @@ from mathutils import Vector
 
 H = 4.0
 PILOTIS_FLOORS = 3
+BLOCK_GROUPS = 2
 BLOCK_FLOORS = 17
 REFUGE_FLOORS = 2
 FIXED_SOLID_BAND_FLOORS = 4
-TOTAL_FLOORS = (PILOTIS_FLOORS + 2 * BLOCK_FLOORS
-                + REFUGE_FLOORS + FIXED_SOLID_BAND_FLOORS)
+TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
+                + (BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.25
 SLAB_T = 0.22
@@ -53,8 +55,8 @@ CEILING_LIGHT_H = 0.06
 CEILING_LIGHT_TOP_GAP = 0.05
 CEILING_LIGHT_Z = WIN_Z + WIN_H - CEILING_LIGHT_TOP_GAP - CEILING_LIGHT_H / 2.0
 CEILING_LIGHT_ON_RATIO = 0.36
-CEILING_LIGHTS_PER_FLOOR = round(2 * (WINDOWS_LONG + WINDOWS_SHORT)
-                                 * CEILING_LIGHT_ON_RATIO)
+CEILING_LIGHTS_PER_FLOOR = (2 * round(WINDOWS_LONG * CEILING_LIGHT_ON_RATIO)
+                            + 2 * round(WINDOWS_SHORT * CEILING_LIGHT_ON_RATIO))
 SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
 FIRST_GLAZED = SOLID_BASE_FLOORS
@@ -78,9 +80,13 @@ CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
 PARAPET_H = 1.10
 CORE_OVERRUN = 4.6         # lift overtravel + machine room above the roof slab
 CORE_ROOF_PARAPET = 0.9
-REFUGE_START = (FIRST_GLAZED + LAST_GLAZED + 1 - REFUGE_FLOORS) // 2
-REFUGE_END = REFUGE_START + REFUGE_FLOORS - 1
-REFUGE_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else set()
+REFUGE_STARTS = [FIRST_GLAZED + (index + 1) * BLOCK_FLOORS
+                 + index * REFUGE_FLOORS for index in range(BLOCK_GROUPS - 1)]
+REFUGE_ENDS = [start + REFUGE_FLOORS - 1 for start in REFUGE_STARTS]
+REFUGE_START, REFUGE_END = REFUGE_STARTS[0], REFUGE_ENDS[0]
+REFUGE_SET = (set().union(*[set(range(start, end + 1))
+                            for start, end in zip(REFUGE_STARTS, REFUGE_ENDS)])
+              if SKY_GARDEN else set())
 REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
 BASE_Z_ = PILOTIS_FLOORS * H
 REFUGE_Z0 = BASE_Z_ + REFUGE_START * H
@@ -200,6 +206,23 @@ def main():
                  "Interior_Lining", "Ceiling_Lights", "Sky_Garden_Grille",
                  "Structure"):
         check(f"object present: {name}", name in objs)
+    second_facade = objs.get("Facade_Spandrels.001")
+    second_glass = objs.get("Windows_Glass.001")
+    check("second tower is generated as a separate mesh",
+          second_facade is not None and second_glass is not None)
+    if second_facade and second_glass:
+        second_fb = world_bounds(second_facade)
+        first_fb = world_bounds(objs["Facade_Spandrels"])
+        second_gz = z_clusters(second_glass)
+        check("second tower is 84 m wide for 20 long-face rooms",
+              abs(second_fb[0][1] - second_fb[0][0] - 84.0) < 0.02,
+              f"width={second_fb[0][1] - second_fb[0][0]:.3f} m")
+        check("second tower has 3 x 17 glazed floors",
+              len(second_gz) == 51 * 2,
+              f"{len(second_gz) // 2} glazed floors")
+        check("the two tower envelopes keep an 18 m clear gap",
+              abs(second_fb[0][0] - first_fb[0][1] - 18.0) < 0.02,
+              f"gap={second_fb[0][0] - first_fb[0][1]:.3f} m")
     if failures:
         sys.exit(1)
 
@@ -1045,7 +1068,8 @@ def main():
     # The refuge void has no intermediate plate  # noqa: E116 (that is what makes it double
     # height), and the plate under it is replaced by the thicker garden slab,
     # which lives in Structure. So two plates fewer than there are storeys.
-    expected_plates = TOWER_FLOORS - (REFUGE_FLOORS if SKY_GARDEN else 0)
+    expected_plates = TOWER_FLOORS - ((BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                                      if SKY_GARDEN else 0)
     check("one floor plate per occupied floor, minus the open refuge storeys",
           len(pz) == expected_plates * 2,
           f"{len(pz)} levels for {expected_plates} plates "

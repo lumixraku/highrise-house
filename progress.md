@@ -1,5 +1,27 @@
 # Progress
 
+## 2026-08-23 — fix — build two residential towers with separate configurations
+
+Kept the existing tower at the origin with `2 x 17` residential groups and `18`
+long-facade rooms per floor (`76 x 32 m`, `43` storeys, roof at `172.0 m`). Added
+an adjacent procedural tower using `3 x 17` groups and `20` long-facade rooms per
+floor (`84 x 32 m`, `62` storeys, roof at `248.0 m`). The towers share the fixed
+floor, depth, pier and twin-core rules, remain `18.0 m` apart, and are framed as a
+`178.0 x 32.0 m` site. Both builds reuse the same material set so the original
+tower's emissive ceiling-light slots remain intact. Added verifier checks for the
+second tower's width, 51 glazed floors and clear gap; synchronized README and
+extra-view framing with the two-tower site.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py render_views.py floor_plan.py materials.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; the build report confirmed both configurations and the 18 m gap.
+- Full Cycles preview rendered to `out/preview.png` and was visually inspected; six low-sample extra views rendered successfully, including the two-tower front elevation.
+- `verify_house.py` passed all new two-tower checks and reports `148/152`; four legacy geometry assumptions remain (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling).
+- Final README pass now labels the saved preview as a Cycles render of both towers.
+
+Remaining issues: the four pre-existing verifier assumptions above are unchanged and unrelated to the separate tower configurations.
+
 ## 2026-08-23 — fix — add clustered office ceiling lights
 
 Added warm emissive ceiling panels behind the Office tower curtain wall. Each
