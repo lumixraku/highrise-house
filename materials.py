@@ -251,19 +251,18 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
         reflection_mix = mat.node_tree.nodes.new("ShaderNodeMixShader")
         reflection_mix.name = "Preview Glass Fresnel"
         reflection_mix.label = "Preview Glass Fresnel"
-        # Keep a modest reflection at every angle so the facade reads as glass,
-        # but cap it well below a mirror. A limited 14%..40% response is more
-        # useful in Material Preview than a physical 0%..100% Fresnel curve:
-        # rooms remain visible from an upward-looking view without the lower
-        # facade turning into an indistinguishable open hole.
+        # Push the reflection hard so it dominates the pane: the transparent
+        # leg is squeezed into a small window, leaving only a narrow angle where
+        # the room fixtures behind the glass can read. Still one step short of a
+        # full mirror so the facade never reads as a solid skin.
         reflection_range = mat.node_tree.nodes.new("ShaderNodeMapRange")
         reflection_range.name = "Preview Glass Reflection Range"
-        reflection_range.label = "Preview Glass Reflection Range (14%–40%)"
+        reflection_range.label = "Preview Glass Reflection Range (55%–90%)"
         reflection_range.clamp = True
         reflection_range.inputs["From Min"].default_value = 0.0
         reflection_range.inputs["From Max"].default_value = 1.0
-        reflection_range.inputs["To Min"].default_value = 0.14
-        reflection_range.inputs["To Max"].default_value = 0.40
+        reflection_range.inputs["To Min"].default_value = 0.55
+        reflection_range.inputs["To Max"].default_value = 0.90
 
         links = mat.node_tree.links
         for link in list(output.inputs["Surface"].links):
