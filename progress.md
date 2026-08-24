@@ -1,5 +1,27 @@
 # Progress
 
+## 2026-08-24 — fix — room-level ceiling lights without a second window layer
+
+Removed the full-height, self-illuminated `Interior_Lining` mesh that sat behind
+every residential pane and visually read as a second layer of glazing. Each
+4.00 m window module now represents one room; the deterministic 36% occupied
+rooms receive a 1.20 m warm emissive panel mounted directly under that room's
+ceiling. Its front edge is deterministically set 0.8, 2.4, or 4.0 m behind the
+window, so visible lights vary between near-window and deeper rooms rather than
+forming a facade-wide strip. Updated the geometry verifier, material helpers,
+glass-measurement notes, and README to reflect the single-pane facade.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py measure_glass.py build_office.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`; visual inspection of a dedicated close render confirms individual interior ceiling panels, with no full-window backing surface.
+- `verify_house.py` reports `160/164`: all new assertions pass — no `Interior_Lining`, fixtures are directly beneath their room ceilings, and all three setbacks occur. The four failures are unchanged legacy geometry assumptions.
+- `measure_glass.py` reports `R=0.307, G=0.328, B=0.354`, contrast ratio `9.16x`, and dynamic range `0.448`; the clear-glass check remains healthy.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
 ## 2026-08-24 — fix — neutral clear glass
 
 Changed the default shared glazing from the pale green `GLASS_GREEN` tint to

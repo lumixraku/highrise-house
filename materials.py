@@ -9,8 +9,8 @@ geometry. Two engines are supported and they need different glass:
   raised specular so the pane still reads as glazing.
 
 The default is neutral clear glass: the IOR supplies the physical reflection,
-while the interior lining and ceiling fixtures provide visible depth behind the
-pane. A legacy green tint remains available as an explicit override.
+while discrete ceiling fixtures make occupied rooms visible behind the pane. A
+legacy green tint remains available as an explicit override.
 """
 
 import bpy
@@ -52,12 +52,7 @@ GLASS_GREEN = (0.720, 0.965, 0.760)
 # Neutral clear architectural glazing. With a white base colour, the visible
 # reflection comes from the physical IOR rather than a colour cast.
 GLASS_CLEAR = (1.000, 1.000, 1.000)
-# Lit floors, seen through the glazing. Deliberately NEUTRAL-to-cool: the lining
-# is bright and clearly visible through clear glass, so a warm grey here tints
-# every pane yellow on its own — it was half of why the windows read as olive.
-INTERIOR_LINING = (0.630, 0.650, 0.655)
-# Small warm-white ceiling fixtures. They are deliberately warmer and brighter
-# than the neutral interior lining so occupied rooms read through the glazing.
+# Small warm-white fixtures used only for occupied rooms.
 CEILING_LIGHT = (1.000, 0.550, 0.250)
 MULLION_METAL = (0.155, 0.160, 0.165)   # dark anodised
 GROUND_GREY = (0.115, 0.120, 0.110)
@@ -187,9 +182,8 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
     * Roughness above ~0.01. Real architectural glass is float glass, optically
       flat; 0.02 already scatters visibly at 100 m. Held at 0.0.
     * Emission. A glow is uniform across the pane, so it flattens out the
-      reflections and reads as a milky film. Removed — the interior lining
-      (make_interior) supplies the brightness instead, and it does so with
-      depth, since it sits behind the glass rather than on it.
+      reflections and reads as a milky film. Occupied rooms instead use discrete
+      ceiling fixtures at varied depths behind the glass.
 
     Also note Cycles' Filter Glossy: it deliberately blurs glossy/refractive
     rays to cut noise, and at 1.0 it frosts the panes on its own. build_house.py
@@ -241,51 +235,8 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
     return mat
 
 
-def make_interior(name="Interior", color=INTERIOR_LINING):
-    """What you see THROUGH the glass.
-
-    Clear glass over an empty tower shows whatever is behind it — which, at
-    window height, is the far facade and then the sky, so the panes lose all
-    depth. A lining set back from the glazing gives the light something to land
-    on: it reads as lit floors, and because it sits behind the pane it moves
-    against the sky reflection as the view changes, which is exactly the cue
-    that says "glass" rather than "tinted panel".
-
-    Matte, and slightly darker than the facade so the glazing still registers as
-    an opening.
-
-    Brightness here is what "transparent" actually looks like. Glass reads as see-
-    through only if there is something legible on the far side; where the lining
-    falls dark the pane goes opaque and heavy no matter how clear the material is.
-    Measured share of glass pixels below 0.25 luminance as the lining was lifted:
-
-        (0.52,0.50,0.47) emit 0.35   3.6% dark   luminance 0.438
-        (0.66,0.65,0.62) emit 0.75   0.8% dark   luminance 0.542   <- brightness
-        (0.70,0.69,0.67) emit 1.00   0.5% dark   luminance 0.582
-
-    Its COLOUR matters as much as its brightness, for the same reason: at this
-    brightness the lining is plainly visible through the glass, so its cast lands
-    on every pane. The warm greys above pulled the glazing toward olive. Kept
-    neutral-to-cool so it remains legible through neutral clear glass.
-
-    Stopping at 0.75 is deliberate: past it the emission starts to overpower the
-    sky reflection (local contrast climbed 0.079 -> 0.088), and the pane drifts
-    from "glass with lit rooms behind it" toward "glowing panel".
-    """
-    mat = _new(name)
-    b = _bsdf(mat)
-    _set(b, "Base Color", (*color, 1.0))
-    _set(b, "Roughness", 0.80)
-    _set(b, "Specular IOR Level", 0.15)
-    # Self-illumination stands in for lit floors — on the lining, well behind the
-    # glass, so it never flattens the pane the way emission on the glass did.
-    _set(b, "Emission Color", (*color, 1.0))
-    _set(b, "Emission Strength", 0.75)
-    return mat
-
-
 def make_ceiling_light(name="CeilingLight", color=CEILING_LIGHT):
-    """Warm emissive panels mounted just inside the top of each window bay."""
+    """Warm emissive panels mounted on the ceiling of occupied rooms."""
     mat = _new(name)
     b = _bsdf(mat)
     _set(b, "Base Color", (*color, 1.0))
@@ -384,7 +335,6 @@ def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_CLEAR):
         "concrete": make_concrete(),
         "spandrel": make_wall(color=wall_color),
         "glass": make_glass(engine=engine, tint=glass_tint),
-        "interior": make_interior(),
         "ceiling_light": make_ceiling_light(),
         "foliage": make_foliage(),
         "trunk": make_trunk(),

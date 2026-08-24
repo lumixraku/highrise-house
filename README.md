@@ -115,7 +115,7 @@ facade and one additional residential group.
 | reference panes per floor | 18 long face / 9 short face (54 around) |
 | pane pitch | 4.00 m mullion centres |
 | window module / clear glass | **4.00 m × 1.50 m module; 3.94 m × 1.50 m glass** |
-| ceiling lights | warm-white emissive panels behind a deterministic 36% mix of clustered and scattered lit room windows |
+| ceiling lights | warm-white 1.2 m ceiling panels in a deterministic 36% mix of lit rooms, set 0.8, 2.4, or 4.0 m back from each room window |
 
 ### Bottom three floors
 
@@ -388,9 +388,9 @@ around each pane, and that strip is precisely what reads as a window sill — at
 0.09 m it was clearly visible.
 
 Depth still comes from what sits *behind* the plane, not in front of it: the
-louvres are tilted 30° over a dark shadowbox 0.10 m back, and the interior lining
-is set back `INTERIOR_SETBACK` = 0.85 m so pane and lining move against each other
-as the view shifts.
+louvres are tilted 30° over a dark shadowbox 0.10 m back. There is no full-window
+interior lining: each illuminated pane represents one room and shows only its
+ceiling fixture, set 0.8, 2.4, or 4.0 m into that room.
 
 One subtlety in the geometry: a tilted slat sweeps deeper than half its own
 thickness, so the louvre offset is keyed to its *rotated* extent
@@ -462,7 +462,7 @@ putting sRGB values straight into a Blender colour socket renders washed out.
 | --- | --- |
 | walls | warm pale stone, matte (roughness 0.72), `WALL_COLOR` |
 | glass | neutral clear, transmission 1.0, IOR 1.52, roughness 0.0, no emission |
-| interior lining | matte warm grey 0.85 m behind the glass, self-illuminated 0.75 |
+| ceiling lights | warm-white 1.2 m emissive panels mounted under each lit room's ceiling, at varied room depths |
 | mullions / louvres | dark anodised metal, roughness 0.38 |
 | structure | grey concrete, roughness 0.85 |
 | foliage | dark matte green, 12% transmission for backlit leaves |
@@ -493,13 +493,11 @@ is held at 0 and the noise is paid for in samples instead.
 `verify_house.py` asserts all four, since they are easy to reintroduce while
 tuning.
 
-The catch with fully clear glass is that it shows whatever is behind it — over
-an empty tower that is the far facade and then the sky, so the panes lose all
-depth and read as gaps. Hence `Interior_Lining`: a matte surface 0.85 m behind
-the glazing, standing in for lit floors. Because it sits *behind* the pane it
-shifts against the sky reflection as the view moves, which is the cue that reads
-as glass. That is also what replaced the emission that used to be on the glass —
-same brightness, but with depth.
+The catch with fully clear glass is that it shows whatever is behind it. Rather
+than hiding every pane behind a glowing surface — which reads as a second layer of
+glass — the scene lights individual rooms with ceiling panels. Each lit panel is
+mounted below its actual room ceiling and uses one of three setbacks, so some are
+near the window and others read deeper in plan.
 
 Three things mattered more than the material parameters, each found by measuring
 rendered pixels rather than by eye:
@@ -517,16 +515,15 @@ hemisphere. The world shader desaturates the sky to 0.28 and mixes 35% warm tone
 which keeps a readable sky in the glass reflections while letting surfaces show
 their real colour.
 
-**Fully transmissive glass needs something behind it, not less transmission.**
-Clear glass over an unlit interior renders near-black, and the tempting fix —
-pulling transmission back and adding a glow — is what frosted the panes. The
-right fix is geometric: put a lit lining behind the glazing and leave the glass
-alone.
+**Fully transmissive glass needs room depth, not less transmission.** Clear glass
+over an unlit interior can render near-black, but lowering transmission or making
+the pane glow frosts it. The occupied rooms instead contain discrete ceiling
+fixtures, leaving unlit rooms transparent and avoiding a second facade layer.
 
 **Neutral clear glass keeps the reflection neutral.** The default `GLASS_CLEAR`
 base colour is white, so the previous green cast is removed. The sky reflection
 remains visible because the pane is still physically refractive (IOR 1.52), while
-the lining and ceiling lights preserve depth behind the glazing. The legacy
+the varied-depth ceiling lights preserve room depth behind the glazing. The legacy
 `GLASS_GREEN` constant remains available for comparison renders, but is no
 longer used by the scene builders. For a tinted comparison render, the two
 useful measurements are:
@@ -545,19 +542,10 @@ All three channels matter: G highest by a clear margin, R lowest, B in between.
 To adjust — raise all three for paler, lower red for greener, raise blue if it
 looks yellow, lower blue if it looks cyan.
 
-**Transparency is mostly a property of the lining, not the glass.** Once
+**Transparency depends on the room behind it, not a second facade.** Once
 transmission is 1.0 and roughness 0.0 there is nothing left to make the material
-clearer — what remains is whether there is anything legible on the far side.
-Where the lining falls dark the pane goes opaque and heavy regardless. Lifting it
-to emission 0.75 cut the share of glass pixels below 0.25 luminance from 3.6% to
-0.8%. Going brighter still (emission 1.0) starts to overpower the sky reflection
-and the panes drift toward "glowing panel".
-
-The lining's *colour* matters for the same reason — at that brightness it is
-plainly visible through clear glass, so its cast lands on every pane. A warm grey
-lining tints the whole facade yellow on its own, which was half of why the
-windows read as olive. `INTERIOR_LINING` is kept neutral-to-cool so the green
-tint can read as green.
+clearer. Lit rooms receive a warm, ceiling-mounted fixture, while unlit rooms
+remain visibly dark and transparent; no full-height lining flattens every pane.
 
 Measured over glass pixels only (found by ray-casting the camera through each
 pixel — whole-frame averages are useless, since spandrel covers most of the
@@ -571,7 +559,7 @@ facade and drowns the panes out):
 The **stdev** column is the frosted test, and the only one that catches it
 numerically: a rough or partly-diffuse pane averages its surroundings, so
 neighbouring pixels converge and local contrast collapses toward the wall's.
-Clear glass holds sharp sky-reflection, mullion and lining detail — here it runs
+Clear glass holds sharp sky-reflection, mullion and room-fixture detail — here it runs
 **≈4× the matte wall's local contrast**, at roughly 0.9× the wall's brightness.
 `measure_glass.py` reports all of this:
 
@@ -589,7 +577,7 @@ objects (the saved scene contains the two sets with Blender's `.001` suffixes),
 with one additional truss mesh on the taller companion, so the scene stays light
 for a 178 m-wide site:
 
-`Facade_Spandrels` · `Windows_Glass` · `Interior_Lining` · `Ceiling_Lights` · `Window_Mullions` ·
+`Facade_Spandrels` · `Windows_Glass` · `Ceiling_Lights` · `Window_Mullions` ·
 `Vent_Louvres` · `Vent_Shadowboxes` · `Sky_Garden_Grille` ·
 `Sky_Garden_Planting` · `Sky_Garden_Trunks` · `Floor_Plates` · `Structure` ·
 `Structural_Trusses` ·

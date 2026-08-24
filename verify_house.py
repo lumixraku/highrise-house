@@ -49,11 +49,11 @@ W = OPEN_W + 2 * PIER_LONG
 D = OPEN_D + 2 * PIER_SHORT
 PANE_GLASS_LONG = PANE_W
 PANE_PITCH = PANE_W
-CEILING_LIGHT_W = 2.20
-CEILING_LIGHT_D = 0.36
+CEILING_LIGHT_W = 1.20
+CEILING_LIGHT_D = 1.20
 CEILING_LIGHT_H = 0.06
-CEILING_LIGHT_TOP_GAP = 0.05
-CEILING_LIGHT_Z = WIN_Z + WIN_H - CEILING_LIGHT_TOP_GAP - CEILING_LIGHT_H / 2.0
+CEILING_LIGHT_SETBACKS = (0.80, 2.40, 4.00)
+CEILING_LIGHT_Z = H - SLAB_T - CEILING_LIGHT_H / 2.0
 CEILING_LIGHT_ON_RATIO = 0.36
 CEILING_LIGHTS_PER_FLOOR = (2 * round(WINDOWS_LONG * CEILING_LIGHT_ON_RATIO)
                             + 2 * round(WINDOWS_SHORT * CEILING_LIGHT_ON_RATIO))
@@ -236,7 +236,7 @@ def main():
 
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
                  "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
-                 "Interior_Lining", "Ceiling_Lights", "Sky_Garden_Grille",
+                 "Ceiling_Lights", "Sky_Garden_Grille",
                  "Structure", "Structural_Trusses"):
         check(f"object present: {name}", name in objs)
     second_facade = objs.get("Facade_Spandrels.001")
@@ -672,32 +672,11 @@ def main():
           f"Iy {I_cores + I_piers:,.0f} m4 (cores {I_cores:,.0f} + "
           f"piers {I_piers:,.0f})")
 
-    # --- interior lining and ceiling lights behind the glazing ------------
-    # Clear glass shows whatever is behind it; without a lining the panes look
-    # through the tower to the sky and stop reading as windows.
-    lining = objs["Interior_Lining"]
-    lz = z_clusters(lining)
-    check("lining matches the glazing, one band per glazed floor",
-          len(lz) == GLAZED_FLOORS * 2, f"{len(lz)} levels")
-    lbands = list(zip(lz[0::2], lz[1::2]))
-    check("lining is exactly as tall as the window",
-          all(abs(hi - lo - WIN_H) < EPS for lo, hi in lbands),
-          f"heights={ {round(hi - lo, 4) for lo, hi in lbands} }")
-    check("lining occupies the same Z bands as the glass",
-          [round(z, 4) for z in lz] == [round(z, 4) for z in gz])
-
-    # It has to sit BEHIND the glass — deeper in on every facade.
-    lining_x = max(abs(p) for piece in piece_bounds(lining)
-                   for p in (piece[0][0], piece[1][0]))
     glass_x = max(abs(p) for piece in piece_bounds(glass)
                   for p in (piece[0][0], piece[1][0]))
-    check("lining is set back behind the glazing", lining_x < glass_x - 0.3,
-          f"lining reaches x={lining_x:.3f}, glass x={glass_x:.3f} "
-          f"(setback {glass_x - lining_x:.3f} m)")
-    check("lining follows the separate room windows",
-          abs(facade_span(lining, "S") - GLASS_OPEN_W) < 0.05
-          and abs(facade_span(lining, "E") - GLASS_OPEN_D) < 0.05,
-          f"{facade_span(lining, 'S'):.2f} x {facade_span(lining, 'E'):.2f} m")
+    check("no interior lining creates a second glass layer",
+          not any(name.startswith("Interior_Lining") for name in objs),
+          "Interior_Lining is absent")
 
     lights = objs.get("Ceiling_Lights")
     check("ceiling lights object exists", lights is not None)
@@ -715,10 +694,10 @@ def main():
               len(light_z) == GLAZED_FLOORS * 2,
               f"{len(light_z)} levels for {GLAZED_FLOORS} glazed floors")
         light_bands = list(zip(light_z[0::2], light_z[1::2]))
-        check("ceiling lights sit at the upper edge of each window band",
-              all(abs((lo + hi) / 2 - (base + CEILING_LIGHT_Z)) < 0.02
-                  for (lo, hi), base in zip(light_bands,
-                                             [BASE_Z + f * H for f in sorted(GLAZED_SET)])),
+        floor_bases = [BASE_Z + f * H for f in sorted(GLAZED_SET)]
+        check("ceiling lights mount beneath each room ceiling",
+              all(abs(hi - (base + H - SLAB_T)) < 0.02
+                  for (lo, hi), base in zip(light_bands, floor_bases)),
               f"z={min(light_z):.2f}..{max(light_z):.2f}")
         light_bounds = piece_bounds(lights)
         check("ceiling lights leave most room windows unlit",
@@ -748,6 +727,21 @@ def main():
               and max(max(abs(lo[1]), abs(hi[1])) for lo, hi in light_bounds)
               < D / 2 - 0.3,
               "light panels are recessed from the facade")
+        observed_setbacks = set()
+        for lo, hi in light_bounds:
+            cx = (lo[0] + hi[0]) / 2
+            cy = (lo[1] + hi[1]) / 2
+            candidates = (
+                W / 2 - abs(cx) - CEILING_LIGHT_D / 2 - 0.03,
+                D / 2 - abs(cy) - CEILING_LIGHT_D / 2 - 0.03,
+            )
+            matches = [setback for setback in CEILING_LIGHT_SETBACKS
+                       if any(abs(candidate - setback) < 0.02
+                              for candidate in candidates)]
+            observed_setbacks.update(matches)
+        check("each lit room has a near, middle, or deep ceiling fixture",
+              observed_setbacks == set(CEILING_LIGHT_SETBACKS),
+              f"setbacks={sorted(observed_setbacks)} m")
 
     # --- refuge floor / sky garden -------------------------------------
     if SKY_GARDEN:
@@ -771,7 +765,7 @@ def main():
 
         # The whole point is an OPEN double-height void: nothing enclosing it, and
         # no slab cutting it in half.
-        for name in ("Windows_Glass", "Interior_Lining", "Vent_Louvres"):
+        for name in ("Windows_Glass", "Vent_Louvres"):
             inside = [c for lo, hi in piece_bounds(objs[name])
                       for c in [(lo[2] + hi[2]) / 2]
                       if REFUGE_Z0 + 0.05 < c < REFUGE_Z1 - 0.05]
@@ -1116,7 +1110,7 @@ def main():
     # --- pilotis -------------------------------------------------------
     struct = objs["Structure"]
     for name in ("Facade_Spandrels", "Windows_Glass", "Vent_Louvres",
-                 "Interior_Lining", "Floor_Plates"):
+                 "Floor_Plates"):
         zmin = world_bounds(objs[name])[2][0]
         check(f"{name} stays above the pilotis zone", zmin >= BASE_Z - EPS,
               f"zmin={zmin:.3f} >= {BASE_Z}")
