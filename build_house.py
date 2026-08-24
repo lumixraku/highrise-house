@@ -63,7 +63,11 @@ TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
                 + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS   # occupied floors above
 
-TOWER_GAP = 18.0       # clear horizontal gap between the two building envelopes
+TOWER_GAP = 30.0       # clear horizontal gap between the two building envelopes
+# The two towers are fully staggered, not in the same line: the companion tower
+# is offset one full depth in Y, so its front face lands on the first tower's
+# rear face and the two footprints never overlap in Y projection.
+TOWER_STAGGER = 40.0   # companion tower's Y offset from the first (full depth)
 
 WALL_T = 0.30     # facade wall thickness
 SLAB_T = 0.22     # floor plate thickness
@@ -443,7 +447,8 @@ def configure_tower(block_groups, windows_long, core_column_bays=CORE_COLUMN_BAY
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 SITE_WIDTH = 2 * W + TOWER_GAP
 SITE_CENTER_X = (W + TOWER_GAP) / 2.0
-SITE_DEPTH = D
+SITE_CENTER_Y = TOWER_STAGGER / 2.0
+SITE_DEPTH = TOWER_STAGGER + D
 SITE_TOP_Z = CORE_TOP_Z
 
 # Band offsets inside one floor. The vent + glass + vent band starts 0.50 m
@@ -1400,13 +1405,16 @@ def setup_render():
     bpy.context.collection.objects.link(sun)
 
     cam_data = bpy.data.cameras.new("Camera")
-    cam_data.lens = 40.0
+    # A moderate lens: less wide-angle stretch than a 40 mm, but keeps enough
+    # perspective that the tower Y-stagger reads instead of flattening away.
+    cam_data.lens = 50.0
     cam = bpy.data.objects.new("Camera", cam_data)
 
     # Frame the whole two-tower site: pull back proportionally to its envelope.
-    reach = max(SITE_WIDTH, SITE_DEPTH, SITE_TOP_Z) * 1.35
-    target = Vector((SITE_CENTER_X, 0.0, SITE_TOP_Z * 0.52))
-    eye = Vector((SITE_CENTER_X + reach * 0.78, -reach * 1.05, SITE_TOP_Z * 0.72))
+    reach = max(SITE_WIDTH, SITE_DEPTH, SITE_TOP_Z) * 1.35 * (cam_data.lens / 40.0)
+    target = Vector((SITE_CENTER_X, SITE_CENTER_Y, SITE_TOP_Z * 0.52))
+    eye = Vector((SITE_CENTER_X + reach * 0.78,
+                  SITE_CENTER_Y - reach * 1.05, SITE_TOP_Z * 0.72))
     cam.location = eye
     cam.rotation_euler = (target - eye).normalized().to_track_quat("-Z", "Y").to_euler()
     bpy.context.collection.objects.link(cam)
@@ -1505,7 +1513,8 @@ def frame_viewport():
                 r3d = space.region_3d
                 # Orbit about mid-height, so the tower sits in frame rather than
                 # running off the top with the ground at centre.
-                r3d.view_location = Vector((SITE_CENTER_X, 0.0, SITE_TOP_Z * 0.5))
+                r3d.view_location = Vector(
+                    (SITE_CENTER_X, SITE_CENTER_Y, SITE_TOP_Z * 0.5))
                 r3d.view_distance = diag * 1.6
                 # A 3/4 view from the south-east: the lit side, matching where the
                 # render cameras sit.
@@ -1520,15 +1529,16 @@ def frame_viewport():
                 space.lens = 35.0
 
 
-def translate_objects(objects, x_offset):
+def translate_objects(objects, x_offset, y_offset=0.0):
     """Move one generated tower as a group without changing its local geometry."""
     for obj in objects.values():
         if obj is not None:
             obj.location.x += x_offset
+            obj.location.y += y_offset
 
 
 def main():
-    global SITE_WIDTH, SITE_CENTER_X, SITE_DEPTH, SITE_TOP_Z
+    global SITE_WIDTH, SITE_CENTER_X, SITE_CENTER_Y, SITE_DEPTH, SITE_TOP_Z
 
     reset_scene()
     shared_mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
@@ -1542,18 +1552,21 @@ def main():
     second_objects = build(reset=False, mats=shared_mats, add_trusses=True)
     second_w, second_d, second_top = W, D, CORE_TOP_Z
     second_center_x = first_w / 2.0 + TOWER_GAP + second_w / 2.0
-    translate_objects(second_objects, second_center_x)
+    second_center_y = TOWER_STAGGER
+    translate_objects(second_objects, second_center_x, second_center_y)
 
     SITE_WIDTH = first_w + TOWER_GAP + second_w
     SITE_CENTER_X = (TOWER_GAP + second_w) / 2.0
-    SITE_DEPTH = max(first_d, second_d)
+    SITE_CENTER_Y = (TOWER_STAGGER + (second_d - first_d) / 2.0) / 2.0
+    SITE_DEPTH = TOWER_STAGGER + (first_d + second_d) / 2.0
     SITE_TOP_Z = max(first_top, second_top)
 
     report(second_objects, "new adjacent tower (3 groups x 17 floors, 20 rooms)")
     print("=== two-tower site ===")
     print(f"clear gap            : {TOWER_GAP:.1f} m")
+    print(f"tower stagger        : {TOWER_STAGGER:.1f} m in Y")
     print(f"overall envelope     : {SITE_WIDTH:.1f} x {SITE_DEPTH:.1f} m")
-    print(f"site centre          : x = {SITE_CENTER_X:.1f} m")
+    print(f"site centre          : x = {SITE_CENTER_X:.1f}, y = {SITE_CENTER_Y:.1f} m")
     print(f"highest core top     : {SITE_TOP_Z:.2f} m")
     print("=====================\n")
     setup_render()

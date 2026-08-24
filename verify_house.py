@@ -77,6 +77,7 @@ COL_SPACING = 9.0
 COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 CORE_COLUMN_BAYS = 2
 COMPANION_CORE_COLUMN_BAYS = 3
+TOWER_STAGGER = 40.0     # companion tower's Y offset (full-depth stagger)
 TRUSS_FACADE_INSET = 0.55
 TRUSS_PLAN_MEMBER = 0.20
 TRUSS_CLAW_GROUPS = 3
@@ -256,12 +257,17 @@ def main():
         check("second tower has 3 x 17 glazed floors",
               len(second_gz) == 51 * 2,
               f"{len(second_gz) // 2} glazed floors")
-        check("the two tower envelopes keep an 18 m clear gap",
-              abs(second_fb[0][0] - first_fb[0][1] - 18.0) < 0.02,
+        check("the two tower envelopes keep a 30 m clear gap",
+              abs(second_fb[0][0] - first_fb[0][1] - 30.0) < 0.02,
               f"gap={second_fb[0][0] - first_fb[0][1]:.3f} m")
         second_w = second_fb[0][1] - second_fb[0][0]
         second_d = second_fb[1][1] - second_fb[1][0]
-        second_origin = first_fb[0][1] + 18.0 + second_w / 2
+        second_origin = first_fb[0][1] + 30.0 + second_w / 2
+        second_origin_y = (second_fb[1][0] + second_fb[1][1]) / 2.0
+        first_origin_y = (first_fb[1][0] + first_fb[1][1]) / 2.0
+        check("the two towers are fully staggered in Y, not on the same line",
+              abs(second_origin_y - first_origin_y - TOWER_STAGGER) < 0.02,
+              f"y offset={second_origin_y - first_origin_y:.3f} m")
         second_grid = col_grid(second_w)
         second_core_w, second_core_offset, second_core_xs = core_layout(
             second_w, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
@@ -270,7 +276,8 @@ def main():
             (lo, hi) for lo, hi in second_pieces
             if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
             and (hi[0] - lo[0]) < second_w * 0.5
-            and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5
+            and lo[1] - second_origin_y > -CORE_D / 2 - 0.5
+            and hi[1] - second_origin_y < CORE_D / 2 + 0.5
             and not (abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
                      and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02)]
         measured_second_widths = []
@@ -325,8 +332,8 @@ def main():
                   f"facade={facade_mat.name if facade_mat else 'none'}")
             truss_parts_world = piece_bounds(truss_obj)
             truss_parts = [
-                ((lo[0] - second_origin, lo[1], lo[2]),
-                 (hi[0] - second_origin, hi[1], hi[2]))
+                ((lo[0] - second_origin, lo[1] - second_origin_y, lo[2]),
+                 (hi[0] - second_origin, hi[1] - second_origin_y, hi[2]))
                 for lo, hi in truss_parts_world]
             companion_refuge_starts = [FIRST_GLAZED + (index + 1) * BLOCK_FLOORS
                                        + index * REFUGE_FLOORS

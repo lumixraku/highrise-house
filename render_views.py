@@ -18,24 +18,26 @@ from build_house import D, REFUGE_Z0, REFUGE_Z1, TOP_Z, W  # noqa: E402
 
 ROOF_GARDEN_Z0 = TOP_Z + 0.22
 REFUGE_MID = (REFUGE_Z0 + REFUGE_Z1) / 2
-# The saved scene keeps the original 76 m tower centred at x=0 and places the
-# 84 m companion 18 m away, so the site centre is offset toward the new tower.
-SITE_CENTER_X = 51.0
+# The saved scene keeps the original 76 m tower centred at x=0, y=0 and places
+# the 84 m companion 30 m away and 40 m back in Y (fully staggered), so the site
+# centre is offset toward the new tower in both axes.
+SITE_CENTER_X = 57.0
+SITE_CENTER_Y = 20.0
 
 VIEWS = [
     # name,          camera position,               look-at,             lens
-    ("front",        (SITE_CENTER_X, -560.0, 150.0), (SITE_CENTER_X, 0.0, 125.0), 42.0),
+    ("front",        (SITE_CENTER_X, -560.0, 150.0), (SITE_CENTER_X, SITE_CENTER_Y, 125.0), 42.0),
     ("base_pilotis", (SITE_CENTER_X + 110.0, -92.0, 8.0),
-                      (SITE_CENTER_X, 0.0, 18.0), 32.0),
+                      (SITE_CENTER_X, SITE_CENTER_Y, 18.0), 32.0),
     ("floor_detail", (D / 2 + 30.0, -42.0, 58.0),   (0.0, 0.0, 56.0),    70.0),
     ("corner",       (SITE_CENTER_X + 220.0, -300.0, 190.0),
-                      (SITE_CENTER_X, 0.0, 130.0), 38.0),
+                      (SITE_CENTER_X, SITE_CENTER_Y, 130.0), 38.0),
     # The sky garden, close and slightly below so you look up into the void and
     # can see the planting against the open double height.
     ("sky_garden",   (46.0, -66.0, REFUGE_MID - 2.0),
                       (0.0, 0.0, REFUGE_MID + 1.0),                       58.0),
     ("roof_garden",  (SITE_CENTER_X + 100.0, -130.0, ROOF_GARDEN_Z0 + 18.0),
-                      (SITE_CENTER_X, 0.0, ROOF_GARDEN_Z0 + 2.0),           48.0),
+                      (SITE_CENTER_X, SITE_CENTER_Y, ROOF_GARDEN_Z0 + 2.0),           48.0),
 ]
 
 
