@@ -1405,16 +1405,18 @@ def setup_render():
     bpy.context.collection.objects.link(sun)
 
     cam_data = bpy.data.cameras.new("Camera")
-    # A moderate lens: less wide-angle stretch than a 40 mm, but keeps enough
-    # perspective that the tower Y-stagger reads instead of flattening away.
-    cam_data.lens = 50.0
+    # A telephoto lens so the tower verticals stay parallel instead of keystoning
+    # inward. Combined with a camera lifted to near the roof line (below), the
+    # look direction is nearly horizontal, so the facades read flat rather than
+    # leaning. The reach scales with the lens to keep both towers in frame.
+    cam_data.lens = 85.0
     cam = bpy.data.objects.new("Camera", cam_data)
 
     # Frame the whole two-tower site: pull back proportionally to its envelope.
     reach = max(SITE_WIDTH, SITE_DEPTH, SITE_TOP_Z) * 1.35 * (cam_data.lens / 40.0)
     target = Vector((SITE_CENTER_X, SITE_CENTER_Y, SITE_TOP_Z * 0.52))
     eye = Vector((SITE_CENTER_X + reach * 0.78,
-                  SITE_CENTER_Y - reach * 1.05, SITE_TOP_Z * 0.72))
+                  SITE_CENTER_Y - reach * 1.05, SITE_TOP_Z * 1.02))
     cam.location = eye
     cam.rotation_euler = (target - eye).normalized().to_track_quat("-Z", "Y").to_euler()
     bpy.context.collection.objects.link(cam)
