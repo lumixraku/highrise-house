@@ -11,6 +11,7 @@ Usage:
 
 import math
 import os
+import random
 import sys
 
 import bpy
@@ -44,6 +45,14 @@ MULLION_D = 0.14
 GLASS_T = 0.025
 FLOOR_T = 0.24
 INTERIOR_SETBACK = 0.65
+OFFICE_LIGHT_SEED = 20260823
+OFFICE_LIGHT_RATIO = 0.30
+OFFICE_LIGHT_CLUSTER_SHARE = 0.80
+OFFICE_LIGHT_WIDTH_RATIO = 0.72
+OFFICE_LIGHT_DEPTH = 0.36
+OFFICE_LIGHT_INSET = 0.18
+OFFICE_LIGHT_T = 0.08
+OFFICE_LIGHT_TOP_CLEARANCE = 0.08
 CORE_W = 14.0
 CORE_D = 14.0
 PILOTIS_RADIUS = 1.20
@@ -181,6 +190,54 @@ def make_mullions(profile, cumulative, floors, modules, pitch, material):
                          tangent, normal, MULLION_W, MULLION_D,
                          floor * FLOOR_HEIGHT, (floor + 1) * FLOOR_HEIGHT)
     return mesh_object("Office_Mullions", vertices, faces, material)
+
+
+def lit_office_modules(floor, modules):
+    """Choose stable clusters plus a few isolated late-working office bays."""
+    rng = random.Random(OFFICE_LIGHT_SEED + floor)
+    target = max(1, round(modules * OFFICE_LIGHT_RATIO))
+    clustered_target = round(target * OFFICE_LIGHT_CLUSTER_SHARE)
+    lit = set()
+
+    while len(lit) < clustered_target:
+        start = rng.randrange(modules)
+        length = rng.randint(3, 6)
+        for offset in range(length):
+            if len(lit) >= clustered_target:
+                break
+            lit.add((start + offset) % modules)
+
+    isolated = [module for module in range(modules)
+                if module not in lit
+                and (module - 1) % modules not in lit
+                and (module + 1) % modules not in lit]
+    rng.shuffle(isolated)
+    lit.update(isolated[:target - len(lit)])
+
+    if len(lit) < target:
+        remaining = [module for module in range(modules) if module not in lit]
+        rng.shuffle(remaining)
+        lit.update(remaining[:target - len(lit)])
+    return lit
+
+
+def make_ceiling_lights(profile, cumulative, modules, pitch, material):
+    """Place warm ceiling panels behind selected office curtain-wall modules."""
+    vertices, faces = [], []
+    patterns = {}
+    width = pitch * OFFICE_LIGHT_WIDTH_RATIO
+    radial_offset = OFFICE_LIGHT_INSET + OFFICE_LIGHT_DEPTH / 2
+    for floor in sorted(OFFICE_LEVELS):
+        patterns[floor] = lit_office_modules(floor, modules)
+        z1 = floor * FLOOR_HEIGHT + CLEAR_PANE_H - OFFICE_LIGHT_TOP_CLEARANCE
+        z0 = z1 - OFFICE_LIGHT_T
+        for module in sorted(patterns[floor]):
+            point = profile_at(profile, cumulative, (module + 0.5) * pitch)
+            normal = profile_normal(point)
+            tangent = Vector((-normal.y, normal.x, 0.0))
+            append_prism(vertices, faces, point - normal * radial_offset,
+                         tangent, normal, width, OFFICE_LIGHT_DEPTH, z0, z1)
+    return mesh_object("Office_Ceiling_Lights", vertices, faces, material), patterns
 
 
 def make_floor_slabs(profile, material):
@@ -365,12 +422,16 @@ def main():
     glass = materials.make_glass(name="OfficeGlass", engine="CYCLES")
     metal = materials.make_metal(name="OfficeMullions")
     concrete = materials.make_concrete(name="OfficeConcrete")
+    ceiling_light = materials.make_ceiling_light(name="OfficeCeilingLight")
     ground = materials.make_ground(name="OfficeGround")
     profile = squircle_profile()
     cumulative, perimeter = profile_path(profile)
     floors = TOTAL_LEVELS
     tower, modules, pitch = make_glass(profile, cumulative, perimeter, glass)
     make_mullions(profile, cumulative, floors, modules, pitch, metal)
+    _, light_patterns = make_ceiling_lights(
+        profile, cumulative, modules, pitch, ceiling_light
+    )
     make_floor_slabs(profile, concrete)
     make_equipment_bands(profile, concrete)
     make_refuge_grilles(profile, cumulative, perimeter, metal)
@@ -391,6 +452,11 @@ def main():
     assert len(OFFICE_LEVELS) == OFFICE_FLOORS
     assert len(EQUIPMENT_LEVELS) == EQUIPMENT_FLOORS
     assert not (OFFICE_LEVELS & EQUIPMENT_LEVELS)
+    target_lights = round(modules * OFFICE_LIGHT_RATIO)
+    assert all(len(pattern) == target_lights
+               for pattern in light_patterns.values())
+    assert len({tuple(sorted(pattern)) for pattern in light_patterns.values()}) \
+        == OFFICE_FLOORS
 
     os.makedirs(OUT_DIR, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT_DIR, OUTPUT_STEM + ".blend"))
@@ -408,6 +474,8 @@ def main():
     print(f"Equipment/refuge levels: {sorted(EQUIPMENT_LEVELS)}")
     print(f"Physical levels: {TOTAL_LEVELS} at {FLOOR_HEIGHT:.1f} m floor-to-floor")
     print(f"Profile vertices: {len(profile)}")
+    print(f"Ceiling lights: {target_lights}/{modules} modules per office floor "
+          f"({target_lights / modules:.1%}), deterministic seed {OFFICE_LIGHT_SEED}")
 
 
 if __name__ == "__main__":

@@ -4,13 +4,13 @@ Kept separate from build_house.py so the look can be tuned without touching
 geometry. Two engines are supported and they need different glass:
 
 * Cycles — real refraction. Transmission on a thin solid pane, low roughness,
-  a faint green tint. This is the one that looks like glass.
-* EEVEE  — no true refraction unless raytracing is on. Uses transmission plus a
-  raised specular so the pane still reads as glazing.
+  and a neutral base colour. This is the one that looks like glass.
+* EEVEE  — Fresnel-blended preview glass. It does not need ray tracing, keeps
+  the discrete room fixtures visible, and retains an environment reflection.
 
-The tint is applied to BOTH base colour and transmission so the green shows in
-reflection as well as through the pane; glass that is only tinted in
-transmission reads grey when you see it against a bright sky.
+The default is neutral clear glass: the IOR supplies the physical reflection,
+while discrete ceiling fixtures make occupied rooms visible behind the pane. A
+legacy green tint remains available as an explicit override.
 """
 
 import bpy
@@ -49,10 +49,14 @@ CONCRETE_GREY = (0.430, 0.430, 0.415)   # structure, slightly darker
 # To adjust: raise all three together for paler; lower red for greener; if it
 # looks yellow raise blue, if it looks cyan lower blue.
 GLASS_GREEN = (0.720, 0.965, 0.760)
-# Lit floors, seen through the glazing. Deliberately NEUTRAL-to-cool: the lining
-# is bright and clearly visible through clear glass, so a warm grey here tints
-# every pane yellow on its own — it was half of why the windows read as olive.
-INTERIOR_LINING = (0.630, 0.650, 0.655)
+# Neutral clear architectural glazing. With a white base colour, the visible
+# reflection comes from the physical IOR rather than a colour cast.
+GLASS_CLEAR = (1.000, 1.000, 1.000)
+# Ceiling fixture temperatures. The values are intentionally distinct under AgX:
+# daylight is cool white and warm is domestic tungsten-white, not amber signage.
+CEILING_LIGHT_DAYLIGHT = (0.600, 0.780, 1.000)
+CEILING_LIGHT_WARM = (1.000, 0.420, 0.150)
+CEILING_LIGHT_STRENGTH = 100.0
 MULLION_METAL = (0.155, 0.160, 0.165)   # dark anodised
 GROUND_GREY = (0.115, 0.120, 0.110)
 # Sky-garden planting. Foliage is much darker than it looks to the eye — a leaf
@@ -168,8 +172,8 @@ def make_ground(name="Ground", color=GROUND_GREY):
 # Glass
 # ---------------------------------------------------------------------------
 
-def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
-    """Clear tinted architectural glazing — smooth, fully transmissive.
+def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
+    """Neutral clear architectural glazing — smooth, fully transmissive.
 
     Everything here is aimed at ONE thing: no frosted look. Three separate
     settings can each make glass read as ground/etched glass, and the earlier
@@ -181,9 +185,8 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
     * Roughness above ~0.01. Real architectural glass is float glass, optically
       flat; 0.02 already scatters visibly at 100 m. Held at 0.0.
     * Emission. A glow is uniform across the pane, so it flattens out the
-      reflections and reads as a milky film. Removed — the interior lining
-      (make_interior) supplies the brightness instead, and it does so with
-      depth, since it sits behind the glass rather than on it.
+      reflections and reads as a milky film. Occupied rooms instead use discrete
+      ceiling fixtures at varied depths behind the glass.
 
     Also note Cycles' Filter Glossy: it deliberately blurs glossy/refractive
     rays to cut noise, and at 1.0 it frosts the panes on its own. build_house.py
@@ -192,8 +195,10 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
     Thin-walled stays OFF: the panes have real thickness (GLASS_T) and should
     refract through both faces.
 
-    EEVEE: transmission there is a screen-space approximation, so raytraced
-    refraction is requested where available.
+    EEVEE: mix a transparent surface with an opaque reflection lobe by Fresnel.
+    The blend keeps rooms legible straight on, while reflecting the environment
+    more strongly at a shallow angle. Drawing only the front surface prevents
+    the pane's real thickness from being composited twice in Material Preview.
     """
     mat = _new(name)
     b = _bsdf(mat)
@@ -225,56 +230,76 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_GREEN):
         _set(b, "Transmission Weight", 1.0)
         _set(b, "Roughness", 0.0)
         _set(b, "Specular IOR Level", 0.5)
+        output = mat.node_tree.nodes.get("Material Output")
+        # The stored Principled node above remains the physical glass definition.
+        # EEVEE's real-time view uses this dedicated reflection lobe instead:
+        # alpha blending is what lets a non-ray-traced viewport see the fixtures,
+        # and Fresnel puts a convincing reflected sky back on the pane.
+        reflect = mat.node_tree.nodes.new("ShaderNodeBsdfPrincipled")
+        reflect.name = "Preview Glass Reflection"
+        reflect.label = "Preview Glass Reflection"
+        _set(reflect, "Base Color", (*tint, 1.0))
+        _set(reflect, "Metallic", 0.0)
+        _set(reflect, "Roughness", 0.035)
+        _set(reflect, "IOR", 1.52)
+        _set(reflect, "Specular IOR Level", 0.5)
+        _set(reflect, "Transmission Weight", 0.0)
+
+        transparent = mat.node_tree.nodes.new("ShaderNodeBsdfTransparent")
+        fresnel = mat.node_tree.nodes.new("ShaderNodeFresnel")
+        fresnel.inputs["IOR"].default_value = 1.52
+        reflection_mix = mat.node_tree.nodes.new("ShaderNodeMixShader")
+        reflection_mix.name = "Preview Glass Fresnel"
+        reflection_mix.label = "Preview Glass Fresnel"
+        # Keep a modest reflection at every angle so the facade reads as glass,
+        # but cap it well below a mirror. A limited 14%..40% response is more
+        # useful in Material Preview than a physical 0%..100% Fresnel curve:
+        # rooms remain visible from an upward-looking view without the lower
+        # facade turning into an indistinguishable open hole.
+        reflection_range = mat.node_tree.nodes.new("ShaderNodeMapRange")
+        reflection_range.name = "Preview Glass Reflection Range"
+        reflection_range.label = "Preview Glass Reflection Range (14%–40%)"
+        reflection_range.clamp = True
+        reflection_range.inputs["From Min"].default_value = 0.0
+        reflection_range.inputs["From Max"].default_value = 1.0
+        reflection_range.inputs["To Min"].default_value = 0.14
+        reflection_range.inputs["To Max"].default_value = 0.40
+
+        links = mat.node_tree.links
+        for link in list(output.inputs["Surface"].links):
+            links.remove(link)
+        links.new(fresnel.outputs["Fac"], reflection_range.inputs["Value"])
+        links.new(reflection_range.outputs["Result"], reflection_mix.inputs[0])
+        links.new(transparent.outputs[0], reflection_mix.inputs[1])
+        links.new(reflect.outputs[0], reflection_mix.inputs[2])
+        links.new(reflection_mix.outputs[0], output.inputs["Surface"])
+
         mat.blend_method = "BLEND"
+        if hasattr(mat, "surface_render_method"):
+            mat.surface_render_method = "BLENDED"
         mat.use_backface_culling = False
+        if hasattr(mat, "use_transparency_overlap"):
+            mat.use_transparency_overlap = False
+        if hasattr(mat, "show_transparent_back"):
+            mat.show_transparent_back = False
         if hasattr(mat, "use_screen_refraction"):
-            mat.use_screen_refraction = True
+            mat.use_screen_refraction = False
         if hasattr(mat, "use_raytrace_refraction"):
-            mat.use_raytrace_refraction = True
+            mat.use_raytrace_refraction = False
 
     return mat
 
 
-def make_interior(name="Interior", color=INTERIOR_LINING):
-    """What you see THROUGH the glass.
-
-    Clear glass over an empty tower shows whatever is behind it — which, at
-    window height, is the far facade and then the sky, so the panes lose all
-    depth. A lining set back from the glazing gives the light something to land
-    on: it reads as lit floors, and because it sits behind the pane it moves
-    against the sky reflection as the view changes, which is exactly the cue
-    that says "glass" rather than "tinted panel".
-
-    Matte, and slightly darker than the facade so the glazing still registers as
-    an opening.
-
-    Brightness here is what "transparent" actually looks like. Glass reads as see-
-    through only if there is something legible on the far side; where the lining
-    falls dark the pane goes opaque and heavy no matter how clear the material is.
-    Measured share of glass pixels below 0.25 luminance as the lining was lifted:
-
-        (0.52,0.50,0.47) emit 0.35   3.6% dark   luminance 0.438
-        (0.66,0.65,0.62) emit 0.75   0.8% dark   luminance 0.542   <- brightness
-        (0.70,0.69,0.67) emit 1.00   0.5% dark   luminance 0.582
-
-    Its COLOUR matters as much as its brightness, for the same reason: at this
-    brightness the lining is plainly visible through the glass, so its cast lands
-    on every pane. The warm greys above pulled the glazing toward olive. Kept
-    neutral-to-cool now, which lets the green tint read as green.
-
-    Stopping at 0.75 is deliberate: past it the emission starts to overpower the
-    sky reflection (local contrast climbed 0.079 -> 0.088), and the pane drifts
-    from "glass with lit rooms behind it" toward "glowing panel".
-    """
+def make_ceiling_light(name="CeilingLight", color=CEILING_LIGHT_WARM,
+                       strength=CEILING_LIGHT_STRENGTH):
+    """Emissive ceiling panel; zero strength keeps a switched-off fixture."""
     mat = _new(name)
     b = _bsdf(mat)
     _set(b, "Base Color", (*color, 1.0))
-    _set(b, "Roughness", 0.80)
-    _set(b, "Specular IOR Level", 0.15)
-    # Self-illumination stands in for lit floors — on the lining, well behind the
-    # glass, so it never flattens the pane the way emission on the glass did.
+    _set(b, "Roughness", 0.25)
+    _set(b, "Specular IOR Level", 0.1)
     _set(b, "Emission Color", (*color, 1.0))
-    _set(b, "Emission Strength", 0.75)
+    _set(b, "Emission Strength", strength)
     return mat
 
 
@@ -360,13 +385,18 @@ def make_sky_world(name="Sky", strength=1.0):
 # One call to build the whole set
 # ---------------------------------------------------------------------------
 
-def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_GREEN):
+def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_CLEAR):
     """Returns the dict of materials build_house.py expects."""
     return {
         "concrete": make_concrete(),
         "spandrel": make_wall(color=wall_color),
         "glass": make_glass(engine=engine, tint=glass_tint),
-        "interior": make_interior(),
+        "ceiling_light_daylight": make_ceiling_light(
+            "CeilingLight_Daylight", CEILING_LIGHT_DAYLIGHT),
+        "ceiling_light_warm": make_ceiling_light(
+            "CeilingLight_Warm", CEILING_LIGHT_WARM),
+        "ceiling_light_off": make_ceiling_light(
+            "CeilingLight_Off", (0.055, 0.045, 0.035), 0.0),
         "foliage": make_foliage(),
         "trunk": make_trunk(),
         "metal": make_metal(),

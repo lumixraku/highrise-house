@@ -11,25 +11,31 @@ import sys
 import bpy
 from mathutils import Vector
 
-# Footprint is derived from the window module in build_house.py; keep in sync.
-W, D, TOP_Z = 64.0, 32.0, 160.0
+# Read the generated dimensions from the source configuration so view framing
+# follows changes to the block and room counts automatically.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from build_house import D, REFUGE_Z0, REFUGE_Z1, TOP_Z, W  # noqa: E402
+
 ROOF_GARDEN_Z0 = TOP_Z + 0.22
-# Refuge floor / sky garden void, from build_house.py: storeys 21-22.
-REFUGE_Z0, REFUGE_Z1 = 80.0, 88.0
 REFUGE_MID = (REFUGE_Z0 + REFUGE_Z1) / 2
+# The saved scene keeps the original 76 m tower centred at x=0 and places the
+# 84 m companion 18 m away, so the site centre is offset toward the new tower.
+SITE_CENTER_X = 51.0
 
 VIEWS = [
     # name,          camera position,               look-at,             lens
-    ("front",        (0.0, -440.0, 78.0),           (0.0, 0.0, 78.0),    42.0),
-    ("base_pilotis", (92.0, -78.0, 8.0),            (0.0, 0.0, 18.0),    32.0),
+    ("front",        (SITE_CENTER_X, -560.0, 150.0), (SITE_CENTER_X, 0.0, 125.0), 42.0),
+    ("base_pilotis", (SITE_CENTER_X + 110.0, -92.0, 8.0),
+                      (SITE_CENTER_X, 0.0, 18.0), 32.0),
     ("floor_detail", (D / 2 + 30.0, -42.0, 58.0),   (0.0, 0.0, 56.0),    70.0),
-    ("corner",       (182.0, -228.0, 112.0),        (0.0, 0.0, 76.0),    38.0),
+    ("corner",       (SITE_CENTER_X + 220.0, -300.0, 190.0),
+                      (SITE_CENTER_X, 0.0, 130.0), 38.0),
     # The sky garden, close and slightly below so you look up into the void and
     # can see the planting against the open double height.
     ("sky_garden",   (46.0, -66.0, REFUGE_MID - 2.0),
                       (0.0, 0.0, REFUGE_MID + 1.0),                       58.0),
-    ("roof_garden",  (76.0, -94.0, ROOF_GARDEN_Z0 + 18.0),
-                      (0.0, 0.0, ROOF_GARDEN_Z0 + 2.0),                    48.0),
+    ("roof_garden",  (SITE_CENTER_X + 100.0, -130.0, ROOF_GARDEN_Z0 + 18.0),
+                      (SITE_CENTER_X, 0.0, ROOF_GARDEN_Z0 + 2.0),           48.0),
 ]
 
 
@@ -51,8 +57,8 @@ def main():
     scene.render.resolution_x = 900
     scene.render.resolution_y = 1400
 
-    # Engine and sampling come from the .blend (Cycles). Allow an override for
-    # quick previews: --python render_views.py -- <blend> [samples]
+    # Engine and sampling come from the .blend. Allow a Cycles sample override
+    # when a slower physically refracted render is explicitly selected.
     if len(argv) > 1 and scene.render.engine == "CYCLES":
         scene.cycles.samples = int(argv[1])
 

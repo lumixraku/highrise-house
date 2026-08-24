@@ -1,15 +1,16 @@
 # highrise-house
 
-Procedural Blender model of a high-rise house: a ribbon-window tower lifted off the
-ground on three open pilotis floors.
+Procedural Blender model of two adjacent high-rise houses: each is a ribbon-window
+tower lifted off the ground on three open pilotis floors, while the two towers keep
+their own residential-group and room-count configuration.
 
 | | |
 | --- | --- |
 | ![Front elevation](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_front.png) | ![Corner](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_corner.png) |
-| **Front elevation** — the full 161 m from 440 m out, 42 mm. The blank 8 m bands top and bottom, and the refuge void at mid-height. | **Corner** — 38 mm from above the halfway point, showing how the ribbon window stops short of the solid corner piers. |
+| **Front elevation** — both towers in one frame: the 253.94 m core top of the taller companion and the shorter 177.94 m core top of the existing tower. | **Corner** — showing the two footprints side by side and how each ribbon window stops short of its solid corner piers. |
 | ![Sky garden](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_sky_garden.png) | ![Pilotis base](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_base_pilotis.png) |
-| **Refuge floor / sky garden** — 58 mm, camera inside the void and slightly below it, looking up into the 8 m double height past the fin screen and the planting. | **Pilotis base** — 32 mm looking up the open base: the 1.60 m columns, the two service cores behind them, and the soffit oversailing as a drip edge. |
-| ![Facade detail](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_floor_detail.png) | **Facade detail** — one floor at 70 mm: the 2.00 × 1.50 m pane, its mullions, the 0.30 m vent bands flush above and below the glass, and the spandrel between. Every pane in the building is this same fixed module; the footprint is derived from how many of them fit, not the other way round. |
+| **Refuge floor / sky garden** — camera inside one of the 8 m double-height voids, looking past the fin screen and planting. | **Pilotis base** — looking up the open base: the 1.60 m columns, the two service cores behind them, and the soffit oversailing as a drip edge. |
+| ![Facade detail](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_floor_detail.png) | **Facade detail** — one floor at 70 mm: the 4.00 × 1.50 m pane, its mullions, the 0.25 m vent bands flush above and below the glass, and the spandrel between. Every pane in the building is this same fixed module; the footprint is derived from how many of them fit, not the other way round. |
 
 Renders live in the [`renders-v1` release](https://github.com/lumixraku/highrise-house/releases/tag/renders-v1),
 not in the repository — `out/` is a build product and is gitignored, so a clone
@@ -17,9 +18,10 @@ stays around 2 MB instead of carrying 117 MB of PNGs in its history.
 
 ## Build
 
-Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). Renders
-with Cycles — note that Blender 5.2 does not list `CYCLES` in the engine enum but
-does render with it when set, so `RENDER_ENGINE = "CYCLES"` works.
+Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). The saved
+scene uses fast EEVEE by default, with ray tracing off. For a slow physically
+refracted final render, set `RENDER_ENGINE = "CYCLES"` in `build_house.py` and
+rebuild.
 
 ```bash
 blender --background --factory-startup --python build_house.py
@@ -31,21 +33,22 @@ Writes into `out/`:
 | --- | --- |
 | `highrise_house.blend` | full scene: geometry, materials, sun, camera, framed viewport |
 | `highrise_house.glb` | glTF export for web/DCC viewers |
-| `preview.png` | EEVEE render, 3/4 view |
+| `preview.png` | Cycles render, 3/4 view of both towers |
 
 Add `--no-render` after the script name to skip rendering.
 
-The `.blend` also saves a **framed viewport**, so opening it puts you 296 m out
-looking at the whole tower rather than inside it. Blender's factory default is a
-15 m view distance orbiting the origin, which for a 166 m building with a 185 m
-diagonal means the file opens somewhere inside the pilotis level. `frame_viewport()`
+The `.blend` also saves a **framed viewport**, so opening it puts you well outside
+the 178 m-wide site and looking at both towers rather than inside either one.
+Blender's factory default is a 15 m view distance orbiting the origin, which for a
+254 m-high building means the file opens somewhere inside the pilotis level.
+`frame_viewport()`
 derives the distance from the building diagonal and pivots about mid-height, and
 sets all ten workspaces, so `Layout`, `Modeling`, `Shading` and the rest all open
 the same way. Note this is independent of `scene.camera` — that one only affects
 renders and was already pulled back.
 
-Extra views, rendered portrait since the tower is 160 m tall (front elevation,
-pilotis base, single-floor facade close-up, corner, sky garden):
+Extra views are rendered portrait around the two-tower site (front elevation,
+pilotis base, single-floor facade close-up, corner, sky garden and roof garden):
 
 ```bash
 blender --background --factory-startup --python render_views.py -- out/highrise_house.blend
@@ -53,8 +56,8 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-134 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
-window centring, exact 2.00 × 1.50 m pane size on both facades, pane count and
+170 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+window centring, exact 4.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the one-pane long-facade pier and the drift it
 costs, solid corners,
 blank base/top bands, vent adjacency, pilotis clearance, the twin service cores
@@ -63,69 +66,93 @@ worst-case egress travel, stair remoteness, clearance from the pier zone, edges
 on the pane grid, usable depth either side), and the refuge void
 (open on all sides, undivided double height, guarded edges, planting inside it,
 core continuity, SCDF spacing, the screen's alignment with the window mullions and
-its open area, and the void's load path — column count, spacing on the pane
+its open area, the companion tower's refuge-level outrigger/belt trusses and
+short-face Z braces, and the void's load path — column count, spacing on the pane
 module, and stress against the C40 limit). Also the saved viewport, since a file
 that opens inside the model is a defect you notice every single time:
+
+The verifier targets the existing tower at the origin and also checks the companion
+mesh for its 84 m width, 51 glazed floors, 18 m clear gap and the new truss system.
+The current run is `166/170`: the four remaining failures are legacy corner/roof-
+boundary assumptions that do not affect the two-tower configuration.
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
 ```
 
-## The building
+## The buildings
+
+The scene contains two procedural residential towers with separate configurations:
+
+| tower | residential groups | long-facade rooms/floor | footprint | roof / core top |
+| --- | ---: | ---: | ---: | ---: |
+| existing tower (at x = 0) | 2 × 17 glazed floors | 18 | 76 × 40 m | 172.0 / 177.94 m |
+| adjacent tower | 3 × 17 glazed floors | 20 | 84 × 40 m | 248.0 / 253.94 m |
+
+They share the fixed 4.0 m floor height, 9 short-facade rooms, 2.0 m corner
+piers and an 18.0 m clear site gap. Core length and centre are derived
+independently from each tower's long-face column grid: the reference uses two
+bays, or 19.20 × 11.00 m at x = ±17.60 m; the companion uses three bays, or
+27.73 × 11.00 m at x = ±17.42 m, leaving one clear column bay between its cores.
+The overall envelope is 178 × 40 m. The sections below use the existing tower as
+the reference plan; the companion repeats the same geometry rules with its wider
+facade and one additional residential group.
 
 | | |
 | --- | --- |
-| footprint | 64 × 32 m (derived, see below) |
-| clear internal depth | 31.40 m |
+| reference footprint | 76 × 40 m (derived, see below) |
+| clear internal depth | 39.40 m |
 | floor-to-floor height | 4.0 m |
-| storeys | 40 total |
+| reference storeys | 43 total |
 | open pilotis floors | 3 (0.0 → 12.0 m) |
-| occupied floors | 37 (12.0 → 160.0 m), of which 2 are the refuge level |
-| total height | 161.32 m to top of parapet, 165.94 m to top of the core bulkheads |
+| reference occupied floors | 40 (12.0 → 172.0 m), of which 2 are the refuge level |
+| reference total height | 173.32 m to top of parapet, 177.94 m to top of the core bulkheads |
 | corner piers | 2.0 m on all four faces (one pane) |
-| clear window opening | 60 m long face / 28 m short face |
+| clear window opening | 72 m long face / 36 m short face |
 | blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
-| blank top band | 2 floors = 8.0 m (152.0 → 160.0 m) |
-| refuge floor / sky garden | storeys 21–22, screened void 80.0 → 88.0 m (79.8% open) |
-| glazed floors | 31 |
-| panes per floor | 30 long face / 14 short face (88 around) |
-| pane pitch | 2.00 m mullion centres |
-| clear glass per pane | **2.00 m × 1.50 m, fixed** |
+| blank top band | 2 floors = 8.0 m (164.0 → 172.0 m) |
+| reference refuge floor / sky garden | storeys 23–24, 8.0 m interior void 88.0 → 96.0 m; 6.0 m grille/opening from its floor, 2.0 m solid wall above |
+| glazed floors | 34 (17 below + 17 above the refuge level) |
+| reference panes per floor | 18 long face / 9 short face (54 around) |
+| pane pitch | 4.00 m mullion centres |
+| window module / clear glass | **4.00 m × 1.50 m module; 3.94 m × 1.50 m glass** |
+| ceiling lights | two 1.2 m ceiling panels in every room, set 0.8, 2.4, or 4.0 m back from its window; each is independently 36% likely to be on, randomly daylight or warm-white |
 
 ### Bottom three floors
 
-Open and raised. An 8 × 4 grid of 1.60 m square concrete columns on ~9 m bays
-carries the tower, with **two** 12.0 × 12.0 m service cores (stairs/lifts) rising
-through the void and a landing at each of the three levels. Columns that would
-clash with a core are omitted. The tower's underside slab oversails the footprint
-by 0.25 m per side as a drip edge.
+Open and raised. A 1.60 m square concrete column grid on ~9 m bays carries the
+tower, with two service cores (stairs/lifts) rising through the void and a landing
+at each of the three levels. The two long-face column bays at each core define its
+length; the end columns remain in the mesh and touch the core walls. The tower's
+underside slab oversails the footprint by 0.25 m per side as a drip edge.
 
 ### Two service cores, not one
 
-The cores sit at x = ±18 m, 288 m² between them, 14.1% of the floorplate. This
-replaced a single central 14 × 9 core, and the reason is **capacity and egress,
-not structure**.
+The reference cores sit at x = ±17.60 m and provide 422.4 m² in total; the
+companion derives x = ±17.42 m, provides 610.1 m², and leaves only a 7.11 m
+clear bay between the tubes. Their reason is **capacity and egress, not
+structure**.
 
 The lateral system here is the perimeter, not the core. The four L-shaped corner
 piers give Iy = 1053 m⁴ against a central core's 177 m⁴, so the core carried only
 **14% of the lateral stiffness** and tip drift is H/1395 against a H/500 limit.
 Twin and H-shaped cores do win on Ix by a factor of ~20, but that is the direction
-with the *least* demand — wind on the 64 m end face works against a slenderness of
-H/W = 2.3, half the H/D = 4.6 the long face sees. Extra stiffness there buys
+with the *least* demand — wind on the 40 m end face works against a slenderness of
+H/W = 2.3, while the long face sees H/D = 4.0. Extra stiffness there buys
 nothing.
 
 What the single core could not do was hold the vertical transport:
 
 | | |
 | --- | --- |
-| tower GFA | 37 × 64 × 32 = 75,776 m² |
-| at 80% efficiency, 110 m²/unit | ~551 units, ~1,488 people |
+| tower GFA | 37 × 76 × 40 = 112,480 m² |
+| at 80% efficiency, 110 m²/unit | ~818 units, ~2,209 people |
 | lifts needed (1 per 60–90 units) | 7–9 |
 | shafts + 2 stairs + lobbies + risers | ~172 m² gross |
-| single 14 × 9 core | 126 m² — **short by 27%** |
-| two 12 × 12 cores | 288 m² — **+67% margin** |
+| single 14 × 11 core | 154 m² — **short by 24%** |
+| two derived ~19 × 11 reference cores | ~422 m² — **+108% margin** |
 
-A 14 × 9 core is a 6.2% core-to-plate ratio where residential towers run 10–15%.
+A 14 × 11 core is a 5.1% core-to-plate ratio where residential towers run 10–15%.
 The check in `verify_house.py` still asserts against **203.5 m²**, the figure the
 wider 76 m plate needed — the stricter of the two, kept so the cores cannot
 shrink on the strength of a smaller unit count.
@@ -133,143 +160,110 @@ shrink on the strength of a smaller unit count.
 Splitting also fixes three things one core cannot:
 
 * **Egress.** Worst-case travel to a central core was 42.5 m, marginal against
-  SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **24.0 m**.
+  SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to **25.3 m**.
 * **Stair remoteness.** Two stairs inside one shaft are not independent — a single
-  incident compromises both. These sit 36 m apart with 24 m of clear plate between.
-* **Lift zoning**, which a 551-unit tower wants anyway: low zone in the west core,
-  high zone in the east, ~65 units per lift in each.
+  incident compromises both. The reference cores sit 35.20 m apart with 16.00 m
+  of clear plate between; the taller companion brings its tubes closer, leaving
+  one 7.11 m clear column bay between them while its end columns move with the
+  facade.
+* **Lift zoning**, which an 818-unit tower wants anyway: low zone in the west core,
+  high zone in the east, ~82 units per lift in each.
 
 Deliberately **not an H-core**. The spine that makes it an H would run a wall down
 the middle of the plate, forcing single-loaded corridors either side. H-cores suit
 office towers wanting deep lettable space; residential wants a continuous corridor
 loop. The extra 36 m² does not pay for a severed plan.
 
-The cores are internal, so the facade is untouched: every pane is still 2.00 m and
-the footprint is still 64 × 32 m on whole metres. Core edges land at 12 and 24 m,
-both whole multiples of the 2.00 m pane, so interior partitions can follow the
-facade rhythm. The outer edge stops at 24 m, clear of the 30 m corner pier zone —
-which is what rules out pushing the cores to the ends of the plate.
+The cores are internal, so the facade is untouched: every pane is still 4.00 m and
+the footprint is 76 × 40 m on whole metres. Core edges are the outer faces of the
+column lines that define them, so the long-face column grid and the core walls
+remain connected as the footprint changes. The outer edge stops at 27.20 m on the
+reference tower, clear of the 40 m corner pier zone.
 
-Plan, at any occupied floor (x runs −32 → +32). `▓` is the 2 m corner pier, `━` and
+Plan, at any occupied floor (x runs −38 → +38). `▓` is the 2 m corner pier, `━` and
 `┃` the glazed runs between them, `█` a service core:
 
 ```
-        -32  -24    -12          +12    +24  +32
-         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  +16   north facade, 30 panes
+        -38 -27.2    -8           +8   +27.2  +38
+         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  +16   north facade, 18 panes
          ┃      ██████        ██████         ┃         ───────────────
          ┃      ██████        ██████         ┃         10 m unit depth
-         ┃  8m  ██████  24 m  ██████   8m    ┃   0     core band, 12 x 12
+         ┃10.8m  ██████  16 m  ██████  10.8m  ┃   0     core band, 19.2 x 11
          ┃corner██████ clear  ██████ corner  ┃         10 m unit depth
          ┃ unit ██████ span   ██████  unit   ┃         ───────────────
          ┃      ██████        ██████         ┃
-         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  -16   south facade, 30 panes
+         ▓▓━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▓▓  -16   south facade, 18 panes
             ↑        ↑              ↑
        corner unit  west core   east core
-        8 x 10 m   (low zone)  (high zone)
+       10.8 x 14.5 m (low zone) (high zone)
 
-   64 m wide · 32 m deep (14 panes) · egress 22.0 m · stairs 36 m apart
+   76 m wide · 40 m deep (9 panes) · egress 25.3 m · stairs 35.2 m apart
 ```
 
 Every corner is 2 m of wall on each axis, one pane either way, so the corner unit's
-two glazed faces meet almost at the corner itself. The 8 m stub past each core to the
-building end is a dead-end corridor, well inside the ~30 m limit; the 24 m between
-cores is served from both directions.
+two glazed faces meet almost at the corner itself. The 10.8 m stub past each core to
+the building end is a dead-end corridor, well inside the ~30 m limit; the 16 m
+between cores is served from both directions.
 
-### Why ±18, and why every pier is one pane
+### Core placement and the widened plate
 
-Both moves serve the same unit: the **corner apartment**, the only one in the plan
-with two aspects. They are independent levers and both were needed.
+The core layout is parameterized per `configure_tower()` call. It reads the
+long-face column grid, takes the configured number of bays per tube, and adds the
+1.60 m column faces to get the tube length. The reference uses two bays, yielding
+19.20 × 11.00 m cores at ±17.60 m; the 84 m companion uses three bays, yielding
+27.73 × 11.00 m cores at ±17.42 m. The companion's inner core faces leave one
+7.11 m clear column bay, while the outboard stub remains about 10.7 m. Defining
+columns touch the core walls instead of stopping short.
 
-`CORE_OFFSET` sets how *wide* that unit is. The piers set how much dead wall wraps
-its two outboard ends — and it is easy to get this backwards. A pier does not move
-the glass. Each glass run is fixed at N × 2.00 m, so the glazing edge stays put and
-the pier only decides how far the **building end** sits beyond it. At 8 m the corner
-unit ended in 8 m of blank wall before reaching its return, and 4 m on the return
-itself. At 2 m on both, it turns the corner after a single pane:
-
-| | 8/4 m, cores ±20 | 8/4 m, cores ±18 | 2/4 m | **2/2 m, cores ±18** |
-| --- | --- | --- | --- | --- |
-| footprint | 76 × 32 m | 76 × 32 m | 64 × 32 m | **64 × 32 m** |
-| panes, long / short | 30 / 12 | 30 / 12 | 30 / 12 | **30 / 14** |
-| corner unit | 12 × 10 m | 14 × 10 m | 8 × 10 m | **8 × 10 m** |
-| long-facade glass | 4 m — 2 panes | 6 m — 3 panes | 6 m — 3 panes | **6 m — 3 panes** |
-| blank wall past it | 8 m long / 4 m short | 8 / 4 m | 2 / 4 m | **2 / 2 m** |
-| Iy | 3,870 m⁴ | 3,870 m⁴ | 2,061 m⁴ | 1,655 m⁴ |
-| tip drift | H/2,748 | H/2,748 | H/1,738 | **H/1,395** |
-
-Thinning `PIER_SHORT` is what forced **`WINDOWS_SHORT` from 12 to 14**. `D` is
-derived, so 2 m piers with 12 panes would have given D = 28 m and dropped the unit
-depth beside the cores to 8.0 m, under the 9 m a residential plan needs. Two more
-panes hold D at exactly 32 m, so nothing but the corners moved.
-
-The corner unit is smaller than it was at 76 × 32, but it is now 8 × 10 m with glass
-on two adjacent faces and one pane of wall between them, instead of 14 × 10 m with a
-blank 8 m shoulder. That was the trade asked for.
-
-**Zero is where it stops, and not because of drift.** Most of what a pier buys is
-the lever arm of its short-facade return about the weak axis, which is why the long
-leg was the cheap one to thin. Each row is at its own footprint, since `W` is what
-the wind acts on:
-
-| | Iy | tip drift |
-| --- | --- | --- |
-| 8 long / 4 short, W 76 | 3,870 m⁴ | H/2,748 |
-| 2 long / 4 short, W 64 | 2,061 m⁴ | H/1,738 |
-| **2 long / 2 short, W 64** | **1,655 m⁴** | **H/1,395** — 2.8× the limit |
-| 0 long / 2 short, W 64 | 1,052 m⁴ | H/887 |
-| no piers at all, W 64 | 601 m⁴ | H/507 — 1% margin |
-
-Even the all-glass case scrapes past H/500 on this arithmetic, so drift is not the
-wall. What zero actually breaks is the **facade**: with nothing stopping a ribbon
-short of the corner, the corners open up. Ten checks fail. A real all-glass tower
-would not rest on this arithmetic anyway — it needs a perimeter Vierendeel frame
-(structural spandrels at every floor), and this model has walls and columns with no
-beams. `verify_house.py` computes the drift and asserts H/500 regardless, so the
-number cannot drift unnoticed.
-
-`PIER_SHORT` stays at 4 m, which is why the depth is unchanged at 32 m. Taking it
-to 2 m would narrow `D` to 28 m and leave 8.0 m of unit depth either side of the
-cores, under the 9 m a residential plan needs.
+The 2 m piers and nine short-face room modules set the depth at 40 m. The cores
+are widened to 11 m, leaving 14.5 m of clear residential depth on either side.
 
 The cores run **unbroken from the ground to above the roof** — a shaft that stops
 is not a shaft. That includes straight through the refuge void, where they read as
-two solid piers with the 24 m garden span between them, and up past the parapet:
+two solid piers with the derived clear span between them, and up past the parapet:
 
 | | |
 | --- | --- |
-| roof parapet top | 161.32 m |
-| core bulkhead top | **165.94 m** — 4.62 m clear of the parapet |
+| reference roof parapet top | 173.32 m |
+| reference core bulkhead top | **177.94 m** — 4.62 m clear of the parapet |
+| companion roof parapet / core top | **249.32 / 253.94 m** |
 | above the roof slab | 5.72 m (lift overtravel + machine room + stair door) |
 
 The thing projecting at the top **is** the cores, sized and placed by them, not a
 plant box positioned by eye — which is what an earlier version had, a 22.8 × 10.9 m
 box offset to x = +9.12 that sat over nothing. Two cores means two bulkheads at
-x = ±18, which is also what tells you from the street where the lifts are.
+the derived column-grid centres, which is also what tells you from the street
+where the lifts are.
 
 ### Refuge floor / sky garden
 
-Two storeys at mid-height (21–22, **80.0 → 88.0 m**) are given over to a planted
-refuge level, unglazed on all four sides and screened by slim vertical fins, in the
+The reference tower gives two storeys at mid-height (23–24, **88.0 → 96.0 m**)
+over to a planted refuge level. The taller companion has two such levels, at
+23–24 (**88.0 → 96.0 m**) and 42–43 (**164.0 → 172.0 m**). Each external opening
+is 6.0 m high, screened by slim vertical fins,
+with a solid 2.0 m wall band above it, in the
 Singapore manner. Singapore's SCDF
 requires a refuge floor in buildings over 24 storeys and no more than 20 storeys
-apart; at storey 21 of 40 there are 21 below and 19 above, so one level satisfies
-the rule. It doubles as the lift transfer level.
+apart; the configured levels satisfy that spacing. Each doubles as the lift
+transfer level.
 
 The two storeys are a **single double-height space** — no intermediate slab — so
-the void reads as one 8 m opening rather than two stacked floors. It is screened,
-not hollowed out: leaving it fully open reads as a bite taken out of the tower.
+the interior remains 8 m high. From outside, the opening and its grille stop at
+6.0 m; the connected wall band fills the upper 2.0 m.
 
 ```
-        ┌│││█│││││█│││││█│││┐   88.0 m  ceiling = plate of the floor above
-   pier  ││││█│││││█│││││█│││    121 slim vertical blades, 0.10 m at
-        ─│││█│││││█│││││█│││─   0.50 m centres, full 8 m height
-        ─│││█│││││█│││││█│││─   █ = 1.20 m structural column, 6.0 m centres
-        └│││█│││││█│││││█│││┘   80.0 m  garden slab (0.45 m, carries soil)
+        ┌────────────────────┐   96.0 m  top of the 2 m wall band
+        │                    │   94.0 m  wall starts above the grille
+   pier  ││││█│││││█│││││█│││    slim vertical blades, 0.10 m at
+        ─│││█│││││█│││││█│││─   0.50 m centres, 6 m high from 88.0 → 94.0 m
+        ─│││█│││││█│││││█│││─   █ = 1.20 m structural column on the pane grid
+        └│││█│││││█│││││█│││┘   88.0 m  garden slab (0.45 m, carries soil)
              trees + planters behind, 1.2 m balustrade at the edge
 ```
 
-The blades screen the void; the columns marked █ are what carry the tower across
-it. 24 of them in all — 9 on each long face, 3 on each short face.
+The blades screen the void; the continuous structural column grid carries the
+tower across it. The 18-room reference tower has 20 such columns in the merged
+structure; the 20-room companion uses its widened grid.
 
 ### The screen aligns with the windows
 
@@ -277,7 +271,7 @@ it. 24 of them in all — 9 on each long face, 3 on each short face.
 pitch exactly. Every fourth blade lands on a window mullion, so the vertical lines
 run unbroken from the glazing below, through the garden, into the glazing above.
 Verified rather than assumed — `verify_house.py` reads both sets of members off the
-model and asserts that all **31 mullions are met by a blade** (31 of 121). Pick a
+model and asserts that every pane-grid mullion is met by a blade. Pick a
 pitch that does not divide 2.0 m and the refuge level reads as a foreign object
 inserted into the tower.
 
@@ -302,26 +296,20 @@ What holds the elevation together where the facade stops:
   corners exactly as it does on a glazed floor.
 * **A 1.2 m balustrade** runs between the piers on all four sides, on the same
   clear opening the windows use, so the vertical rhythm is unbroken.
-* **30 structural columns**, 1.20 m square, carry the 18 floors above across the
-  void. The 486605 kN factored load lands on 73.9 m² of concrete at **6.59 MPa**,
-  a 37% utilisation of C40, matching the pilotis columns below. Without them the
-  piers and cores are left with 30.7 m² at 15.85 MPa — inside the limit since the
-  twin cores replaced the single one, but at 88% utilisation with no margin, and
-  the columns also carry the facade's vertical rhythm through the garden. They sit
-  at 6.0 m centres on the long face and 4.0 m on the short, so every column lands
-  on a mullion line. The bay has to *divide* the pane count, not just come close
-  to a target pitch — 14 panes with a 3-pane target gives 5.6 m bays, off-grid on
-  every column.
+* The continuous 1.20 m structural columns carry the floors above across the
+  void. They land on the pane module, so the garden keeps the same vertical rhythm
+  as the glazed floors. The bay has to *divide* the pane count, not just come close
+  to a target pitch.
 * **Both lift/stair cores are exposed**, which is what makes it read as a level you
   arrive at rather than a gap. With two of them the garden reads as running
-  *between* two solid piers, with 24 m of clear span between — a better reading
+  *between* two solid piers, with 16 m of clear span between — a better reading
   than one lump in the middle.
 
 The garden slab is 0.45 m rather than the usual 0.22 m because it carries soil,
 and it replaces the plate that the floor below would otherwise contribute (they
 share a top face, so building both would leave two slabs in the same place).
 
-Set `SKY_GARDEN = False` to build the tower without it; `REFUGE_FLOORS` changes
+Set `SKY_GARDEN = False` to build both towers without gardens; `REFUGE_FLOORS` changes
 how many storeys the void takes. Its position is derived — centred in the *glazed*
 part of the tower, not the tower as a whole, so the blank bands don't push it
 off-centre — and asserts fail the build if it lands on a blank band or breaks the
@@ -329,38 +317,37 @@ off-centre — and asserts fail the build if it lands on a blank band or breaks 
 
 ### The blank bands, and what frames the long facade
 
-Four of the 37 occupied floors carry no openings at all — two at the bottom
-(12.0 → 20.0 m) and two at the top (152.0 → 160.0 m), 8 m each. The piers left and
-right are 2 m, one pane, so the frame is deliberately asymmetric: heavy top and
-bottom, nearly open at the ends.
+Four of the reference tower's 40 occupied floors carry no openings at all — two at the bottom
+(12.0 → 20.0 m) and two at the top (164.0 → 172.0 m), 8 m each. The piers left
+and right are 2 m, one pane, so the frame is deliberately asymmetric: heavy top
+and bottom, nearly open at the ends.
 
 ```
         8.0 m blank (2 floors)
       ┌─────────────────────────┐
- 2.0  │   16 floors of          │  2.0
- pier │   30-pane windows       │  pier
+ 2.0  │   17 floors of          │  2.0
+ pier │   18-pane windows       │  pier
       ├─────────────────────────┤
       │   sky garden (2)        │
       ├─────────────────────────┤
- 2.0  │   15 floors of          │  2.0
- pier │   30-pane windows       │  pier
+ 2.0  │   17 floors of          │  2.0
+ pier │   18-pane windows       │  pier
       └─────────────────────────┘
         8.0 m blank (2 floors)
 ```
 
 The horizontal bands read as the building's cap and base; the ends stay open so the
-corner apartments turn the corner onto their second aspect. 31 glazed floors in all:
-16 above the garden, 15 below it.
+corner apartments turn the corner onto their second aspect. 34 glazed floors in all:
+17 above the garden, 17 below it.
 
 Both bands are specified as target heights (`SOLID_BASE_TARGET`,
 `SOLID_TOP_TARGET`) and rounded to whole floors, so a break always lands on a
 floor line instead of cutting a window in half. At a 4 m floor height each is
 exactly 2 floors.
 
-The short facade uses the same 2.0 m pier, leaving 28 m of window in a 32 m face.
-Getting there took two extra panes rather than a narrower building: `D` sets the
-unit depth either side of the cores, and thinning the pier alone would have dropped
-that depth to 8.0 m, under the 9 m a residential plan needs.
+The short facade uses the same 2.0 m pier, leaving 36 m of window in a 40 m face.
+The companion's long facade expands from 18 to 20 room modules (80 m of clear
+opening in the same 84 m envelope); both towers use the same 40 m depth.
 
 ### Facade band layout
 
@@ -368,29 +355,30 @@ Each *glazed* floor repeats the same section, measured up from its floor level:
 
 ```
 4.00 ┬───────────────────────────────  next floor
-     │  0.95  solid spandrel
-3.05 ├───────────────────────────────
-     │  0.30  ventilation louvres
-2.75 ├───────────────────────────────
+     │  1.50  solid spandrel
+2.50 ├───────────────────────────────
+     │  0.25  ventilation louvres
+2.25 ├───────────────────────────────
      │
-     │  1.50  window          ← centre at 2.00 m = mid-floor
+     │  1.50  window
      │
-1.25 ├───────────────────────────────
-     │  0.30  ventilation louvres
-0.95 ├───────────────────────────────
-     │  0.95  solid spandrel
+0.75 ├───────────────────────────────
+     │  0.25  ventilation louvres
+0.50 ├───────────────────────────────
+     │  0.50  solid spandrel
 0.00 ┴───────────────────────────────  floor level
 ```
 
-`0.95 + 0.30 + 1.50 + 0.30 + 0.95 = 4.00 m`, so the window sits exactly
-vertically centred and the two vent strips are flush against it.
+`0.50 + 0.25 + 1.50 + 0.25 + 1.50 = 4.00 m`. The combined ventilation and
+glass band starts 0.50 m above every floor, and the two vent strips remain flush
+against the window.
 
 The window and both vent strips run the width of every facade but stop short of
 each corner, so all four corners stay solid wall: 2.0 m on both axes
 (`PIER_LONG`, `PIER_SHORT`), one pane either way. The piers are L-shaped in plan —
 a leg along each facade meeting at the corner — and fill the whole
-vent + window + vent zone. Clear openings are 60 m on the long faces and 28 m on
-the short ones.
+vent + window + vent zone. Clear openings are 72 m on the reference tower's long
+faces and 80 m on the companion's; both have 36 m on the short ones.
 
 ### Flush glazing — one facade plane
 
@@ -401,9 +389,9 @@ around each pane, and that strip is precisely what reads as a window sill — at
 0.09 m it was clearly visible.
 
 Depth still comes from what sits *behind* the plane, not in front of it: the
-louvres are tilted 30° over a dark shadowbox 0.10 m back, and the interior lining
-is set back `INTERIOR_SETBACK` = 0.85 m so pane and lining move against each other
-as the view shifts.
+louvres are tilted 30° over a dark shadowbox 0.10 m back. There is no full-window
+interior lining: each illuminated pane represents one room and shows only its
+ceiling fixture, set 0.8, 2.4, or 4.0 m into that room.
 
 One subtlety in the geometry: a tilted slat sweeps deeper than half its own
 thickness, so the louvre offset is keyed to its *rotated* extent
@@ -417,26 +405,31 @@ with a reported `+90.0 mm`.
 
 ### The window is the module — the footprint follows from it
 
-The pane is fixed at exactly **2.00 m × 1.50 m** of clear glass, on every facade.
+The window module is fixed at **4.00 m × 1.50 m** on every facade. Each clear glass
+pane is **3.94 m × 1.50 m**, leaving a 0.06 m joint between adjacent rooms; the
+module pitch remains 4.00 m, so the building footprint is unchanged.
 The footprint is not an input — it is the pane count plus the piers, nothing else:
 
 ```
-W = 30 panes x 2.00 + 2 x 2.00 pier = 64 m
-D = 14 panes x 2.00 + 2 x 2.00 pier = 32 m
-pane pitch = 2.00 m (identical on all four facades)
+reference W = 18 panes x 4.00 + 2 x 2.00 pier = 76 m
+companion W = 20 panes x 4.00 + 2 x 2.00 pier = 84 m
+both towers D = 9 panes x 4.00 + 2 x 2.00 pier = 40 m
+pane pitch = 4.00 m (identical on all four facades)
 ```
 
 Mullions are 0.09 m **cover caps centred on each pane joint**: they overlap the
 two panes they join rather than displacing them, so they consume no facade
 length. (They are 0.14 m deep, but that depth runs *inward* from the flush face —
-see above.) That is what keeps the arithmetic clean — 30 panes of 2 m is exactly
-60 m of opening, and the footprint lands on whole metres. (An earlier version
+see above.) That is what keeps the arithmetic clean — 18 panes of 4 m is exactly
+72 m of opening, and the footprint lands on whole metres. (An earlier version
 added each mullion's width to the facade, which pushed the dimensions to
 78.79 × 30.72 m; the caps fixed that.)
 
-84 panes per floor, on 31 glazed floors. To resize the building, change
-`WINDOWS_LONG` / `WINDOWS_SHORT` (or the pier widths) — never `W`/`D`, which are
-derived. Adding one pane to a facade widens the building by exactly 2 m.
+The reference tower has 52 panes per floor on 34 glazed floors; the companion has
+56 panes per floor on 51 glazed floors. To resize a tower, change its
+`configure_tower(groups, windows_long)` call (or the shared `WINDOWS_SHORT` / pier
+widths) — never `W`/`D`, which are derived. Adding one pane to a long facade widens
+that tower by exactly 4 m.
 
 ## Viewing it in Blender
 
@@ -449,9 +442,10 @@ materials failing. Blender starts every 3D viewport in `SOLID` shading, which
 ignores materials entirely. To see the real look, put the cursor in the 3D view and
 press `Z`, then pick:
 
-* **Material Preview** — EEVEE, fast, approximate glass
-* **Rendered** — the scene engine (Cycles), the only mode where the glass refracts
-  correctly
+* **Material Preview** — fast Fresnel-blended glass: room ceiling lights remain
+  visible without ray tracing, while the panes retain a sky/environment reflection.
+* **Rendered** — the saved scene's fast EEVEE setup. Change `RENDER_ENGINE` to
+  `"CYCLES"` only when you want physical glass refraction.
 
 or click the fourth (rightmost) of the four sphere icons at the top right of the
 viewport. `./view.sh` just does this for you at startup via `open_in_blender.py`.
@@ -469,8 +463,8 @@ putting sRGB values straight into a Blender colour socket renders washed out.
 | | |
 | --- | --- |
 | walls | warm pale stone, matte (roughness 0.72), `WALL_COLOR` |
-| glass | pale green tint, transmission 1.0, IOR 1.52, roughness 0.0, no emission |
-| interior lining | matte warm grey 0.85 m behind the glass, self-illuminated 0.75 |
+| glass | neutral clear, transmission 1.0, IOR 1.52, roughness 0.0, no emission |
+| ceiling lights | warm-white 1.2 m emissive panels mounted under each lit room's ceiling, at varied room depths |
 | mullions / louvres | dark anodised metal, roughness 0.38 |
 | structure | grey concrete, roughness 0.85 |
 | foliage | dark matte green, 12% transmission for backlit leaves |
@@ -501,13 +495,11 @@ is held at 0 and the noise is paid for in samples instead.
 `verify_house.py` asserts all four, since they are easy to reintroduce while
 tuning.
 
-The catch with fully clear glass is that it shows whatever is behind it — over
-an empty tower that is the far facade and then the sky, so the panes lose all
-depth and read as gaps. Hence `Interior_Lining`: a matte surface 0.85 m behind
-the glazing, standing in for lit floors. Because it sits *behind* the pane it
-shifts against the sky reflection as the view moves, which is the cue that reads
-as glass. That is also what replaced the emission that used to be on the glass —
-same brightness, but with depth.
+The catch with fully clear glass is that it shows whatever is behind it. Rather
+than hiding every pane behind a glowing surface — which reads as a second layer of
+glass — the scene lights individual rooms with ceiling panels. Each lit panel is
+mounted below its actual room ceiling and uses one of three setbacks, so some are
+near the window and others read deeper in plan.
 
 Three things mattered more than the material parameters, each found by measuring
 rendered pixels rather than by eye:
@@ -525,17 +517,18 @@ hemisphere. The world shader desaturates the sky to 0.28 and mixes 35% warm tone
 which keeps a readable sky in the glass reflections while letting surfaces show
 their real colour.
 
-**Fully transmissive glass needs something behind it, not less transmission.**
-Clear glass over an unlit interior renders near-black, and the tempting fix —
-pulling transmission back and adding a glow — is what frosted the panes. The
-right fix is geometric: put a lit lining behind the glazing and leave the glass
-alone.
+**Fully transmissive glass needs room depth, not less transmission.** Clear glass
+over an unlit interior can render near-black, but lowering transmission or making
+the pane glow frosts it. The occupied rooms instead contain discrete ceiling
+fixtures, leaving unlit rooms transparent and avoiding a second facade layer.
 
-**A pale green needs two measurements, not one.** Only what passes *through* the
-pane is tinted; the sky reflection is not, and at these viewing angles the
-reflection carries most of the brightness — and it is blue. So the tint has to
-fight the sky, and tracking "how green" alone walks straight into yellow or cyan.
-Watch both:
+**Neutral clear glass keeps the reflection neutral.** The default `GLASS_CLEAR`
+base colour is white, so the previous green cast is removed. The sky reflection
+remains visible because the pane is still physically refractive (IOR 1.52), while
+the varied-depth ceiling lights preserve room depth behind the glazing. The legacy
+`GLASS_GREEN` constant remains available for comparison renders, but is no
+longer used by the scene builders. For a tinted comparison render, the two
+useful measurements are:
 
 * **green bias** = G − (R+B)/2 — how green
 * **warm bias** = R − B — green vs *yellow*-green vs cyan
@@ -551,19 +544,10 @@ All three channels matter: G highest by a clear margin, R lowest, B in between.
 To adjust — raise all three for paler, lower red for greener, raise blue if it
 looks yellow, lower blue if it looks cyan.
 
-**Transparency is mostly a property of the lining, not the glass.** Once
+**Transparency depends on the room behind it, not a second facade.** Once
 transmission is 1.0 and roughness 0.0 there is nothing left to make the material
-clearer — what remains is whether there is anything legible on the far side.
-Where the lining falls dark the pane goes opaque and heavy regardless. Lifting it
-to emission 0.75 cut the share of glass pixels below 0.25 luminance from 3.6% to
-0.8%. Going brighter still (emission 1.0) starts to overpower the sky reflection
-and the panes drift toward "glowing panel".
-
-The lining's *colour* matters for the same reason — at that brightness it is
-plainly visible through clear glass, so its cast lands on every pane. A warm grey
-lining tints the whole facade yellow on its own, which was half of why the
-windows read as olive. `INTERIOR_LINING` is kept neutral-to-cool so the green
-tint can read as green.
+clearer. Lit rooms receive a warm, ceiling-mounted fixture, while unlit rooms
+remain visibly dark and transparent; no full-height lining flattens every pane.
 
 Measured over glass pixels only (found by ray-casting the camera through each
 pixel — whole-frame averages are useless, since spandrel covers most of the
@@ -577,7 +561,7 @@ facade and drowns the panes out):
 The **stdev** column is the frosted test, and the only one that catches it
 numerically: a rough or partly-diffuse pane averages its surroundings, so
 neighbouring pixels converge and local contrast collapses toward the wall's.
-Clear glass holds sharp sky-reflection, mullion and lining detail — here it runs
+Clear glass holds sharp sky-reflection, mullion and room-fixture detail — here it runs
 **≈4× the matte wall's local contrast**, at roughly 0.9× the wall's brightness.
 `measure_glass.py` reports all of this:
 
@@ -590,25 +574,40 @@ To try the pale grey wall instead of beige, set
 
 ## Geometry organisation
 
-Everything is generated from boxes and joined into twelve objects, so the scene
-stays light (~40k vertices at 40 storeys):
+Each tower is generated from boxes and joined into the base facade/structure
+objects (the saved scene contains the two sets with Blender's `.001` suffixes),
+with one additional truss mesh on the taller companion, so the scene stays light
+for a 178 m-wide site:
 
-`Facade_Spandrels` · `Windows_Glass` · `Interior_Lining` · `Window_Mullions` ·
+`Facade_Spandrels` · `Windows_Glass` · `Ceiling_Lights` · `Window_Mullions` ·
 `Vent_Louvres` · `Vent_Shadowboxes` · `Sky_Garden_Grille` ·
 `Sky_Garden_Planting` · `Sky_Garden_Trunks` · `Floor_Plates` · `Structure` ·
+`Structural_Trusses` ·
 `Ground`
 
 ## Changing the design
 
-All parameters sit at the top of `build_house.py`. `PANE_W` and the pane counts
-set the footprint (`W`/`D` are derived — don't set them directly),
-`TOTAL_FLOORS` the storey count and `PILOTIS_FLOORS` how many of those are open
-(`TOWER_FLOORS` is the remainder). The column grid, roof bulkheads and camera
-all derive from the footprint and the core positions, so changing the pane
-counts keeps the model coherent.
+The shared `BLOCK_FLOORS = 17` sets the height of each residential group. `main()`
+then calls `configure_tower(2, 18, core_column_bays=2)` for the existing tower and
+`configure_tower(3, 20, core_column_bays=3)` for the companion. `TOTAL_FLOORS`,
+`W` and `D` are derived from those group and pane counts (do not set them directly).
+The column grid, core lengths, roof bulkheads and camera all derive from each
+footprint, and the camera frames the combined site envelope.
 Note that
 `verify_house.py` carries its own copy of `W`, `D` and the floor counts — update it
-to match, or its assertions will test the old dimensions. The five vertical bands are derived
-from `H`, `WIN_H` and `VENT_H` — `SPANDREL_H` is computed as
-`(H - WIN_H - 2 * VENT_H) / 2`, which keeps the window centred for any floor
-height, and an `assert` fails the build if the bands stop summing to `H`.
+to match, or its assertions will test the old dimensions. The five vertical bands
+place the vent + glass + vent zone from 0.50 m to 2.50 m above each floor; an
+`assert` fails the build if the bands stop summing to `H`.
+
+The taller companion adds a dedicated `Structural_Trusses` mesh. At each of its
+two double-height refuge levels, horizontal outrigger rails run from both cores
+to the long-face belt, and the same claw pattern wraps around all four refuge-level
+facades. The 40 m short faces use three claws (six diagonals and two uprights);
+the 80 m long faces scale to seven claws (fourteen diagonals and six uprights),
+keeping each diagonal bay near 6 m instead of leaving a giant visual span. Each
+core's long wall still gets an X-braced panel,
+while four additional X panels are embedded in the upper refuge slab in plan so
+they reinforce the diaphragm without crossing any ordinary residential window
+band or sightline. The concrete cores remain continuous closed tubes; the white
+trusses reuse the exterior wall finish, adding a visible lateral-load path and
+expression of the core-to-perimeter connection without introducing a dark overlay.

@@ -14,20 +14,21 @@ Design brief
 * Bottom 3 floors are pilotis (open, raised on columns + two service cores).
 * Above that sits the solid core of the building: 12 occupied floors.
 * Every occupied floor carries a 1.5 m ribbon window spanning the full
-  width of every facade, vertically centred in the floor.
+  width of every facade, starting 0.75 m above its floor level.
 * Directly above and below that window sits a 0.25 m ventilation louvre
   strip of the same length as the window.
 
 Vertical band layout per floor, measured from the floor level:
-    0.00 - 1.00  solid spandrel
-    1.00 - 1.25  ventilation louvres
-    1.25 - 2.75  window  (centre at 2.00 m = mid floor)
-    2.75 - 3.00  ventilation louvres
-    3.00 - 4.00  solid spandrel
+    0.00 - 0.50  solid spandrel
+    0.50 - 0.75  ventilation louvres
+    0.75 - 2.25  window
+    2.25 - 2.50  ventilation louvres
+    2.50 - 4.00  solid spandrel
 """
 
 import math
 import os
+import random
 import sys
 
 import bpy
@@ -44,16 +45,25 @@ H = 4.0           # floor-to-floor height
 # Footprint W (X) and D (Y) are DERIVED from the window module further down:
 # the pane size is fixed, so the building widens to fit a whole number of panes.
 
-# Look. CYCLES gives real refraction through the glass and is the reason it reads
-# as glass rather than tinted plastic; BLENDER_EEVEE is much faster but fakes it.
-RENDER_ENGINE = "CYCLES"
+# Look. EEVEE keeps the default interactive; its alpha-blended glazing shows the
+# room fixtures without ray-traced refraction. Switch to CYCLES only for a slow,
+# physically refracted final render.
+RENDER_ENGINE = "BLENDER_EEVEE"
 WALL_COLOR = materials.WARM_STONE     # or materials.COOL_STONE for pale grey
-GLASS_TINT = materials.GLASS_GREEN
+GLASS_TINT = materials.GLASS_CLEAR
 CYCLES_SAMPLES = 128
 
-TOTAL_FLOORS = 40      # storeys counted from the ground
 PILOTIS_FLOORS = 3     # of which these are open and raised
+BLOCK_GROUPS = 2       # residential groups in the first/current tower
+BLOCK_FLOORS = 17      # glazed residential floors in each group
+REFUGE_FLOORS = 2      # fixed double-height refuge / sky-garden floors
+FIXED_SOLID_BAND_FLOORS = 4  # 2 blank floors at the base + 2 at the top
+TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
+                + (BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS   # occupied floors above
+
+TOWER_GAP = 18.0       # clear horizontal gap between the two building envelopes
 
 WALL_T = 0.30     # facade wall thickness
 SLAB_T = 0.22     # floor plate thickness
@@ -67,25 +77,20 @@ GLASS_T = 0.03
 # is exactly what reads as a window sill — which is what we do not want.
 GLASS_INSET = 0.0     # from the outer wall face; 0 = flush with it
 VENT_INSET = 0.0      # louvres finish on the wall plane too
-# The glass is fully clear, so it needs something behind it or it reads as a gap.
-# This lining stands in for lit floors; set back far enough that pane and lining
-# move against each other as the view shifts, which is what reads as glass.
-INTERIOR_SETBACK = 0.85
-
 # The room window is the fixed module: exactly PANE_W x WIN_H of clear glass.
 # EVERYTHING outside is derived from the room-window counts — never the other way round.
 PANE_W = 4.00
-WINDOWS_LONG = 15      # room windows across each long facade  (X)
-WINDOWS_SHORT = 7       # room windows across each short facade (Y)
-WINDOW_GAP = 0.12       # real vertical joint between adjacent room windows
+WINDOWS_LONG = 18      # room windows across each long facade  (X)
+WINDOWS_SHORT = 9       # room windows across each short facade (Y)
+WINDOW_GAP = 0.06       # real vertical joint between adjacent room windows
 PANE_GLASS_W = PANE_W - WINDOW_GAP
 
 # The mullion is a cover cap centred on each pane joint: it sits proud of the
 # glass line and overlaps the two panes it joins, so it costs NO facade length.
 # That keeps the arithmetic clean — an opening is exactly N x PANE_W, so the
 # footprint comes out on whole metres:
-#   W = 15 x 4.00 + 2 x 2.00 = 64.00 m
-#   D =  7 x 4.00 + 2 x 2.00 = 32.00 m
+#   W = 18 x 4.00 + 2 x 2.00 = 76.00 m
+#   D =  9 x 4.00 + 2 x 2.00 = 40.00 m
 MULLION_W = 0.09
 MULLION_INSET = 0.12     # recessed from the facade plane to deepen window joints
 
@@ -101,10 +106,9 @@ MULLION_INSET = 0.12     # recessed from the facade plane to deepen window joint
 # return. At 2 m on both, it turns the corner after a single pane and has a real
 # second aspect, which is the whole point of putting it there.
 #
-# Thinning PIER_SHORT is what forced WINDOWS_SHORT from 12 to 14. D is derived, so
-# 2 m piers with 12 panes would have given D = 28 m and 8.0 m of unit depth beside
-# the cores, under the 9 m residential minimum. Two more panes hold D at 32 m, so
-# the depth is unchanged and only the corners moved.
+# D is derived from the short-face pane count. The current nine-pane depth gives
+# 40 m overall. The cores are thickened to 11 m, leaving 14.5 m of clear unit
+# depth on either side.
 #
 # The cost is lateral stiffness, and it is affordable. Each figure below is at its
 # own footprint, since W is what the wind acts on:
@@ -142,21 +146,21 @@ SOLID_TOP_FLOORS = max(1, round(SOLID_TOP_TARGET / H))
 # Singapore's SCDF requires a refuge floor in buildings over 24 storeys, spaced
 # no more than 20 storeys apart, and the local convention is to give it over to a
 # planted sky garden open on all sides — it doubles as the lift transfer level.
-# One two-storey void at mid-height satisfies the spacing rule for a 40-storey
-# tower and is where the garden reads best from the street.
+# Each pair of groups is separated by one two-storey void. With three groups,
+# this gives two refuge / sky-garden levels and keeps every residential group at
+# the configured 17 floors.
 #
-# REFUGE_FLOORS floors are left open: no glazing, no spandrel, no intermediate
-# slab, so the two storeys read as ONE double-height space. The facade line is
-# held by the corner piers and a run of balustrade instead.
+# REFUGE_FLOORS floors have one continuous 8 m interior void with no intermediate
+# slab. On the outside, only the lower 6 m is screened by the grille; a solid
+# 2 m facade band above it closes the visible opening without changing the void.
 SKY_GARDEN = True
-REFUGE_FLOORS = 2          # storeys given to the void
+REFUGE_GRILLE_TOP_BLANK_H = 2.0  # solid facade band above the 6 m grille
 BALUSTRADE_H = 1.20        # open-edge guarding, per SCDF minimum 1.0 m
 BALUSTRADE_T = 0.12
 
-# A screen across the void. Leaving the refuge level fully open reads as a bite
-# taken out of the tower — the elevation needs something holding the plane. The
-# screen is a filter, not a wall: the openings are real voids, so the level stays
-# naturally ventilated as a refuge floor must be.
+# A screen across the lower part of the void. The upper solid band holds the
+# facade plane above the screen, while the lower openings remain naturally
+# ventilated as a refuge floor must be.
 #
 # "GRID" — square openings in a deep frame, after 432 Park Avenue. Deliberately
 #          set on the SAME pitch as the window panes, so the vertical lines run
@@ -215,7 +219,7 @@ assert abs(WINDOWS_SHORT * PANE_W - OPEN_D) < 1e-9
 assert abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9, \
     "footprint should land on whole metres"
 
-COL_SIZE = 1.60       # continuous column footprint (sized for a 40-storey load)
+COL_SIZE = 1.60       # continuous column footprint (sized for the tower load)
 CORNER_COL_SIZE = 2.00  # exactly fills each retained 2 m corner facade margin
 COL_SPACING = 9.0     # target column grid spacing
 COL_CLEAR_INSET = 2.0 # clear distance from facade plane to outer column face
@@ -228,58 +232,46 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # 11% of the lateral stiffness and tip drift is H/1738 against a H/500 limit.
 # Nothing about the core choice buys stiffness this building needs.
 #
-# What a single 14 x 9 core could NOT do was hold the vertical transport. 37
-# floors x 64 x 32 m is 75776 m2 GFA, about 551 units and 1488 people, needing
+# What a single 14 x 11 core could NOT do was hold the vertical transport. 37
+# floors x 76 x 40 m is 112480 m2 GFA, about 818 units and 2209 people, needing
 # 7-9 lifts. Shafts, two stairs, lobbies, smoke-stop lobbies and risers come to
-# roughly 172 m2 gross; 14 x 9 = 126 m2, short by 27%. That is a 6.2%
+# roughly 172 m2 gross; 14 x 11 = 154 m2, short by 24%. That is a 5.1%
 # core-to-plate ratio where residential towers run 10-15%.
 # CORE_PROVISION below stays at the 203.5 m2 figure derived from the wider 76 m
-# plate, deliberately: it is the stricter of the two and the measured 288 m2
+# plate, deliberately: it is the stricter of the two and the measured 422 m2
 # clears it anyway, so keeping it means the cores cannot shrink on the strength
 # of a smaller unit count.
 #
 # Splitting also fixes two things one core cannot:
 #   * Egress. Worst-case travel to a central core was 42.5 m, marginal against
-#     SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to 24 m.
+#     SCDF's ~30 m dead-end / ~45 m two-way. Twin cores bring it to 20 m.
 #   * Stair remoteness. Two stairs in ONE shaft are not independent — a single
-#     incident compromises both. These sit 40 m apart.
-#   * Lift zoning, which a 551-unit tower wants anyway: low zone in the west
+#     incident compromises both. The two core centres stay well separated.
+#   * Lift zoning, which an 818-unit tower wants anyway: low zone in the west
 #     core, high zone in the east, ~65 units per lift in each.
 #
 # Deliberately NOT an H-core: the spine that makes it an H would run a wall down
 # the middle of the plate, forcing single-loaded corridors either side. H-cores
 # suit office towers wanting deep lettable space; residential wants a continuous
 # corridor loop.
-CORE_W, CORE_D = 16.0, 9.0    # longer along facade, narrower into apartment depth
+# The core length is derived per tower from the long-face column grid below.
+# Each tube spans a configured number of column bays; the column outer faces
+# become the tube ends.
+# These bootstrap values describe the reference tower until configure_tower()
+# refreshes them for the active footprint.
+CORE_COLUMN_BAYS = 2
+COMPANION_CORE_COLUMN_BAYS = 3
+CORE_W, CORE_D = 20.0, 11.0   # derived long length / thickened apartment-depth width
 CORE_T = 0.28                 # core wall thickness
-# Offset from the building centreline. Even metres, so the core walls land on
-# mullion lines and interior partitions can follow the facade rhythm. Held clear
-# of the corner pier zone (outer edge at 24 m, pier starts at 30 m), which is
-# what rules out pushing the cores right to the ends of the plate.
-#
-# 18 rather than 20, and the reason is the CORNER APARTMENT. It sits outboard of
-# a core, so its width is W/2 - (CORE_OFFSET + CORE_W/2). With W now 64 m, 20
-# would leave 6 m against a 10 m depth — a corridor, not a flat — and still only
-# 2 panes on the long facade, because the outer end falls beyond the fixed
-# x = +-30 glazing edge. At 18 it is 8 x 10 m with 3 panes on the long face plus
-# the short-face return, which is the two-aspect unit the plan is aiming at.
-#
-# This works WITH the 2 m PIER_LONG rather than instead of it: the pier decides
-# how much dead wall wraps the outboard end, the core offset decides how wide
-# the unit is. Both were needed.
-#
-# The cost is the clear span between the cores, 28 -> 24 m. That is the span the
-# sky garden reads across and the depth available to the middle units. 24 m is
-# still well over the 20 m needed to keep the two stairs remote from each other,
-# and worst-case egress is unchanged at 24.0 m.
-CORE_OFFSET = 16.0
+# The active tower derives CORE_OFFSET and CORE_W from its long-face column grid.
+# The outermost core boundary stays one column line in from each end of the
+# usable grid. Increasing the bay count therefore lengthens each tube inward,
+# preserving the outboard stub while reducing the gap between the cores.
+CORE_OFFSET = 18.0       # bootstrap value; refreshed by configure_tower()
 CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
 
 assert CORE_OFFSET + CORE_W / 2 <= W / 2 - PIER_LONG, \
     "core must stay clear of the corner pier zone"
-assert abs((CORE_OFFSET - CORE_W / 2) % PANE_W) < 1e-9 \
-    and abs((CORE_OFFSET + CORE_W / 2) % PANE_W) < 1e-9, \
-    "core edges should land on the pane grid"
 assert 2 * CORE_W * CORE_D >= 203.5, "cores must hold the required provision"
 
 PARAPET_H = 1.10
@@ -299,7 +291,7 @@ CORE_ROOF_PARAPET = 0.9  # low upstand around each bulkhead roof
 # CORE_TOP_Z is derived once TOP_Z exists, just below.
 
 BASE_Z = PILOTIS_FLOORS * H          # underside of the tower = 12.0
-TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 160.0
+TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level = 172.0
 # The roof repeats the planted refuge-level language, but remains entirely open
 # to the sky: its grille replaces the solid perimeter parapet and no canopy is
 # added over the terrace. The lift/stair overruns remain the only roof volumes.
@@ -307,6 +299,20 @@ ROOF_GARDEN = True
 ROOF_GARDEN_Z0 = TOP_Z + 0.22
 # Match the refuge garden's full two-storey grille height, not the roof parapet.
 ROOF_GARDEN_GRILLE_H = 2 * H
+
+# --- refuge-level lateral trusses ------------------------------------------
+# The taller companion tower gets a visible outrigger / belt-truss system at
+# each double-height refuge level.  Members stay inside the facade line and
+# use the same pale exterior finish so the structure reads as part of the facade
+# rather than a dark metal overlay.
+TRUSS_MEMBER = 0.38
+TRUSS_FACADE_INSET = 0.55
+TRUSS_CORE_FACE_OFFSET = 0.20
+TRUSS_LEVEL_EDGE = 0.75
+TRUSS_EDGE_INSET = 0.65
+TRUSS_PLAN_MEMBER = 0.20       # hidden inside the refuge-level upper slab
+TRUSS_CLAW_GROUPS = 3           # three two-triangle groups on each short facade
+TRUSS_TRIANGLES_PER_CLAW = 2
 # Top of the bulkhead upstand, which is the highest point on the building.
 CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
 
@@ -318,32 +324,154 @@ assert CORE_TOP_Z > TOP_Z + 0.22 + PARAPET_H, \
 # being pushed off-centre by them.
 _glazed_first = SOLID_BASE_FLOORS
 _glazed_last = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
-REFUGE_START = (_glazed_first + _glazed_last + 1 - REFUGE_FLOORS) // 2
-REFUGE_END = REFUGE_START + REFUGE_FLOORS - 1        # inclusive, tower-relative
-REFUGE_FLOOR_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else set()
-# Storey number as an occupant would count it, from the ground.
-REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
-REFUGE_Z0 = BASE_Z + REFUGE_START * H
-REFUGE_Z1 = REFUGE_Z0 + REFUGE_FLOORS * H
+REFUGE_STARTS = [
+    _glazed_first + (index + 1) * BLOCK_FLOORS + index * REFUGE_FLOORS
+    for index in range(BLOCK_GROUPS - 1)
+]
+REFUGE_ENDS = [start + REFUGE_FLOORS - 1 for start in REFUGE_STARTS]
+REFUGE_FLOOR_SET = (set().union(*[
+    set(range(start, end + 1))
+    for start, end in zip(REFUGE_STARTS, REFUGE_ENDS)
+]) if SKY_GARDEN else set())
+# Keep the first refuge aliases for the extra-view and verifier scripts.
+REFUGE_START, REFUGE_END = REFUGE_STARTS[0], REFUGE_ENDS[0]
+REFUGE_STOREYS = [PILOTIS_FLOORS + start + 1 for start in REFUGE_STARTS]
+REFUGE_STOREY = REFUGE_STOREYS[0]
+REFUGE_Z0S = [BASE_Z + start * H for start in REFUGE_STARTS]
+REFUGE_Z1S = [z0 + REFUGE_FLOORS * H for z0 in REFUGE_Z0S]
+REFUGE_Z0, REFUGE_Z1 = REFUGE_Z0S[0], REFUGE_Z1S[0]
+REFUGE_GRILLE_Z0S = REFUGE_Z0S
+REFUGE_GRILLE_Z1S = [z1 - REFUGE_GRILLE_TOP_BLANK_H for z1 in REFUGE_Z1S]
+REFUGE_GRILLE_Z0, REFUGE_GRILLE_Z1 = REFUGE_GRILLE_Z0S[0], REFUGE_GRILLE_Z1S[0]
+REFUGE_GRILLE_H = REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0
+REFUGE_START_BY_FLOOR = {start: index for index, start in enumerate(REFUGE_STARTS)}
+REFUGE_END_BY_FLOOR = {end: index for index, end in enumerate(REFUGE_ENDS)}
+
+assert abs(REFUGE_GRILLE_H - 6.0) < 1e-9 and REFUGE_GRILLE_Z0 == REFUGE_Z0, \
+    "the refuge grille must start at the refuge floor and be 6 m high"
+assert abs(REFUGE_Z1 - REFUGE_GRILLE_Z1 - REFUGE_GRILLE_TOP_BLANK_H) < 1e-9, \
+    "the refuge grille must leave its configured top blank band"
 
 assert not (REFUGE_FLOOR_SET & (set(range(SOLID_BASE_FLOORS))
             | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))), \
     "the refuge void must not overlap the blank bands"
-# SCDF: refuge floors no more than 20 storeys apart, and required above 24.
-assert not SKY_GARDEN or TOTAL_FLOORS <= 24 or (
-    REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20), \
-    "refuge floor spacing exceeds 20 storeys"
+assert SOLID_BASE_FLOORS + SOLID_TOP_FLOORS == FIXED_SOLID_BAND_FLOORS, \
+    "the fixed solid-band floor count must match its two derived bands"
+assert len(REFUGE_STARTS) == BLOCK_GROUPS - 1
+assert all((start - (REFUGE_ENDS[index - 1] + 1 if index else _glazed_first)
+            == BLOCK_FLOORS)
+           for index, start in enumerate(REFUGE_STARTS)), \
+    "each refuge must follow its configured residential group"
+assert _glazed_last - REFUGE_ENDS[-1] == BLOCK_FLOORS, \
+    "the final residential group must retain its configured floor count"
+assert all((storey - (PILOTIS_FLOORS + _glazed_first + 1)) <= 21 + index * 20
+           for index, storey in enumerate(REFUGE_STOREYS)), \
+    "refuge floor spacing exceeds the configured interval"
+
+
+def configure_tower(block_groups, windows_long, core_column_bays=CORE_COLUMN_BAYS):
+    """Refresh the derived geometry for one tower variant."""
+    global BLOCK_GROUPS, WINDOWS_LONG, CORE_COLUMN_BAYS
+    global TOTAL_FLOORS, TOWER_FLOORS, OPEN_W, OPEN_D, W, D
+    global PANE_GLASS_LONG, PANE_GLASS_SHORT
+    global CORE_W, CORE_OFFSET, CORE_XS
+    global BASE_Z, TOP_Z, ROOF_GARDEN_Z0, CORE_TOP_Z
+    global _glazed_first, _glazed_last
+    global REFUGE_STARTS, REFUGE_ENDS, REFUGE_FLOOR_SET
+    global REFUGE_START, REFUGE_END, REFUGE_STOREYS, REFUGE_STOREY
+    global REFUGE_Z0S, REFUGE_Z1S, REFUGE_Z0, REFUGE_Z1
+    global REFUGE_GRILLE_Z0S, REFUGE_GRILLE_Z1S
+    global REFUGE_GRILLE_Z0, REFUGE_GRILLE_Z1, REFUGE_GRILLE_H
+    global REFUGE_START_BY_FLOOR, REFUGE_END_BY_FLOOR
+
+    BLOCK_GROUPS = int(block_groups)
+    WINDOWS_LONG = int(windows_long)
+    CORE_COLUMN_BAYS = int(core_column_bays)
+    if BLOCK_GROUPS < 2 or WINDOWS_LONG < 1:
+        raise ValueError("each tower needs at least two groups and one long-face room")
+
+    TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
+                    + (BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                    + FIXED_SOLID_BAND_FLOORS)
+    TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
+    OPEN_W = opening_for(WINDOWS_LONG)
+    OPEN_D = opening_for(WINDOWS_SHORT)
+    W = OPEN_W + 2 * PIER_LONG
+    D = OPEN_D + 2 * PIER_SHORT
+    CORE_W, CORE_OFFSET, CORE_XS = core_layout(W)
+    PANE_GLASS_LONG = PANE_GLASS_W
+    PANE_GLASS_SHORT = PANE_GLASS_W
+
+    if CORE_OFFSET + CORE_W / 2 > W / 2 - PIER_LONG:
+        raise ValueError("tower is too narrow for the configured service cores")
+    if CORE_W <= COL_SIZE:
+        raise ValueError("core length must leave room for its defining columns")
+
+    BASE_Z = PILOTIS_FLOORS * H
+    TOP_Z = BASE_Z + TOWER_FLOORS * H
+    ROOF_GARDEN_Z0 = TOP_Z + 0.22
+    CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
+
+    _glazed_first = SOLID_BASE_FLOORS
+    _glazed_last = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
+    REFUGE_STARTS = [
+        _glazed_first + (index + 1) * BLOCK_FLOORS + index * REFUGE_FLOORS
+        for index in range(BLOCK_GROUPS - 1)
+    ]
+    REFUGE_ENDS = [start + REFUGE_FLOORS - 1 for start in REFUGE_STARTS]
+    REFUGE_FLOOR_SET = (set().union(*[
+        set(range(start, end + 1))
+        for start, end in zip(REFUGE_STARTS, REFUGE_ENDS)
+    ]) if SKY_GARDEN else set())
+    REFUGE_START, REFUGE_END = REFUGE_STARTS[0], REFUGE_ENDS[0]
+    REFUGE_STOREYS = [PILOTIS_FLOORS + start + 1 for start in REFUGE_STARTS]
+    REFUGE_STOREY = REFUGE_STOREYS[0]
+    REFUGE_Z0S = [BASE_Z + start * H for start in REFUGE_STARTS]
+    REFUGE_Z1S = [z0 + REFUGE_FLOORS * H for z0 in REFUGE_Z0S]
+    REFUGE_Z0, REFUGE_Z1 = REFUGE_Z0S[0], REFUGE_Z1S[0]
+    REFUGE_GRILLE_Z0S = REFUGE_Z0S
+    REFUGE_GRILLE_Z1S = [z1 - REFUGE_GRILLE_TOP_BLANK_H for z1 in REFUGE_Z1S]
+    REFUGE_GRILLE_Z0, REFUGE_GRILLE_Z1 = REFUGE_GRILLE_Z0S[0], REFUGE_GRILLE_Z1S[0]
+    REFUGE_GRILLE_H = REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0
+    REFUGE_START_BY_FLOOR = {start: index for index, start in enumerate(REFUGE_STARTS)}
+    REFUGE_END_BY_FLOOR = {end: index for index, end in enumerate(REFUGE_ENDS)}
+
+    assert abs(REFUGE_GRILLE_H - 6.0) < 1e-9
+    assert _glazed_last - REFUGE_ENDS[-1] == BLOCK_FLOORS
+
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+SITE_WIDTH = 2 * W + TOWER_GAP
+SITE_CENTER_X = (W + TOWER_GAP) / 2.0
+SITE_DEPTH = D
+SITE_TOP_Z = CORE_TOP_Z
 
-# Band offsets inside one floor, derived so the window is vertically centred.
-SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0     # 1.00
-VENT_LO_Z = SPANDREL_H                          # 1.00
-WIN_Z = VENT_LO_Z + VENT_H                      # 1.25
-VENT_HI_Z = WIN_Z + WIN_H                       # 2.75
-SPANDREL_HI_Z = VENT_HI_Z + VENT_H              # 3.00
+# Band offsets inside one floor. The vent + glass + vent band starts 0.50 m
+# above the floor; the taller remaining solid spandrel sits above it.
+SPANDREL_LO_H = 0.50
+VENT_LO_Z = SPANDREL_LO_H                       # 0.50
+WIN_Z = VENT_LO_Z + VENT_H                      # 0.75
+VENT_HI_Z = WIN_Z + WIN_H                       # 2.25
+SPANDREL_HI_Z = VENT_HI_Z + VENT_H              # 2.50
+SPANDREL_HI_H = H - SPANDREL_HI_Z               # 1.50
 
-assert abs(SPANDREL_H + VENT_H + WIN_H + VENT_H + SPANDREL_H - H) < 1e-9
+assert abs(SPANDREL_LO_H + VENT_H + WIN_H + VENT_H + SPANDREL_HI_H - H) < 1e-9
+
+# Each pane is one room. Every room gets two real horizontal ceiling panels, not
+# a bright strip floating behind the glass. Panels stay installed when switched
+# off; the state and colour of each individual fixture are deterministic-random.
+CEILING_LIGHT_W = 1.20
+CEILING_LIGHT_D = 1.20
+CEILING_LIGHT_H = 0.06
+CEILING_LIGHTS_PER_ROOM = 2
+CEILING_LIGHT_ACROSS_OFFSETS = (-0.85, 0.85)
+CEILING_LIGHT_SETBACKS = (0.80, 2.40, 4.00)
+CEILING_LIGHT_Z = H - SLAB_T - CEILING_LIGHT_H / 2.0
+# Every fixture independently has this chance of being lit. Keep the seeded
+# pattern stable between rebuilds, while letting rooms have zero, one, or two
+# lights on like a real inhabited building.
+CEILING_LIGHT_SEED = 20260823
+CEILING_LIGHT_ON_RATIO = 0.36
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +529,18 @@ def box(name, center, dims, mat, rot=None):
     return obj
 
 
+def beam_between(name, start, end, width, mat):
+    """Make a square structural member between two world-space points."""
+    start, end = Vector(start), Vector(end)
+    delta = end - start
+    length = delta.length
+    if length <= 1e-6:
+        return None
+    rotation = delta.to_track_quat("Z", "Y").to_euler()
+    return box(name, (start + end) / 2.0,
+               (width, width, length), mat, rot=rotation)
+
+
 def join(objects, name):
     """Join a list of objects into one; returns the merged object."""
     objects = [o for o in objects if o is not None]
@@ -430,6 +570,38 @@ def col_grid(span):
     step = usable / bays
     start = -usable / 2
     return [start + i * step for i in range(bays + 1)]
+
+
+def core_layout(span, core_column_bays=None):
+    """Derive the twin-core long dimension from the active column grid.
+
+    Each core occupies ``core_column_bays`` long-face column bays. Its outer
+    boundary remains one grid line in from each end, and its inner boundary
+    moves inward as bays are added. The outside faces of the boundary columns
+    become the tube ends, so those columns remain visible and structurally meet
+    the core walls instead of stopping short.
+    """
+    grid = col_grid(span)
+    bays = CORE_COLUMN_BAYS if core_column_bays is None else int(core_column_bays)
+    if bays < 1:
+        raise ValueError("core layout needs at least one column bay")
+    west_lo_index = 1
+    west_hi_index = west_lo_index + bays
+    east_hi_index = len(grid) - 2
+    east_lo_index = east_hi_index - bays
+    if west_hi_index >= east_lo_index:
+        raise ValueError("tower is too narrow for the configured core column bays")
+
+    west_lo = grid[west_lo_index]
+    west_hi = grid[west_hi_index]
+    east_lo = grid[east_lo_index]
+    east_hi = grid[east_hi_index]
+    core_w = (west_hi - west_lo) + COL_SIZE
+    west_center = (west_lo + west_hi) / 2.0
+    east_center = (east_lo + east_hi) / 2.0
+    if abs(west_center + east_center) > 1e-6:
+        raise ValueError("column grid must stay symmetric around the tower centre")
+    return core_w, abs(west_center), (-abs(west_center), abs(west_center))
 
 
 def corner_columns():
@@ -513,31 +685,60 @@ def glass_ring(name, z0, height, mat):
     return parts
 
 
-def interior_ring(name, z0, height, mat):
-    """Lining set back behind the glazing, on all four facades.
+def ceiling_light_rng(floor_index, facade_index, room_index, fixture_index):
+    """Stable random stream for one installed room fixture."""
+    return random.Random(CEILING_LIGHT_SEED + floor_index * 101
+                         + facade_index * 10007 + room_index * 1000003
+                         + fixture_index * 100000007)
 
-    Clear glass needs something behind it. Without this the panes look straight
-    through the tower to the far facade and the sky, and the glazing reads as a
-    gap rather than a window. Set back INTERIOR_SETBACK so there is visible depth
-    between pane and lining — that parallax against the sky reflection is what
-    makes it read as glass.
-    """
-    zc = z0 + height / 2.0
-    off = GLASS_INSET + INTERIOR_SETBACK
-    t = 0.05
+
+def ceiling_light_setback(floor_index, facade_index, room_index, fixture_index):
+    """Pick a stable near, middle, or deep ceiling fixture for one room."""
+    return ceiling_light_rng(floor_index, facade_index, room_index,
+                             fixture_index).choice(CEILING_LIGHT_SETBACKS)
+
+
+def ceiling_light_state(floor_index, facade_index, room_index, fixture_index):
+    """Return the independent on/off state and colour temperature of a panel."""
+    rng = ceiling_light_rng(floor_index, facade_index, room_index, fixture_index)
+    rng.choice(CEILING_LIGHT_SETBACKS)  # match the preceding stable draw
+    if rng.random() >= CEILING_LIGHT_ON_RATIO:
+        return "off"
+    return rng.choice(("daylight", "warm"))
+
+
+def ceiling_lights(name, z0, floor_index, mats):
+    """Two independently switched, colour-random ceiling panels per room."""
+    zc = z0 + CEILING_LIGHT_Z
     parts = []
-    for i in range(WINDOWS_SHORT):
-        y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
-        for sx in (-1, 1):
-            parts.append(box(f"{name}_ew_{i}_{sx}",
-                             (sx * (W / 2 - off), y, zc),
-                             (t, PANE_GLASS_W, height), mat))
-    for i in range(WINDOWS_LONG):
-        x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
-        for sy in (-1, 1):
-            parts.append(box(f"{name}_ns_{i}_{sy}",
-                             (x, sy * (D / 2 - off), zc),
-                             (PANE_GLASS_W, t, height), mat))
+    for facade_index, sx in enumerate((-1, 1)):
+        for i in range(WINDOWS_SHORT):
+            y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
+            for fixture_index, across in enumerate(CEILING_LIGHT_ACROSS_OFFSETS):
+                setback = ceiling_light_setback(floor_index, facade_index, i,
+                                                 fixture_index)
+                x = sx * (W / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
+                parts.append(box(f"{name}_ew_{i}_{fixture_index}_{sx}",
+                                 (x, y + across, zc),
+                                 (CEILING_LIGHT_D, CEILING_LIGHT_W,
+                                  CEILING_LIGHT_H),
+                                 mats[ceiling_light_state(
+                                     floor_index, facade_index, i,
+                                     fixture_index)]))
+    for facade_index, sy in enumerate((-1, 1), start=2):
+        for i in range(WINDOWS_LONG):
+            x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
+            for fixture_index, across in enumerate(CEILING_LIGHT_ACROSS_OFFSETS):
+                setback = ceiling_light_setback(floor_index, facade_index, i,
+                                                 fixture_index)
+                y = sy * (D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
+                parts.append(box(f"{name}_ns_{i}_{fixture_index}_{sy}",
+                                 (x + across, y, zc),
+                                 (CEILING_LIGHT_W, CEILING_LIGHT_D,
+                                  CEILING_LIGHT_H),
+                                 mats[ceiling_light_state(
+                                     floor_index, facade_index, i,
+                                     fixture_index)]))
     return parts
 
 
@@ -637,7 +838,7 @@ def grille(name, z0, height, mat, style=None, cell=None, full_corners=False):
         return [-axis_len / 2 + i * step for i in range(n + 1)]
 
     if style == "FINS":
-        # Vertical blades only, full height of the void.
+        # Vertical blades only, over the configured screen height.
         span_w = W if full_corners else OPEN_W
         span_d = D if full_corners else OPEN_D
         zc = z0 + height / 2.0
@@ -788,23 +989,182 @@ def vent_strip(name, z0, louver_mat, back_mat):
     return parts
 
 
+def structural_trusses(name, mat):
+    """Add refuge-level outrigger, belt, plan-X and perimeter Z trusses.
+
+    The two refuge voids are the natural transfer levels: horizontal outriggers
+    tie each core to the north/south perimeter, while the perimeter chords and
+    alternating diagonals form a belt truss.  Matching single diagonals now
+    continue around both long and short faces, while a second, horizontal
+    X-braced diaphragm is embedded in the upper refuge slab.  The same levels
+    get X-braces on each core's long wall, keeping the solid core tube as the
+    fire-separated shaft while making its lateral role explicit in the model.
+    """
+    parts = []
+    if not REFUGE_Z0S:
+        return parts
+
+    y_face = D / 2.0 - TRUSS_FACADE_INSET
+    x_face = W / 2.0 - TRUSS_FACADE_INSET
+    long_y0, long_y1 = -OPEN_W / 2.0, OPEN_W / 2.0
+    short_y0 = -OPEN_D / 2.0 + TRUSS_EDGE_INSET
+    short_y1 = OPEN_D / 2.0 - TRUSS_EDGE_INSET
+    short_claw_groups = TRUSS_CLAW_GROUPS
+    short_perimeter_bays = short_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+    # Keep the same claw silhouette on the wider elevations without letting a
+    # single diagonal grow into a visually implausible 12 m span. The long-face
+    # group count follows the long/short opening ratio, rounded to whole claws.
+    long_claw_groups = max(short_claw_groups,
+                           round(OPEN_W / OPEN_D * short_claw_groups))
+    long_perimeter_bays = long_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+    short_nodes = [
+        short_y0 + (short_y1 - short_y0) * index / short_perimeter_bays
+        for index in range(short_perimeter_bays + 1)
+    ]
+    long_nodes = [
+        long_y0 + (long_y1 - long_y0) * index / long_perimeter_bays
+        for index in range(long_perimeter_bays + 1)
+    ]
+
+    for level, (z0, z1) in enumerate(zip(REFUGE_Z0S, REFUGE_Z1S)):
+        zl = z0 + TRUSS_LEVEL_EDGE
+        zh = z1 - TRUSS_LEVEL_EDGE
+        tag = f"{name}_{level}"
+
+        # Long-face belt chords.  Their endpoints line up with the opening
+        # edges, so the corner piers remain clear and the belt reads as a frame.
+        for sy in (-1, 1):
+            y = sy * y_face
+            parts.append(beam_between(f"{tag}_LongLower_{sy}",
+                                      (long_y0, y, zl), (long_y1, y, zl),
+                                      TRUSS_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_LongUpper_{sy}",
+                                      (long_y0, y, zh), (long_y1, y, zh),
+                                      TRUSS_MEMBER, mat))
+            # Keep the light single-diagonal language and continue it across
+            # the front and rear elevations, closing the refuge truss ring.
+            for bay, (xa, xb) in enumerate(zip(long_nodes, long_nodes[1:])):
+                za, zb = ((zl, zh) if bay % 2 == 0 else (zh, zl))
+                parts.append(beam_between(f"{tag}_LongZ_{sy}_{bay}",
+                                          (xa, y, za), (xb, y, zb),
+                                          TRUSS_MEMBER, mat))
+            # One upright separates every pair of triangles, giving the
+            # requested three-claw / chicken-foot silhouette.
+            for claw in range(1, long_claw_groups):
+                node = claw * TRUSS_TRIANGLES_PER_CLAW
+                x = long_nodes[node]
+                parts.append(beam_between(f"{tag}_LongUpright_{sy}_{claw}",
+                                          (x, y, zl), (x, y, zh),
+                                          TRUSS_MEMBER, mat))
+
+        # Short-face belt chords with alternating diagonals.  Each bay is a
+        # Z-shaped panel; reversing the slope at the next node gives the
+        # intended zig-zag silhouette in the depth-side elevation.
+        for sx in (-1, 1):
+            x = sx * x_face
+            parts.append(beam_between(f"{tag}_ShortLower_{sx}",
+                                      (x, short_y0, zl), (x, short_y1, zl),
+                                      TRUSS_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_ShortUpper_{sx}",
+                                      (x, short_y0, zh), (x, short_y1, zh),
+                                      TRUSS_MEMBER, mat))
+            for bay, (ya, yb) in enumerate(zip(short_nodes, short_nodes[1:])):
+                za, zb = ((zl, zh) if bay % 2 == 0 else (zh, zl))
+                parts.append(beam_between(f"{tag}_ShortZ_{sx}_{bay}",
+                                          (x, ya, za), (x, yb, zb),
+                                          TRUSS_MEMBER, mat))
+            for claw in range(1, short_claw_groups):
+                node = claw * TRUSS_TRIANGLES_PER_CLAW
+                y = short_nodes[node]
+                parts.append(beam_between(f"{tag}_ShortUpright_{sx}_{claw}",
+                                          (x, y, zl), (x, y, zh),
+                                          TRUSS_MEMBER, mat))
+
+        # Plan X-bracing is hidden in the upper refuge floor slab.  It closes
+        # the four diaphragm panels between the cores and the perimeter without
+        # adding anything across ordinary residential window bands.
+        plan_z = z1 - SLAB_T / 2.0
+        x_west = CORE_XS[0] - CORE_W / 2.0 - TRUSS_CORE_FACE_OFFSET
+        x_east = CORE_XS[1] + CORE_W / 2.0 + TRUSS_CORE_FACE_OFFSET
+        for side, x_core, x_outer in (
+                ("West", x_west, -x_face), ("East", x_east, x_face)):
+            parts.append(beam_between(f"{tag}_PlanX_{side}_A",
+                                      (x_core, short_y0, plan_z),
+                                      (x_outer, short_y1, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_PlanX_{side}_B",
+                                      (x_core, short_y1, plan_z),
+                                      (x_outer, short_y0, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
+        for side, y_core, y_outer in (
+                ("South", -CORE_D / 2.0 - TRUSS_CORE_FACE_OFFSET,
+                 -y_face),
+                ("North", CORE_D / 2.0 + TRUSS_CORE_FACE_OFFSET,
+                 y_face)):
+            parts.append(beam_between(f"{tag}_PlanX_{side}_A",
+                                      (long_y0, y_core, plan_z),
+                                      (long_y1, y_outer, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
+            parts.append(beam_between(f"{tag}_PlanX_{side}_B",
+                                      (long_y1, y_core, plan_z),
+                                      (long_y0, y_outer, plan_z),
+                                      TRUSS_PLAN_MEMBER, mat))
+
+        # Outriggers run from each core's north/south wall to the long-face
+        # belt.  Two chords at different heights make the refuge void a real
+        # truss depth rather than a single decorative line.
+        for core, cx in enumerate(CORE_XS):
+            for sy in (-1, 1):
+                y_core = sy * (CORE_D / 2.0 + TRUSS_CORE_FACE_OFFSET)
+                y_outer = sy * y_face
+                for rail, z in (("Lower", zl), ("Upper", zh)):
+                    parts.append(beam_between(
+                        f"{tag}_Outrigger_{core}_{sy}_{rail}",
+                        (cx, y_core, z), (cx, y_outer, z),
+                        TRUSS_MEMBER, mat))
+
+            # X-braces on both long faces of the core.  They sit just proud of
+            # the wall face but remain within the core's plan plus the member
+            # depth, so the shaft geometry itself is unchanged.
+            x0 = cx - CORE_W / 2.0 + TRUSS_EDGE_INSET
+            x1 = cx + CORE_W / 2.0 - TRUSS_EDGE_INSET
+            for sy in (-1, 1):
+                y = sy * (CORE_D / 2.0 + TRUSS_CORE_FACE_OFFSET)
+                parts.append(beam_between(f"{tag}_CoreX_{core}_{sy}_A",
+                                          (x0, y, zl), (x1, y, zh),
+                                          TRUSS_MEMBER, mat))
+                parts.append(beam_between(f"{tag}_CoreX_{core}_{sy}_B",
+                                          (x0, y, zh), (x1, y, zl),
+                                          TRUSS_MEMBER, mat))
+
+    return [part for part in parts if part is not None]
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
-def build():
-    reset_scene()
+def build(reset=True, mats=None, add_trusses=False):
+    if reset:
+        reset_scene()
 
-    mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
-                               glass_tint=GLASS_TINT)
+    if mats is None:
+        mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
+                                    glass_tint=GLASS_TINT)
     concrete = mats["concrete"]
     spandrel = mats["spandrel"]
     glass = mats["glass"]
+    ceiling_light_mats = {
+        "daylight": mats["ceiling_light_daylight"],
+        "warm": mats["ceiling_light_warm"],
+        "off": mats["ceiling_light_off"],
+    }
     metal = mats["metal"]
     dark = mats["dark"]
 
     walls, glazing, frames, louvres, backs, slabs, structure = [], [], [], [], [], [], []
-    linings = []
+    trusses = []
+    ceiling_lights_mesh = []
     plants, trunks, grilles = [], [], []
     foliage_mat = mats["foliage"]
     trunk_mat = mats["trunk"]
@@ -819,10 +1179,12 @@ def build():
             # building corners below; retain every other original grid column.
             if i in (0, len(x_grid) - 1) and j in (0, len(y_grid) - 1):
                 continue
-            # Skip columns that would land inside a service core wall. Two cores
-            # now, so this tests both.
-            if any(abs(x - cx) < CORE_W / 2 + COL_SIZE
-                   and abs(y) < CORE_D / 2 + COL_SIZE for cx in CORE_XS):
+            # Keep the two column lines that define each core's ends. Only a
+            # column whose full section is strictly inside a core is omitted;
+            # boundary columns remain visible and touch the core walls.
+            if any(abs(x - cx) + COL_SIZE / 2 < CORE_W / 2 - CORE_T
+                   and abs(y) + COL_SIZE / 2 < CORE_D / 2 - CORE_T
+                   for cx in CORE_XS):
                 continue
             structure.append(box(
                 f"Column_{i}_{j}", (x, y, CORE_TOP_Z / 2.0),
@@ -848,7 +1210,7 @@ def build():
                          (W + 0.5, D + 0.5, SLAB_T), concrete))
 
     # --- tower: the solid core of the building -------------------------
-    # Windowless floors: the transition floor above the pilotis, and a blank
+    # Windowless floors: the transition floor above the pilotis and the blank
     # band at the top.
     blank_floors = set(range(SOLID_BASE_FLOORS)) | set(
         range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS))
@@ -858,21 +1220,29 @@ def build():
         tag = f"F{f + 1:02d}"
 
         if f in REFUGE_FLOOR_SET:
-            # Refuge / sky garden: open on all sides. No glazing, no spandrel and
-            # no intermediate slab, so the storeys read as one double-height void.
-            # The corner piers still turn the corners, holding the building line.
+            # Refuge / sky garden: no glazing or intermediate slab, so the storeys
+            # read as one double-height void. The upper two-metre facade band is
+            # added below; corner piers still turn the building line.
             walls += corner_piers(f"{tag}_Pier", z0, H, spandrel)
-            if f == REFUGE_START:
+            if f in REFUGE_START_BY_FLOOR:
+                refuge_index = REFUGE_START_BY_FLOOR[f]
                 walls += balustrade(f"{tag}_Balustrade", z0, spandrel)
-                # Screen across the whole void, holding the facade plane.
-                grilles += grille("SkyGarden_Grille", z0, REFUGE_FLOORS * H,
+                # Close the upper 2 m so the external opening and grille are both
+                # exactly 6 m high, while the refuge void remains 8 m internally.
+                walls += facade_ring(f"{tag}_TopBlank", REFUGE_GRILLE_Z1S[refuge_index],
+                                     REFUGE_Z1S[refuge_index] - REFUGE_GRILLE_Z1S[refuge_index],
+                                     WALL_T, spandrel)
+                grilles += grille(f"SkyGarden_Grille_{refuge_index}",
+                                  REFUGE_GRILLE_Z0S[refuge_index],
+                                  REFUGE_GRILLE_Z1S[refuge_index] - REFUGE_GRILLE_Z0S[refuge_index],
                                   spandrel)
                 g_struct, g_plant, g_trunk = sky_garden(
-                    "SkyGarden", z0, concrete, foliage_mat, trunk_mat, metal)
+                    f"SkyGarden_{refuge_index}", z0, concrete,
+                    foliage_mat, trunk_mat, metal)
                 structure += g_struct
                 plants += g_plant
                 trunks += g_trunk
-            if f == REFUGE_END:
+            if f in REFUGE_END_BY_FLOOR:
                 # Slabs are added at the TOP of each floor, so skipping the refuge
                 # storeys would leave the void with no ceiling and the floor above
                 # with nothing under it.
@@ -884,14 +1254,14 @@ def build():
         if f in blank_floors:
             # Blank floor: solid wall the whole storey height, no openings.
             walls += facade_ring(f"{tag}_Blank", z0, H, WALL_T, spandrel)
-            if not (SKY_GARDEN and f == REFUGE_START - 1):
+            if not (SKY_GARDEN and f + 1 in REFUGE_START_BY_FLOOR):
                 slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
                                  (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
             continue
 
-        walls += facade_ring(f"{tag}_SpandrelLo", z0, SPANDREL_H, WALL_T, spandrel)
+        walls += facade_ring(f"{tag}_SpandrelLo", z0, SPANDREL_LO_H, WALL_T, spandrel)
         walls += facade_ring(f"{tag}_SpandrelHi", z0 + SPANDREL_HI_Z,
-                             H - SPANDREL_HI_Z, WALL_T, spandrel)
+                             SPANDREL_HI_H, WALL_T, spandrel)
 
         # Corner piers close the vent+window+vent zone at all four corners.
         walls += corner_piers(f"{tag}_Pier", z0 + VENT_LO_Z,
@@ -903,12 +1273,14 @@ def build():
             (backs if "_back_" in o.name else louvres).append(o)
 
         glazing += glass_ring(f"{tag}_Glass", z0 + WIN_Z, WIN_H, glass)
+        ceiling_lights_mesh += ceiling_lights(f"{tag}_CeilingLight", z0, f,
+                                              ceiling_light_mats)
         frames += mullions(f"{tag}_Mullion", z0 + WIN_Z, WIN_H, metal)
 
         # Floor plate for the level above, visible behind the glazing. Skipped
         # directly under the refuge level, where the thicker garden slab (which
         # shares the same top face) does the job instead.
-        if not (SKY_GARDEN and f == REFUGE_START - 1):
+        if not (SKY_GARDEN and f + 1 in REFUGE_START_BY_FLOOR):
             slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
                              (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
 
@@ -951,13 +1323,17 @@ def build():
     # Within the refuge level they stay visible, which is what makes that void
     # read as a level you arrive at rather than a gap. With two of them the garden
     # reads as running BETWEEN two solid piers, which is a better reading than one
-    # lump in the middle — the 28 m of clear span between them is the view.
+    # lump in the middle — the clear span between them remains the view.
     structure += cores("TowerCore", BASE_Z, TOP_Z - BASE_Z, concrete)
+
+    if add_trusses:
+        # Match the exterior exactly; mullions and louvres keep their dark metal.
+        trusses += structural_trusses("RefugeTruss", spandrel)
 
     merged = {
         "Facade_Spandrels": join(walls, "Facade_Spandrels"),
         "Windows_Glass": join(glazing, "Windows_Glass"),
-        "Interior_Lining": join(linings, "Interior_Lining"),
+        "Ceiling_Lights": join(ceiling_lights_mesh, "Ceiling_Lights"),
         "Sky_Garden_Grille": join(grilles, "Sky_Garden_Grille"),
         "Sky_Garden_Planting": join(plants, "Sky_Garden_Planting"),
         "Sky_Garden_Trunks": join(trunks, "Sky_Garden_Trunks"),
@@ -966,6 +1342,7 @@ def build():
         "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
         "Floor_Plates": join(slabs, "Floor_Plates"),
         "Structure": join(structure, "Structure"),
+        "Structural_Trusses": join(trusses, "Structural_Trusses"),
     }
     return merged
 
@@ -987,16 +1364,16 @@ def setup_render():
         scene.cycles.transmission_bounces = 12
         scene.cycles.transparent_max_bounces = 12
         scene.cycles.glossy_bounces = 6
-        # Filter Glossy blurs glossy and refractive rays to reduce noise. At 1.0
-        # it frosts perfectly smooth glass all by itself, whatever the material
-        # says — so keep it off and pay for the noise in samples instead.
-        if hasattr(scene.cycles, "blur_glossy"):
-            scene.cycles.blur_glossy = 0.0
     elif hasattr(scene, "eevee"):
         for attr, value in (("taa_render_samples", 128), ("use_gtao", True),
-                            ("use_raytracing", True)):
+                            ("use_raytracing", False)):
             if hasattr(scene.eevee, attr):
                 setattr(scene.eevee, attr, value)
+
+    # Keep this stored Cycles setting clean even when EEVEE is the active engine:
+    # Filter Glossy frosts smooth glass if a later final render switches engines.
+    if hasattr(scene.cycles, "blur_glossy"):
+        scene.cycles.blur_glossy = 0.0
 
     # Filmic-style view transform: raw sRGB blows out the sunlit walls and
     # flattens the glass highlights.
@@ -1026,21 +1403,20 @@ def setup_render():
     cam_data.lens = 40.0
     cam = bpy.data.objects.new("Camera", cam_data)
 
-    # Frame the whole building: pull back proportionally to its size so the
-    # camera keeps working when the footprint or floor count changes.
-    reach = max(W, D, TOP_Z) * 1.35
-    target = Vector((0.0, 0.0, TOP_Z * 0.52))
-    eye = Vector((reach * 0.78, -reach * 1.05, TOP_Z * 0.72))
+    # Frame the whole two-tower site: pull back proportionally to its envelope.
+    reach = max(SITE_WIDTH, SITE_DEPTH, SITE_TOP_Z) * 1.35
+    target = Vector((SITE_CENTER_X, 0.0, SITE_TOP_Z * 0.52))
+    eye = Vector((SITE_CENTER_X + reach * 0.78, -reach * 1.05, SITE_TOP_Z * 0.72))
     cam.location = eye
     cam.rotation_euler = (target - eye).normalized().to_track_quat("-Z", "Y").to_euler()
     bpy.context.collection.objects.link(cam)
     scene.camera = cam
 
 
-def report(objects):
+def report(objects, label="tower"):
     total_verts = sum(len(o.data.vertices) for o in objects.values() if o)
-    print("\n=== high-rise house ===")
-    print(f"footprint            : {W:.1f} x {D:.1f} m")
+    print(f"\n=== high-rise house: {label} ===")
+    print(f"tower footprint      : {W:.1f} x {D:.1f} m")
     print(f"floor height         : {H:.1f} m")
     print(f"storeys              : {TOTAL_FLOORS} total")
     print(f"open pilotis floors  : {PILOTIS_FLOORS} (0.0 -> {BASE_Z:.1f} m)")
@@ -1059,12 +1435,10 @@ def report(objects):
     print(f"glazed floors        : "
           f"{TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS - len(REFUGE_FLOOR_SET)}")
     if SKY_GARDEN:
-        print(f"refuge / sky garden  : storeys {REFUGE_STOREY}-"
-              f"{REFUGE_STOREY + REFUGE_FLOORS - 1} "
-              f"({REFUGE_Z0:.1f} -> {REFUGE_Z1:.1f} m), {REFUGE_FLOORS} floors open "
-              f"= {REFUGE_FLOORS * H:.1f} m double height")
-        print(f"refuge spacing       : {REFUGE_STOREY} storeys up, "
-              f"{TOTAL_FLOORS - REFUGE_STOREY} above (SCDF: max 20 apart)")
+        print(f"refuge / sky gardens : {len(REFUGE_STARTS)} levels at storeys "
+              f"{', '.join(map(str, REFUGE_STOREYS))}; each {REFUGE_FLOORS * H:.1f} m double height")
+        print(f"garden screen        : {REFUGE_GRILLE_H:.1f} m opening + "
+              f"{REFUGE_GRILLE_TOP_BLANK_H:.1f} m solid band above")
         print("columns across void  : same continuous full-height structural grid")
         if GRILLE_STYLE == "GRID":
             n_rows = max(1, round(REFUGE_FLOORS * H / GRILLE_CELL))
@@ -1081,16 +1455,19 @@ def report(objects):
           f"{SOLID_BASE_FLOORS * H:.1f} m below, {SOLID_TOP_FLOORS * H:.1f} m above")
     print(f"clear window opening : {OPEN_W:.1f} m (long face) / {OPEN_D:.1f} m (short face)")
     print(f"room windows/floor    : {WINDOWS_LONG} long face / {WINDOWS_SHORT} short face")
+    print(f"residential groups    : {BLOCK_GROUPS} x {BLOCK_FLOORS} glazed floors per tower")
     print(f"pane pitch           : {PANE_PITCH:.2f} m (= pane width; mullions are "
           f"{MULLION_W:.2f} m caps over the joints)")
     print(f"clear internal depth : {D - 2 * WALL_T:.2f} m (inside face to inside face)")
-    print(f"service cores        : 2 x {CORE_W:.0f} x {CORE_D:.0f} m at "
-          f"x = {CORE_XS[0]:+.0f} / {CORE_XS[1]:+.0f}, "
+    print(f"service cores        : 2 x {CORE_W:.2f} x {CORE_D:.2f} m at "
+          f"x = {CORE_XS[0]:+.2f} / {CORE_XS[1]:+.2f}, "
           f"{2 * CORE_W * CORE_D:.0f} m2 total "
           f"({2 * CORE_W * CORE_D / (W * D) * 100:.1f}% of the plate)")
-    print(f"core spacing         : {2 * CORE_OFFSET:.0f} m between centres, "
-          f"{2 * (CORE_OFFSET - CORE_W / 2):.0f} m clear between them, "
-          f"{W / 2 - (CORE_OFFSET + CORE_W / 2):.0f} m to each building end")
+    print(f"core spacing         : {2 * CORE_OFFSET:.2f} m between centres, "
+          f"{2 * (CORE_OFFSET - CORE_W / 2):.2f} m clear between them, "
+          f"{W / 2 - (CORE_OFFSET + CORE_W / 2):.2f} m to each building end")
+    print(f"core derivation      : {CORE_COLUMN_BAYS} long-face column bays "
+          f"plus {COL_SIZE:.2f} m column faces")
     print(f"derivation           : W = {WINDOWS_LONG} x {PANE_W:.0f} + 2 x "
           f"{PIER_LONG:.0f} = {W:.0f} m,  D = {WINDOWS_SHORT} x {PANE_W:.0f} + 2 x "
           f"{PIER_SHORT:.0f} = {D:.0f} m")
@@ -1098,10 +1475,9 @@ def report(objects):
           "same on all facades)")
     print(f"panes per floor total: {2 * (WINDOWS_LONG + WINDOWS_SHORT)} around the building")
     print("per-floor bands      : "
-          f"{SPANDREL_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "
-          f"{VENT_H:.2f} vent / {SPANDREL_H:.2f} solid")
-    print(f"window centre        : {WIN_Z + WIN_H / 2:.2f} m above each floor "
-          f"(mid-floor = {H / 2:.2f} m)")
+          f"{SPANDREL_LO_H:.2f} solid / {VENT_H:.2f} vent / {WIN_H:.2f} window / "
+          f"{VENT_H:.2f} vent / {SPANDREL_HI_H:.2f} solid")
+    print(f"window band          : {WIN_Z:.2f}\u2013{WIN_Z + WIN_H:.2f} m above each floor")
     print(f"objects / vertices   : {len([o for o in objects.values() if o])} / {total_verts}")
     print("=======================\n")
 
@@ -1118,7 +1494,7 @@ def frame_viewport():
     if the footprint or floor count changes. The diagonal is the dimension that
     has to fit, not the height alone.
     """
-    diag = math.sqrt(W ** 2 + D ** 2 + CORE_TOP_Z ** 2)
+    diag = math.sqrt(SITE_WIDTH ** 2 + SITE_DEPTH ** 2 + SITE_TOP_Z ** 2)
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type != "VIEW_3D":
@@ -1129,7 +1505,7 @@ def frame_viewport():
                 r3d = space.region_3d
                 # Orbit about mid-height, so the tower sits in frame rather than
                 # running off the top with the ground at centre.
-                r3d.view_location = Vector((0.0, 0.0, CORE_TOP_Z * 0.5))
+                r3d.view_location = Vector((SITE_CENTER_X, 0.0, SITE_TOP_Z * 0.5))
                 r3d.view_distance = diag * 1.6
                 # A 3/4 view from the south-east: the lit side, matching where the
                 # render cameras sit.
@@ -1144,10 +1520,43 @@ def frame_viewport():
                 space.lens = 35.0
 
 
+def translate_objects(objects, x_offset):
+    """Move one generated tower as a group without changing its local geometry."""
+    for obj in objects.values():
+        if obj is not None:
+            obj.location.x += x_offset
+
+
 def main():
-    objects = build()
+    global SITE_WIDTH, SITE_CENTER_X, SITE_DEPTH, SITE_TOP_Z
+
+    reset_scene()
+    shared_mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
+                                      glass_tint=GLASS_TINT)
+    configure_tower(2, 18, core_column_bays=2)
+    first_objects = build(reset=False, mats=shared_mats)
+    first_w, first_d, first_top = W, D, CORE_TOP_Z
+    report(first_objects, "existing tower (2 groups x 17 floors, 18 rooms)")
+
+    configure_tower(3, 20, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
+    second_objects = build(reset=False, mats=shared_mats, add_trusses=True)
+    second_w, second_d, second_top = W, D, CORE_TOP_Z
+    second_center_x = first_w / 2.0 + TOWER_GAP + second_w / 2.0
+    translate_objects(second_objects, second_center_x)
+
+    SITE_WIDTH = first_w + TOWER_GAP + second_w
+    SITE_CENTER_X = (TOWER_GAP + second_w) / 2.0
+    SITE_DEPTH = max(first_d, second_d)
+    SITE_TOP_Z = max(first_top, second_top)
+
+    report(second_objects, "new adjacent tower (3 groups x 17 floors, 20 rooms)")
+    print("=== two-tower site ===")
+    print(f"clear gap            : {TOWER_GAP:.1f} m")
+    print(f"overall envelope     : {SITE_WIDTH:.1f} x {SITE_DEPTH:.1f} m")
+    print(f"site centre          : x = {SITE_CENTER_X:.1f} m")
+    print(f"highest core top     : {SITE_TOP_Z:.2f} m")
+    print("=====================\n")
     setup_render()
-    report(objects)
     frame_viewport()
 
     os.makedirs(OUT_DIR, exist_ok=True)

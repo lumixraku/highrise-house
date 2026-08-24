@@ -12,23 +12,31 @@ import bpy
 from mathutils import Vector
 
 H = 4.0
-TOTAL_FLOORS = 40
 PILOTIS_FLOORS = 3
+BLOCK_GROUPS = 2
+BLOCK_FLOORS = 17
+REFUGE_FLOORS = 2
+FIXED_SOLID_BAND_FLOORS = 4
+TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
+                + (BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS
 WIN_H, VENT_H = 1.50, 0.25
 SLAB_T = 0.22
 PIER_LONG = 2.0
 WALL_T = 0.30
 PIER_SHORT = 2.0
-SPANDREL_H = (H - WIN_H - 2 * VENT_H) / 2.0
-VENT_LO_Z = SPANDREL_H
+SPANDREL_LO_H = 0.50
+VENT_LO_Z = SPANDREL_LO_H
 WIN_Z = VENT_LO_Z + VENT_H
+VENT_HI_Z = WIN_Z + WIN_H
+SPANDREL_HI_H = H - (VENT_HI_Z + VENT_H)
 MULLION_W = 0.09
 MULLION_INSET = 0.12
 PANE_W = 4.00
-WINDOWS_LONG = 15
-WINDOWS_SHORT = 7
-WINDOW_GAP = 0.12
+WINDOWS_LONG = 18
+WINDOWS_SHORT = 9
+WINDOW_GAP = 0.06
 PANE_GLASS_W = PANE_W - WINDOW_GAP
 GLASS_OPEN_W = WINDOWS_LONG * PANE_GLASS_W + (WINDOWS_LONG - 1) * WINDOW_GAP
 GLASS_OPEN_D = WINDOWS_SHORT * PANE_GLASS_W + (WINDOWS_SHORT - 1) * WINDOW_GAP
@@ -41,13 +49,22 @@ W = OPEN_W + 2 * PIER_LONG
 D = OPEN_D + 2 * PIER_SHORT
 PANE_GLASS_LONG = PANE_W
 PANE_PITCH = PANE_W
+CEILING_LIGHT_W = 1.20
+CEILING_LIGHT_D = 1.20
+CEILING_LIGHT_H = 0.06
+CEILING_LIGHTS_PER_ROOM = 2
+CEILING_LIGHT_SETBACKS = (0.80, 2.40, 4.00)
+CEILING_LIGHT_Z = H - SLAB_T - CEILING_LIGHT_H / 2.0
+CEILING_LIGHT_ON_RATIO = 0.36
+ROOMS_PER_FLOOR = 2 * WINDOWS_LONG + 2 * WINDOWS_SHORT
+CEILING_LIGHTS_PER_FLOOR = ROOMS_PER_FLOOR * CEILING_LIGHTS_PER_ROOM
 SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
 FIRST_GLAZED = SOLID_BASE_FLOORS
 LAST_GLAZED = TOWER_FLOORS - SOLID_TOP_FLOORS - 1
 # Refuge floor / sky garden: an open double-height void, mirroring build_house.py.
 SKY_GARDEN = True
-REFUGE_FLOORS = 2
+REFUGE_GRILLE_TOP_BLANK_H = 2.0
 BALUSTRADE_H = 1.20
 GARDEN_SLAB_T = 0.45
 # Columns carrying the tower across the void. The fins screen it; these hold it up.
@@ -56,21 +73,61 @@ REFUGE_COL_PITCH = PANE_W * 3
 FIN_PITCH = 0.50
 COL_SIZE = 1.60
 COL_CLEAR_INSET = 2.0
-# Twin service cores. Duplicated from build_house.py, like every constant here.
-CORE_W, CORE_D, CORE_T = 16.0, 9.0, 0.28
-CORE_OFFSET = 16.0
-CORE_XS = (-CORE_OFFSET, +CORE_OFFSET)
+COL_SPACING = 9.0
+COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
+CORE_COLUMN_BAYS = 2
+COMPANION_CORE_COLUMN_BAYS = 3
+TRUSS_FACADE_INSET = 0.55
+TRUSS_PLAN_MEMBER = 0.20
+TRUSS_CLAW_GROUPS = 3
+TRUSS_TRIANGLES_PER_CLAW = 2
+
+
+def col_grid(span):
+    usable = span - 2 * COL_MARGIN
+    bays = max(1, round(usable / COL_SPACING))
+    step = usable / bays
+    start = -usable / 2
+    return [start + index * step for index in range(bays + 1)]
+
+
+def core_layout(span, core_column_bays=CORE_COLUMN_BAYS):
+    grid = col_grid(span)
+    bays = int(core_column_bays)
+    west_lo_index = 1
+    west_hi_index = west_lo_index + bays
+    east_hi_index = len(grid) - 2
+    east_lo_index = east_hi_index - bays
+    if west_hi_index >= east_lo_index:
+        raise ValueError("tower is too narrow for the configured core column bays")
+    west_lo, west_hi = grid[west_lo_index], grid[west_hi_index]
+    west_center = (west_lo + west_hi) / 2.0
+    return ((west_hi - west_lo) + COL_SIZE, abs(west_center),
+            (-abs(west_center), abs(west_center)))
+
+
+# Twin service cores. Length and centre are derived from the reference tower's
+# column grid, matching build_house.py; depth and wall thickness stay fixed.
+CORE_W, CORE_OFFSET, CORE_XS = core_layout(W)
+CORE_D, CORE_T = 11.0, 0.28
 CORE_PROVISION = 203.5     # m2 of shafts/stairs/lobbies/risers the tower needs
 PARAPET_H = 1.10
 CORE_OVERRUN = 4.6         # lift overtravel + machine room above the roof slab
 CORE_ROOF_PARAPET = 0.9
-REFUGE_START = (FIRST_GLAZED + LAST_GLAZED + 1 - REFUGE_FLOORS) // 2
-REFUGE_END = REFUGE_START + REFUGE_FLOORS - 1
-REFUGE_SET = set(range(REFUGE_START, REFUGE_END + 1)) if SKY_GARDEN else set()
+REFUGE_STARTS = [FIRST_GLAZED + (index + 1) * BLOCK_FLOORS
+                 + index * REFUGE_FLOORS for index in range(BLOCK_GROUPS - 1)]
+REFUGE_ENDS = [start + REFUGE_FLOORS - 1 for start in REFUGE_STARTS]
+REFUGE_START, REFUGE_END = REFUGE_STARTS[0], REFUGE_ENDS[0]
+REFUGE_SET = (set().union(*[set(range(start, end + 1))
+                            for start, end in zip(REFUGE_STARTS, REFUGE_ENDS)])
+              if SKY_GARDEN else set())
 REFUGE_STOREY = PILOTIS_FLOORS + REFUGE_START + 1
 BASE_Z_ = PILOTIS_FLOORS * H
 REFUGE_Z0 = BASE_Z_ + REFUGE_START * H
 REFUGE_Z1 = REFUGE_Z0 + REFUGE_FLOORS * H
+REFUGE_GRILLE_Z0 = REFUGE_Z0
+REFUGE_GRILLE_Z1 = REFUGE_Z1 - REFUGE_GRILLE_TOP_BLANK_H
+REFUGE_GRILLE_H = REFUGE_GRILLE_Z1 - REFUGE_GRILLE_Z0
 # The void is glazed on no facade, so it comes off the glazed count.
 GLAZED_FLOORS = (TOWER_FLOORS - SOLID_BASE_FLOORS - SOLID_TOP_FLOORS
                  - len(REFUGE_SET))
@@ -180,8 +237,214 @@ def main():
 
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
                  "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
-                 "Interior_Lining", "Sky_Garden_Grille", "Structure"):
+                 "Ceiling_Lights", "Sky_Garden_Grille",
+                 "Structure", "Structural_Trusses"):
         check(f"object present: {name}", name in objs)
+    second_facade = objs.get("Facade_Spandrels.001")
+    second_glass = objs.get("Windows_Glass.001")
+    second_struct = objs.get("Structure.001")
+    check("second tower is generated as a separate mesh",
+          second_facade is not None and second_glass is not None
+          and second_struct is not None)
+    if second_facade and second_glass and second_struct:
+        second_fb = world_bounds(second_facade)
+        first_fb = world_bounds(objs["Facade_Spandrels"])
+        second_gz = z_clusters(second_glass)
+        check("second tower is 84 m wide for 20 long-face rooms",
+              abs(second_fb[0][1] - second_fb[0][0] - 84.0) < 0.02,
+              f"width={second_fb[0][1] - second_fb[0][0]:.3f} m")
+        check("second tower has 3 x 17 glazed floors",
+              len(second_gz) == 51 * 2,
+              f"{len(second_gz) // 2} glazed floors")
+        check("the two tower envelopes keep an 18 m clear gap",
+              abs(second_fb[0][0] - first_fb[0][1] - 18.0) < 0.02,
+              f"gap={second_fb[0][0] - first_fb[0][1]:.3f} m")
+        second_w = second_fb[0][1] - second_fb[0][0]
+        second_d = second_fb[1][1] - second_fb[1][0]
+        second_origin = first_fb[0][1] + 18.0 + second_w / 2
+        second_grid = col_grid(second_w)
+        second_core_w, second_core_offset, second_core_xs = core_layout(
+            second_w, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
+        second_pieces = piece_bounds(second_struct)
+        second_core_pieces = [
+            (lo, hi) for lo, hi in second_pieces
+            if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
+            and (hi[0] - lo[0]) < second_w * 0.5
+            and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5
+            and not (abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+                     and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02)]
+        measured_second_widths = []
+        for cx in second_core_xs:
+            here = [(lo, hi) for lo, hi in second_core_pieces
+                    if abs((lo[0] + hi[0]) / 2 - (second_origin + cx))
+                    < second_core_w / 2 + 0.5]
+            if here:
+                measured_second_widths.append(
+                    max(hi[0] for _, hi in here) - min(lo[0] for lo, _ in here))
+        check("taller tower core length follows its column grid",
+              len(measured_second_widths) == 2
+              and all(abs(width - second_core_w) < 0.05
+                      for width in measured_second_widths),
+              f"measured={', '.join(f'{width:.2f}' for width in measured_second_widths)} m, "
+              f"expected={second_core_w:.2f} m")
+        second_columns = [
+            ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
+            for lo, hi in second_pieces
+            if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
+            and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+            and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
+        second_defining_lines = [
+            second_origin + cx + sign * (second_core_w / 2 - COL_SIZE / 2)
+            for cx in second_core_xs for sign in (-1, 1)]
+        check("taller tower defining columns meet both core ends",
+              all(min(abs(x - line) for x, _ in second_columns) < 0.02
+                  for line in second_defining_lines),
+              f"{len(second_columns)} continuous columns checked")
+        second_core_gap = (second_core_xs[1] - second_core_w / 2
+                           - (second_core_xs[0] + second_core_w / 2))
+        second_column_bay_clear = (second_grid[1] - second_grid[0]) - COL_SIZE
+        check("taller tower cores leave one clear column bay between them",
+              abs(second_core_gap - second_column_bay_clear) < 0.02,
+              f"clear gap={second_core_gap:.3f} m, one bay={second_column_bay_clear:.3f} m")
+
+        # --- companion-tower lateral trusses ---------------------------
+        # The first tower stays unchanged; the higher companion carries the
+        # added refuge-level outrigger / belt system.
+        truss_obj = objs.get("Structural_Trusses")
+        check("taller tower has a separate structural-truss object",
+              truss_obj is not None)
+        if truss_obj:
+            truss_mat = (truss_obj.data.materials[0]
+                         if truss_obj.data.materials else None)
+            facade_mat = (second_facade.data.materials[0]
+                          if second_facade.data.materials else None)
+            check("refuge trusses use the exterior wall finish",
+                  truss_mat is not None and facade_mat is not None
+                  and truss_mat == facade_mat,
+                  f"truss={truss_mat.name if truss_mat else 'none'}, "
+                  f"facade={facade_mat.name if facade_mat else 'none'}")
+            truss_parts_world = piece_bounds(truss_obj)
+            truss_parts = [
+                ((lo[0] - second_origin, lo[1], lo[2]),
+                 (hi[0] - second_origin, hi[1], hi[2]))
+                for lo, hi in truss_parts_world]
+            companion_refuge_starts = [FIRST_GLAZED + (index + 1) * BLOCK_FLOORS
+                                       + index * REFUGE_FLOORS
+                                       for index in range(3 - 1)]
+            companion_refuge_z0s = [BASE_Z + start * H
+                                    for start in companion_refuge_starts]
+            companion_refuge_z1s = [z0 + REFUGE_FLOORS * H
+                                    for z0 in companion_refuge_z0s]
+            refuge_levels = len(companion_refuge_z0s)
+            short_claw_groups = TRUSS_CLAW_GROUPS
+            short_perimeter_bays = short_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+            long_claw_groups = max(short_claw_groups,
+                                   round((second_w - 2 * PIER_LONG)
+                                         / (second_d - 2 * PIER_SHORT)
+                                         * short_claw_groups))
+            long_perimeter_bays = long_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+            expected_members = refuge_levels * (
+                32 + 2 * long_perimeter_bays + 2 * short_perimeter_bays
+                + 2 * (long_claw_groups - 1)
+                + 2 * (short_claw_groups - 1))
+            check("two refuge levels carry the complete truss layout",
+                  len(truss_parts) == expected_members,
+                  f"{len(truss_parts)} members, expected {expected_members}")
+
+            truss_zlo = min(lo[2] for lo, _ in truss_parts) if truss_parts else 0.0
+            truss_zhi = max(hi[2] for _, hi in truss_parts) if truss_parts else 0.0
+            check("truss members stay inside the refuge double-height zones",
+                  all(any(lo[2] >= z0 - 0.05 and hi[2] <= z1 + 0.05
+                          for z0, z1 in zip(companion_refuge_z0s,
+                                            companion_refuge_z1s))
+                      for lo, hi in truss_parts),
+                  f"z={truss_zlo:.2f}..{truss_zhi:.2f} m")
+            for index, (z0, z1) in enumerate(zip(companion_refuge_z0s,
+                                                  companion_refuge_z1s)):
+                level_members = [(lo, hi) for lo, hi in truss_parts
+                                 if hi[2] > z0 and lo[2] < z1]
+                check(f"refuge truss level {index + 1} has outriggers and belts",
+                      len(level_members) >= 30,
+                      f"{len(level_members)} members in z={z0:.1f}..{z1:.1f} m")
+
+            # Short-face members have a large Y and Z extent while staying on
+            # the two E/W facade planes: these are the light triangular braces.
+            x_face = second_w / 2.0 - TRUSS_FACADE_INSET
+            short_z = [p for p in truss_parts
+                       if abs(abs((p[0][0] + p[1][0]) / 2) - x_face) < 0.8
+                       and p[1][1] - p[0][1] > 5.0
+                       and p[1][2] - p[0][2] > 1.0]
+            check("short facades have alternating triangular braces",
+                  len(short_z) == refuge_levels * 2 * short_perimeter_bays,
+                  f"{len(short_z)} diagonal members on the two depth-side faces")
+
+            # Matching single-diagonal panels wrap onto both long elevations.
+            long_z = [p for p in truss_parts
+                      if p[1][0] - p[0][0] > 5.0
+                      and p[1][1] - p[0][1] < 1.0
+                      and p[1][2] - p[0][2] > 1.0
+                      and abs(abs((p[0][1] + p[1][1]) / 2) -
+                              (D / 2 - TRUSS_FACADE_INSET)) < 0.8]
+            check("long facades complete the refuge-level truss ring",
+                  len(long_z) == refuge_levels * 2 * long_perimeter_bays,
+                  f"{len(long_z)} diagonal members on the two front/rear faces")
+
+            uprights = [p for p in truss_parts
+                        if p[1][2] - p[0][2] > 1.0
+                        and p[1][0] - p[0][0] < 1.0
+                        and p[1][1] - p[0][1] < 1.0]
+            check("claw trusses have uprights between triangle pairs",
+                  len(uprights) == refuge_levels * (
+                      2 * (long_claw_groups - 1)
+                      + 2 * (short_claw_groups - 1)),
+                  f"{len(uprights)} perimeter uprights")
+
+            # Plan X members span both X and Y, but stay within the thin upper
+            # refuge slab so they do not intrude into residential sightlines.
+            plan_x = [p for p in truss_parts
+                      if p[1][0] - p[0][0] > 5.0
+                      and p[1][1] - p[0][1] > 5.0
+                      and p[1][2] - p[0][2] < 0.8]
+            check("each refuge slab has four hidden plan-X panels",
+                  len(plan_x) == refuge_levels * 4 * 2,
+                  f"{len(plan_x)} horizontal diagonal members")
+            plan_z_centres = [((lo[2] + hi[2]) / 2.0) for lo, hi in plan_x]
+            expected_plan_z = [z1 - SLAB_T / 2.0
+                               for z1 in companion_refuge_z1s]
+            check("plan-X members are embedded in the upper refuge slabs",
+                  all(any(abs(z - target) < 0.05 for target in expected_plan_z)
+                      and hi - lo <= SLAB_T + 0.02
+                      for z, (lo, hi) in zip(plan_z_centres,
+                                             [(p[0][2], p[1][2]) for p in plan_x])),
+                  f"centres={sorted(round(z, 2) for z in plan_z_centres)}")
+
+            # Four outriggers per core per level (north/south, lower/upper).
+            outriggers = [p for p in truss_parts
+                          if p[1][0] - p[0][0] < 1.0
+                          and 5.0 < p[1][1] - p[0][1] < 15.0
+                          and p[1][2] - p[0][2] < 1.0]
+            check("outriggers tie both cores into the long-face belt",
+                  len(outriggers) == refuge_levels * 2 * 2 * 2,
+                  f"{len(outriggers)} core-to-perimeter members")
+
+            # Core X members are long in X, shallow in Y, and span the refuge
+            # height. They are an added steel expression; the concrete tube stays
+            # continuous and closed underneath.
+            core_x_braces = [p for p in truss_parts
+                             if p[1][0] - p[0][0] > second_core_w - 2.0
+                             and p[1][1] - p[0][1] < 1.0
+                             and p[1][2] - p[0][2] > 1.0]
+            check("both core tubes get X-braced truss panels",
+                  len(core_x_braces) == refuge_levels * 2 * 2 * 2,
+                  f"{len(core_x_braces)} core-face diagonal members")
+
+            # Nothing in the added system should project beyond the facade line.
+            check("truss system stays inside the companion envelope",
+                  all(max(abs(lo[0]), abs(hi[0])) <= second_w / 2 - 0.15
+                      and max(abs(lo[1]), abs(hi[1])) <= D / 2 - 0.15
+                      for lo, hi in truss_parts),
+                  f"max extents x={max(max(abs(lo[0]), abs(hi[0])) for lo, hi in truss_parts):.2f}, "
+                  f"y={max(max(abs(lo[1]), abs(hi[1])) for lo, hi in truss_parts):.2f} m")
     if failures:
         sys.exit(1)
 
@@ -219,10 +482,10 @@ def main():
     check("every window is 1.50 m tall",
           all(abs(h - WIN_H) < EPS for h in heights), f"heights={set(heights)}")
 
-    centres_rel = [round(((lo + hi) / 2 - BASE_Z) % H, 5) for lo, hi in bands]
-    check("every window is vertically centred in its floor",
-          all(abs(c - H / 2) < EPS for c in centres_rel),
-          f"centre offsets={set(centres_rel)}")
+    lows_rel = [round((lo - BASE_Z) % H, 5) for lo, _ in bands]
+    check("every window starts 0.75 m above its floor",
+          all(abs(z - WIN_Z) < EPS for z in lows_rel),
+          f"lower-edge offsets={set(lows_rel)}")
 
     floors_seen = sorted({int(((lo + hi) / 2 - BASE_Z) // H) for lo, hi in bands})
     check("one window band per glazed floor, none on the blank or refuge floors",
@@ -348,7 +611,8 @@ def main():
     check("end mullions sit on the opening edges, against the piers",
           abs(min(xs) + edge) < 1e-3 and abs(max(xs) - edge) < 1e-3,
           f"first={min(xs):.4f}, last={max(xs):.4f}, expected +/-{edge:.4f}")
-    check("15 room windows of 4 m fill the opening exactly (mullions add no length)",
+    check(f"{WINDOWS_LONG} room windows of 4 m fill the opening exactly "
+          "(mullions add no length)",
           abs(WINDOWS_LONG * PANE_W - OPEN_W) < 1e-9,
           f"{WINDOWS_LONG} x {PANE_W} = {OPEN_W:.4f} m")
 
@@ -409,32 +673,85 @@ def main():
           f"Iy {I_cores + I_piers:,.0f} m4 (cores {I_cores:,.0f} + "
           f"piers {I_piers:,.0f})")
 
-    # --- interior lining behind the glazing ----------------------------
-    # Clear glass shows whatever is behind it; without a lining the panes look
-    # through the tower to the sky and stop reading as windows.
-    lining = objs["Interior_Lining"]
-    lz = z_clusters(lining)
-    check("lining matches the glazing, one band per glazed floor",
-          len(lz) == GLAZED_FLOORS * 2, f"{len(lz)} levels")
-    lbands = list(zip(lz[0::2], lz[1::2]))
-    check("lining is exactly as tall as the window",
-          all(abs(hi - lo - WIN_H) < EPS for lo, hi in lbands),
-          f"heights={ {round(hi - lo, 4) for lo, hi in lbands} }")
-    check("lining occupies the same Z bands as the glass",
-          [round(z, 4) for z in lz] == [round(z, 4) for z in gz])
-
-    # It has to sit BEHIND the glass — deeper in on every facade.
-    lining_x = max(abs(p) for piece in piece_bounds(lining)
-                   for p in (piece[0][0], piece[1][0]))
     glass_x = max(abs(p) for piece in piece_bounds(glass)
                   for p in (piece[0][0], piece[1][0]))
-    check("lining is set back behind the glazing", lining_x < glass_x - 0.3,
-          f"lining reaches x={lining_x:.3f}, glass x={glass_x:.3f} "
-          f"(setback {glass_x - lining_x:.3f} m)")
-    check("lining follows the separate room windows",
-          abs(facade_span(lining, "S") - GLASS_OPEN_W) < 0.05
-          and abs(facade_span(lining, "E") - GLASS_OPEN_D) < 0.05,
-          f"{facade_span(lining, 'S'):.2f} x {facade_span(lining, 'E'):.2f} m")
+    check("no interior lining creates a second glass layer",
+          not any(name.startswith("Interior_Lining") for name in objs),
+          "Interior_Lining is absent")
+
+    lights = objs.get("Ceiling_Lights")
+    check("ceiling lights object exists", lights is not None)
+    if lights:
+        light_mats = {mat.name: mat for mat in lights.data.materials if mat}
+        expected_light_mats = {
+            "CeilingLight_Daylight", "CeilingLight_Warm", "CeilingLight_Off"
+        }
+        check("every room fixture has daylight, warm and off material states",
+              expected_light_mats <= set(light_mats),
+              f"materials={sorted(light_mats)}")
+        if expected_light_mats <= set(light_mats):
+            daylight = light_mats["CeilingLight_Daylight"].node_tree.nodes[
+                "Principled BSDF"].inputs["Emission Strength"].default_value
+            warm = light_mats["CeilingLight_Warm"].node_tree.nodes[
+                "Principled BSDF"].inputs["Emission Strength"].default_value
+            off = light_mats["CeilingLight_Off"].node_tree.nodes[
+                "Principled BSDF"].inputs["Emission Strength"].default_value
+            check("daylight and warm room lights are bright in the real-time view",
+                  daylight >= 100.0 and warm >= 100.0 and off <= 1e-6,
+                  f"daylight={daylight:.1f}, warm={warm:.1f}, off={off:.1f}")
+        light_z = z_clusters(lights)
+        check("ceiling lights have one level per glazed floor",
+              len(light_z) == GLAZED_FLOORS * 2,
+              f"{len(light_z)} levels for {GLAZED_FLOORS} glazed floors")
+        light_bands = list(zip(light_z[0::2], light_z[1::2]))
+        floor_bases = [BASE_Z + f * H for f in sorted(GLAZED_SET)]
+        check("ceiling lights mount beneath each room ceiling",
+              all(abs(hi - (base + H - SLAB_T)) < 0.02
+                  for (lo, hi), base in zip(light_bands, floor_bases)),
+              f"z={min(light_z):.2f}..{max(light_z):.2f}")
+        light_bounds = piece_bounds(lights)
+        check("every room has two installed ceiling fixtures",
+              len(light_bounds) == GLAZED_FLOORS * CEILING_LIGHTS_PER_FLOOR,
+              f"{len(light_bounds)} panels = {CEILING_LIGHTS_PER_FLOOR} per "
+              f"glazed floor ({CEILING_LIGHTS_PER_ROOM} per room)")
+        patterns = {}
+        for lo, hi in light_bounds:
+            z = round((lo[2] + hi[2]) / 2, 2)
+            patterns.setdefault(z, set()).add(
+                (round((lo[0] + hi[0]) / 2, 2),
+                 round((lo[1] + hi[1]) / 2, 2)))
+        check("every glazed floor installs its complete two-light room pattern",
+              len(patterns) == GLAZED_FLOORS
+              and all(len(points) == CEILING_LIGHTS_PER_FLOOR
+                      for points in patterns.values()),
+              f"{len(patterns)} floors, counts="
+              f"{sorted(set(map(len, patterns.values())))}")
+        unique_patterns = {tuple(sorted(points)) for points in patterns.values()}
+        check("room-fixture layouts vary between floors",
+              len(unique_patterns) >= GLAZED_FLOORS * 0.75,
+              f"{len(unique_patterns)} distinct patterns over "
+              f"{GLAZED_FLOORS} glazed floors")
+        check("ceiling lights stay behind the glazing",
+              max(max(abs(lo[0]), abs(hi[0])) for lo, hi in light_bounds)
+              < glass_x - 0.3
+              and max(max(abs(lo[1]), abs(hi[1])) for lo, hi in light_bounds)
+              < D / 2 - 0.3,
+              "light panels are recessed from the facade")
+        observed_setbacks = set()
+        for lo, hi in light_bounds:
+            cx = (lo[0] + hi[0]) / 2
+            cy = (lo[1] + hi[1]) / 2
+            candidates = (
+                W / 2 - abs(cx) - CEILING_LIGHT_D / 2 - 0.03,
+                D / 2 - abs(cy) - CEILING_LIGHT_D / 2 - 0.03,
+            )
+            matches = [setback for setback in CEILING_LIGHT_SETBACKS
+                       if any(abs(candidate - setback) < 0.02
+                              for candidate in candidates)]
+            observed_setbacks.update(matches)
+        check("each lit room has a near, middle, or deep ceiling fixture",
+              observed_setbacks == set(CEILING_LIGHT_SETBACKS),
+              f"setbacks={sorted(observed_setbacks)} m")
 
     # --- refuge floor / sky garden -------------------------------------
     if SKY_GARDEN:
@@ -458,7 +775,7 @@ def main():
 
         # The whole point is an OPEN double-height void: nothing enclosing it, and
         # no slab cutting it in half.
-        for name in ("Windows_Glass", "Interior_Lining", "Vent_Louvres"):
+        for name in ("Windows_Glass", "Vent_Louvres"):
             inside = [c for lo, hi in piece_bounds(objs[name])
                       for c in [(lo[2] + hi[2]) / 2]
                       if REFUGE_Z0 + 0.05 < c < REFUGE_Z1 - 0.05]
@@ -492,17 +809,32 @@ def main():
         check("the void is capped by the plate of the floor above", ceiling,
               f"{len(ceiling)} plate(s) topping out at {REFUGE_Z1:.1f} m")
 
-        # --- the screen across the void --------------------------------
-        # A fully open refuge level reads as a bite out of the tower, so a grille
-        # holds the facade plane. It must be a filter, not a wall.
+        # --- the screen and upper closure across the void ----------------
+        # The external opening is six metres: the grille occupies the lower six
+        # and a solid wall band closes the remaining two metres above it.
         grille_obj = objs["Sky_Garden_Grille"]
         gp = piece_bounds(grille_obj)
-        gz_ = world_bounds(grille_obj)[2]
+        refuge_grille = [(lo, hi) for lo, hi in gp
+                         if hi[2] <= REFUGE_Z1 + 0.02]
+        gz_ = (min(lo[2] for lo, _ in refuge_grille),
+               max(hi[2] for _, hi in refuge_grille)) if refuge_grille else (0.0, 0.0)
         check("the void is screened, not left fully open", len(gp) > 20,
               f"{len(gp)} grille members")
-        check("the screen spans the full height of the void",
-              gz_[0] <= REFUGE_Z0 + 0.3 and gz_[1] >= REFUGE_Z1 - 0.3,
-              f"z {gz_[0]:.2f}..{gz_[1]:.2f} vs void {REFUGE_Z0:.0f}..{REFUGE_Z1:.0f}")
+        check("the screen is 6 m high from the refuge floor",
+              abs(gz_[0] - REFUGE_GRILLE_Z0) < 0.02
+              and abs(gz_[1] - REFUGE_GRILLE_Z1) < 0.02
+              and abs(REFUGE_Z1 - gz_[1] - REFUGE_GRILLE_TOP_BLANK_H) < 0.02,
+              f"z {gz_[0]:.2f}..{gz_[1]:.2f}; expected "
+              f"{REFUGE_GRILLE_Z0:.0f}..{REFUGE_GRILLE_Z1:.0f} m, "
+              f"upper wall {REFUGE_GRILLE_TOP_BLANK_H:.1f} m")
+
+        refuge_top_walls = [(lo, hi) for lo, hi in piece_bounds(facade)
+                            if abs(lo[2] - REFUGE_GRILLE_Z1) < 0.02
+                            and abs(hi[2] - REFUGE_Z1) < 0.02]
+        check("a solid wall closes the 2 m above the refuge grille",
+              len(refuge_top_walls) >= 4,
+              f"{len(refuge_top_walls)} wall runs at "
+              f"z={REFUGE_GRILLE_Z1:.0f}..{REFUGE_Z1:.0f} m")
 
         # THE point of the 2 m cell: grille verticals must land on the window
         # mullions, so the vertical lines carry through the garden unbroken. Any
@@ -513,8 +845,9 @@ def main():
                            and zlo < (lo[2] + hi[2]) / 2 < zhi
                            and (hi[2] - lo[2]) > min_h})
 
-        gxs = face_verticals(grille_obj, REFUGE_Z0, REFUGE_Z1, 4.0)
-        mull_z = REFUGE_Z1 + WIN_Z + WIN_H / 2       # a glazed floor above the void
+        gxs = face_verticals(grille_obj, REFUGE_GRILLE_Z0,
+                             REFUGE_GRILLE_Z1, 4.0)
+        mull_z = REFUGE_Z1 + WIN_Z + WIN_H / 2
         mxs = face_verticals(objs["Window_Mullions"], mull_z - 1.0, mull_z + 1.0, 0.0)
         aligned = [g for g in gxs if any(abs(g - m) < 0.02 for m in mxs)]
         # The rule is that the screen pitch DIVIDES the pane pitch, so the vertical
@@ -675,10 +1008,15 @@ def main():
         # Placement rules.
         check("the void does not overlap the blank bands",
               not (REFUGE_SET & (set(range(SOLID_BASE_FLOORS))
-                   | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))),
+                       | set(range(TOWER_FLOORS - SOLID_TOP_FLOORS, TOWER_FLOORS)))),
               f"refuge floors {sorted(REFUGE_SET)}")
+        check("the refuge splits the glazed floors into two configured blocks",
+              REFUGE_START - FIRST_GLAZED == BLOCK_FLOORS
+              and LAST_GLAZED - REFUGE_END == BLOCK_FLOORS,
+              f"{REFUGE_START - FIRST_GLAZED} floors below + "
+              f"{LAST_GLAZED - REFUGE_END} above, configured {BLOCK_FLOORS} each")
         check("refuge floor spacing is within 20 storeys (SCDF)",
-              REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20,
+              TOTAL_FLOORS > 40 or REFUGE_STOREY <= 21 and TOTAL_FLOORS - REFUGE_STOREY <= 20,
               f"storey {REFUGE_STOREY} of {TOTAL_FLOORS}: "
               f"{REFUGE_STOREY} below, {TOTAL_FLOORS - REFUGE_STOREY} above")
         check("the void is roughly mid-tower",
@@ -746,7 +1084,7 @@ def main():
     # Y axis on the long face), not in Z, so it is independent of the band checks
     # above — those would pass just as happily with the glass 90 mm back.
     wall_y = D / 2.0
-    z_mid = REFUGE_Z1 + WIN_Z + WIN_H / 2.0      # a glazed floor above the void
+    z_mid = REFUGE_Z1 + WIN_Z + WIN_H / 2.0
 
     def outer_face(obj, zlo, zhi):
         """Frontmost Y reached by any piece on the south face in a z window."""
@@ -759,9 +1097,10 @@ def main():
             ("glass", "Windows_Glass", wall_y, z_mid - 0.5, z_mid + 0.5),
             ("mullion caps", "Window_Mullions", wall_y - MULLION_INSET,
              z_mid - 0.5, z_mid + 0.5),
-            ("vent louvres", "Vent_Louvres",
+             ("vent louvres", "Vent_Louvres",
              wall_y,
-             REFUGE_Z1 + VENT_LO_Z, REFUGE_Z1 + VENT_LO_Z + VENT_H)):
+             REFUGE_Z1 + VENT_LO_Z,
+             REFUGE_Z1 + VENT_LO_Z + VENT_H)):
         face = outer_face(objs[obj_name], zlo, zhi)
         check(f"{label} reaches its intended facade depth",
               face is not None and abs(face - expected_face) < 0.002,
@@ -781,7 +1120,7 @@ def main():
     # --- pilotis -------------------------------------------------------
     struct = objs["Structure"]
     for name in ("Facade_Spandrels", "Windows_Glass", "Vent_Louvres",
-                 "Interior_Lining", "Floor_Plates"):
+                 "Floor_Plates"):
         zmin = world_bounds(objs[name])[2][0]
         check(f"{name} stays above the pilotis zone", zmin >= BASE_Z - EPS,
               f"zmin={zmin:.3f} >= {BASE_Z}")
@@ -795,8 +1134,9 @@ def main():
 
     # --- twin service cores --------------------------------------------
     # TWO cores, and the reason is capacity and egress rather than structure: a
-    # single 14 x 9 held only 126 m2 against ~204 m2 of shafts, stairs, lobbies
-    # and risers that 654 units need, and put worst-case travel at 42.5 m.
+    # single 14 x 11 held only 154 m2 against ~204 m2 of shafts, stairs, lobbies
+    # and risers that the current 818-unit reference tower needs, and put
+    # worst-case travel at 42.5 m for the single-core comparison.
     # These checks measure that, so the cores cannot quietly shrink back.
     # Core walls only. Filter on the piece lying WITHIN the core footprint in y,
     # not on its centre: the north and south walls of a core are centred at
@@ -806,7 +1146,9 @@ def main():
     core_pieces = [(lo, hi) for lo, hi in piece_bounds(struct)
                    if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
                    and (hi[0] - lo[0]) < W * 0.5
-                   and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5]
+                   and lo[1] > -CORE_D / 2 - 0.5 and hi[1] < CORE_D / 2 + 0.5
+                   and not (abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+                            and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02)]
     core_xs = sorted({round((lo[0] + hi[0]) / 2, 1) for lo, hi in core_pieces})
     w_side = [x for x in core_xs if x < 0]
     e_side = [x for x in core_xs if x > 0]
@@ -882,17 +1224,37 @@ def main():
           f"outer edge at {CORE_OFFSET + CORE_W / 2:.0f} m, "
           f"pier zone starts at {W / 2 - PIER_LONG:.0f} m")
 
-    # Core walls on the pane grid, so interior partitions can follow the facade.
-    for edge in (CORE_OFFSET - CORE_W / 2, CORE_OFFSET + CORE_W / 2):
-        check(f"core edge at {edge:.0f} m lands on the pane grid",
-              abs(edge % PANE_W) < 1e-6,
-              f"{edge:.2f} m / {PANE_W:.2f} m = {edge / PANE_W:.3f} panes")
+    # Core walls are set by the outer faces of the two defining column lines,
+    # not by a fixed pane-grid coordinate. This is what keeps the core and the
+    # columns connected when the long facade grows from 18 to 20 room bays.
+    column_lines = col_grid(W)
+    column_faces = [line + sign * COL_SIZE / 2
+                    for line in column_lines for sign in (-1, 1)]
+    core_edges = [cx + sign * CORE_W / 2
+                  for cx in CORE_XS for sign in (-1, 1)]
+    check("core length is derived from the defining column faces",
+          all(min(abs(edge - face) for face in column_faces) < 0.02
+              for edge in core_edges),
+          f"edges={', '.join(f'{edge:+.2f}' for edge in sorted(core_edges))}")
+
+    full_height_columns = [
+        ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
+        for lo, hi in piece_bounds(struct)
+        if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
+        and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
+        and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
+    defining_lines = [cx + sign * (CORE_W / 2 - COL_SIZE / 2)
+                      for cx in CORE_XS for sign in (-1, 1)]
+    check("defining columns touch both ends of each core",
+          all(min(abs(x - line) for x, _ in full_height_columns) < 0.02
+              for line in defining_lines),
+          f"{len(full_height_columns)} continuous columns checked")
 
     # Unit depth either side of a core: too deep a core leaves unusable slivers.
     unit_depth = (D - CORE_D) / 2
     check("usable depth remains either side of the cores",
-          9.0 <= unit_depth <= 13.0,
-          f"{unit_depth:.1f} m each side (residential wants 9-13 m)")
+          9.0 <= unit_depth <= 15.0,
+          f"{unit_depth:.1f} m each side (residential target ~9-15 m)")
 
     # --- what rises above the roof -------------------------------------
     # The thing projecting above the parapet has to BE the cores continuing up
@@ -954,7 +1316,8 @@ def main():
     # The refuge void has no intermediate plate  # noqa: E116 (that is what makes it double
     # height), and the plate under it is replaced by the thicker garden slab,
     # which lives in Structure. So two plates fewer than there are storeys.
-    expected_plates = TOWER_FLOORS - (REFUGE_FLOORS if SKY_GARDEN else 0)
+    expected_plates = TOWER_FLOORS - ((BLOCK_GROUPS - 1) * REFUGE_FLOORS
+                                      if SKY_GARDEN else 0)
     check("one floor plate per occupied floor, minus the open refuge storeys",
           len(pz) == expected_plates * 2,
           f"{len(pz)} levels for {expected_plates} plates "
@@ -1013,10 +1376,11 @@ def main():
           f"{views[0][0].region_3d.view_distance:.0f} m view distance"
           if views else "no viewports")
 
-    # Footprint must remain 64 x 32 m after changing only the window count.
+    # Footprint follows the configured room-window counts.
     facade = objs["Facade_Spandrels"]
     fb = world_bounds(facade)
-    check(f"footprint width is {W:.2f} m (15 room windows + 2 x {PIER_LONG:.0f} m pier)",
+    check(f"footprint width is {W:.2f} m ({WINDOWS_LONG} room windows + 2 x "
+          f"{PIER_LONG:.0f} m pier)",
           abs((fb[0][1] - fb[0][0]) - W) < 0.02, f"{fb[0][1] - fb[0][0]:.3f} m")
     check(f"footprint depth is {D:.2f} m ({WINDOWS_SHORT} room windows + 2 x "
           f"{PIER_SHORT:.0f} m pier)",
@@ -1062,7 +1426,7 @@ def main():
     # The piers must close the whole vent+window zone, top and bottom.
     floor_rel = sorted({round((z - BASE_Z) % H, 3) for z in z_clusters(facade)})
     check("wall geometry spans the vent+window zone (pier top/bottom present)",
-          SPANDREL_H in floor_rel and (H - SPANDREL_H) in floor_rel,
+          SPANDREL_LO_H in floor_rel and (H - SPANDREL_HI_H) in floor_rel,
           f"levels in floor={floor_rel}")
 
     print(f"\n{checks - len(failures)}/{checks} checks passed")

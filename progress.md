@@ -1,5 +1,515 @@
 # Progress
 
+## 2026-08-24 — fix — slightly stronger bounded glass reflection
+
+Raised the bounded EEVEE preview-glass response from 12%..28% to 14%..40%.
+The minimum reflection is slightly stronger so straight-on panes retain a
+clear glass cue, while the maximum reflection is substantially stronger at
+oblique angles without returning to a facade-wide mirror.
+
+Verification:
+- `python3 -m py_compile materials.py build_house.py verify_house.py` and
+  `git diff --check` passed.
+- Blender rebuilt the three output artifacts; the saved node range is confirmed
+  as `0.14..0.40`, with EEVEE ray tracing off.
+- `verify_house.py` reports `160/164`; all glass and lighting-specific checks
+  pass. The four failures remain the same legacy geometry assumptions.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
+## 2026-08-24 — fix — bound Material Preview glass reflection
+
+Replaced the angle-exponent experiment with a directly bounded EEVEE glass
+mix. The Fresnel response now maps to a clamped 12%..28% reflection range:
+the 12% lower bound prevents a normal-facing pane from looking like an empty
+opening, while the 28% upper bound prevents an upward-looking facade from
+turning into a broad sky reflection. The transparent lobe, non-ray-traced
+setup, room-fixture layout, and fixture brightness are unchanged.
+
+Verification:
+- `python3 -m py_compile materials.py build_house.py verify_house.py` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  `out/preview.png`; inspection confirms the clamped `Preview Glass Reflection
+  Range` is 12%..28%, with EEVEE ray tracing still off.
+- `verify_house.py` reports `160/164`; all glass and lighting-specific checks
+  pass. The four failures remain the same legacy geometry assumptions.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
+## 2026-08-24 — fix — ray-tracing-free Material Preview glass
+
+Made EEVEE the saved scene's default render engine and explicitly disabled its
+ray tracing. Its glass now mixes transparency with an amplified Fresnel
+reflection lobe, so the real-thickness pane is not darkened twice, its room
+fixtures remain visible in Material Preview, and the windows still read as
+reflective glazing. Cycles remains available by changing `RENDER_ENGINE` for a
+slower physically refracted final render.
+
+Each 4 m window-room now carries two installed 1.2 m ceiling panels. A seeded
+per-fixture draw independently switches each panel on or off (36% on); lit
+panels independently choose daylight or warm-white, so a room can have zero,
+one, or two lights lit. The two lit materials use 100 emission strength (rather
+than the former 6). `open_in_blender.py` now opens the third Material Preview
+mode directly, rather than the fourth Rendered mode.
+
+Verification:
+- `python3 -m py_compile build_house.py materials.py verify_house.py open_in_blender.py render_views.py` and `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`; image inspection confirms the angle-dependent window reflection while individual room lights remain present.
+- The final strength-100 scene inspection confirms EEVEE with ray tracing off, the Fresnel preview-glass nodes, and the daylight/warm/off material values `100/100/0`.
+- `verify_house.py` reports `160/164`: all new glass and per-fixture lighting assertions pass, including 108 installed fixtures on every glazed floor (two per 54 rooms).
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
+## 2026-08-24 — fix — room-level ceiling lights without a second window layer
+
+Removed the full-height, self-illuminated `Interior_Lining` mesh that sat behind
+every residential pane and visually read as a second layer of glazing. Each
+4.00 m window module now represents one room; the deterministic 36% occupied
+rooms receive a 1.20 m warm emissive panel mounted directly under that room's
+ceiling. Its front edge is deterministically set 0.8, 2.4, or 4.0 m behind the
+window, so visible lights vary between near-window and deeper rooms rather than
+forming a facade-wide strip. Updated the geometry verifier, material helpers,
+glass-measurement notes, and README to reflect the single-pane facade.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py measure_glass.py build_office.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`; visual inspection of a dedicated close render confirms individual interior ceiling panels, with no full-window backing surface.
+- `verify_house.py` reports `160/164`: all new assertions pass — no `Interior_Lining`, fixtures are directly beneath their room ceilings, and all three setbacks occur. The four failures are unchanged legacy geometry assumptions.
+- `measure_glass.py` reports `R=0.307, G=0.328, B=0.354`, contrast ratio `9.16x`, and dynamic range `0.448`; the clear-glass check remains healthy.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
+## 2026-08-24 — fix — neutral clear glass
+
+Changed the default shared glazing from the pale green `GLASS_GREEN` tint to
+neutral `GLASS_CLEAR` (1.0, 1.0, 1.0). Transmission remains 1.0, roughness 0.0,
+and IOR 1.52, so the panes retain physical reflections and refraction without a
+green colour cast. The legacy green constant remains available as an explicit
+override; both the residential generator and Office now use the clear default.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`.
+- `verify_house.py` reports `166/170`; all glass material, two-tower, sparse-light,
+  core, and truss checks pass. The four failures are unchanged legacy geometry
+  assumptions.
+- `measure_glass.py` reports `R=0.577, G=0.587, B=0.599`, green bias `-0.001`,
+  contrast ratio `4.85x`, and dynamic range `0.662`; the neutral reflection is
+  visible without a green cast.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain.
+
+## 2026-08-24 — fix — reduce the window-to-window joint
+
+Halved `WINDOW_GAP` from 0.12 m to 0.06 m. The 4.00 m room module and both tower
+footprints remain unchanged; each clear pane widens from 3.88 m to 3.94 m on all
+four facades.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`.
+- `verify_house.py` reports `166/170`; the pane-width and 0.06 m-joint assertions pass.
+
+Remaining issues: four legacy verifier assumptions remain unchanged.
+
+## 2026-08-24 — fix — match refuge trusses to the exterior finish
+
+Changed the companion tower's visible refuge-level trusses from the dark mullion
+metal to the exact exterior `Spandrel` material, so the long-face claw pattern reads
+as a white facade structure. Added a verifier assertion tying the truss material to
+the companion facade material, and excluded 1.60 x 1.60 m boundary columns from the
+core-wall measurement filters so the thickened 11 m cores are measured correctly.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py materials.py` passed.
+- `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`.
+- `verify_house.py` reports `166/170`; the truss material, 176-member layout, seven-claw
+  long faces, core dimensions, and all new geometry checks pass.
+
+Remaining issues: four legacy verifier assumptions remain (`blank bands land on floor
+lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling).
+
+## 2026-08-23 — fix — tighten the wide-face refuge truss rhythm
+
+Kept the 40 m depth and 11 m core thickness, but scaled the visible refuge-truss
+claw count by facade width. Each 40 m short face remains three two-triangle claws;
+the 80 m companion long faces now use seven claws (fourteen diagonals and six
+uprights per face), keeping each diagonal bay near 6 m rather than the previous
+12 m span. The hidden plan-X diaphragm, core-X braces, outriggers and belts remain
+unchanged.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender rebuild and the full verifier are pending for this updated long-face
+  truss layout.
+
+Remaining issues: pending Blender rebuild and verification.
+
+## 2026-08-23 — fix — widen both towers to 40 m and thicken the cores
+
+Applied the latest geometry request on top of the prior 36 m revision: both towers
+now use `WINDOWS_SHORT = 9`, so the derived depth is `D = 40.0 m` (76 x 40 m
+reference and 84 x 40 m companion). Increased the fixed core depth from `9.0 m` to
+`11.0 m` while keeping each core's long dimension derived from its defining column
+grid. The three-claw refuge trusses remain unchanged: six diagonal members and two
+vertical uprights per facade, wrapping all four sides of both refuge levels.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender rebuild and the full verifier are pending for this latest 40 m / 11 m-core
+  configuration.
+
+Remaining issues: pending Blender rebuild and verification.
+
+## 2026-08-23 — fix — widen both towers to 36 m and add three-claw refuge trusses
+
+Widened both procedural towers by one short-face room module: `WINDOWS_SHORT = 8`,
+so the derived depth is `D = 36.0 m` (76 x 36 m reference tower and 84 x 36 m
+companion). Long-face room counts, floor groups, core spacing and the 18 m site gap
+remain unchanged. Reworked each refuge-level facade of the taller companion into
+three two-triangle claws: six diagonal members plus two vertical uprights per face,
+wrapping all four sides while keeping the hidden plan-X and core-X braces inside
+the refuge structure.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`,
+  and `out/preview.png`; the build report confirmed both towers at 36 m depth.
+- `verify_house.py` reports `165/169`; the three-claw diagonal and upright checks,
+  36 m footprint checks, plan-X checks and core-X checks all pass.
+
+Remaining issues: four legacy geometry assumptions remain (`blank bands land on
+floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall
+sampling); none is caused by this change. This remains a conceptual geometry model,
+not a project-specific structural analysis.
+
+## 2026-08-23 — fix — wrap the refuge-level triangular truss ring around all facades
+
+Reworked the companion tower's refuge-level appearance after review: removed the
+extra visible cross-members from the short faces and restored the lighter,
+single-diagonal triangular pattern. Added matching alternating single diagonals
+to both long (front and rear) facades, so each refuge level now reads as one
+continuous four-sided truss ring. The hidden plan-X diaphragm and internal core
+X braces remain structural and do not alter ordinary residential sightlines.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`,
+  and `out/preview.png`; the companion now has 116 refuge-truss members (58 per
+  refuge level), including 16 short-face and 36 long-face perimeter diagonals.
+- `verify_house.py` reports `164/168`; all new perimeter-ring checks pass. The
+  four remaining failures are unchanged legacy geometry assumptions.
+
+Remaining issues: None for the requested appearance/layout change.
+
+## 2026-08-23 — fix — add refuge-level plan X bracing and crossed short-face trusses
+
+Expanded the taller companion tower's two refuge-level truss systems without
+adding members to ordinary residential floors. Each short-face panel now has a
+second diagonal, making a complete X brace. Each refuge level also gets four
+horizontal plan-X panels, embedded in the upper refuge slab to stiffen the
+diaphragm while staying out of residential rooms and sightlines. The first tower
+is unchanged.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`,
+  and `out/preview.png`; the companion has 96 refuge-truss members (48 per
+  refuge level), including 32 crossed short-face diagonals and 16 hidden plan-X
+  members.
+- `verify_house.py` reports `163/167`; all new truss checks pass. The four
+  remaining failures are the same pre-existing geometry assumptions (`blank
+  bands land on floor lines`, refuge corner piers, roof-overrun footprint, and
+  solid corner-wall sampling).
+
+Remaining issues: None for the requested truss additions. This is still a
+conceptual geometry model, not a substitute for a project-specific structural
+analysis.
+
+## 2026-08-23 — fix — add companion-tower refuge-level Z trusses
+
+Added a dedicated `Structural_Trusses` mesh to the taller companion tower only.
+At both of its double-height refuge / sky-garden levels, the system now has
+long-face belt chords, core-to-perimeter outriggers, alternating Z-shaped
+diagonals on both short (depth-side) facades, and X-braced panels on both faces
+of both service cores. The concrete cores remain continuous closed tubes; the
+metal members are an added lateral-load path and a visible core-to-perimeter
+connection. Updated the verifier and README with the truss geometry and scope.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; 64 truss members were generated across the two companion refuge levels.
+- `verify_house.py` passed all new truss assertions: `161/165` overall. The four remaining failures are pre-existing boundary assumptions (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling).
+
+Remaining issues: the four legacy verifier assumptions above remain; none is caused by the truss system.
+
+## 2026-08-23 — fix — extend the companion cores to one-bay separation
+
+Adjusted only the taller companion tower's service cores from two long-face
+column bays to three. The outer boundary remains on the first inset column line,
+so each core grows inward while its defining columns stay connected to the wall.
+The companion now uses `27.73 x 9.00 m` cores at x = +/-17.42 m, leaving a
+`7.11 m` clear single-column bay between them. The original 76 m tower remains
+at two bays and `19.20 x 9.00 m` cores at x = +/-17.60 m. Updated the procedural
+configuration, verifier, and README.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; the companion report confirmed 27.73 m cores and a 7.11 m gap.
+- `verify_house.py` passed the new companion core-length, end-column, and one-bay separation assertions and reports `151/155` overall.
+
+Remaining issues: four pre-existing verifier assumptions remain (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling); none is caused by this core extension.
+
+## 2026-08-23 — fix — derive service-core length from each tower's columns
+
+Replaced the shared fixed core length with a per-tower layout derived from the
+long-face column grid. Each core now spans two column bays and extends to the
+outer faces of its defining columns, so those columns remain in the structural
+mesh and meet both core ends. The reference tower now uses 19.20 x 9.00 m cores
+at x = +/-17.60 m; the taller companion independently uses 19.02 x 9.00 m cores
+at x = +/-21.78 m. Synchronized the floor plan, README, build report, and
+geometry checks with the derived dimensions.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py floor_plan.py render_views.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; both tower reports confirmed the derived core sizes and positions.
+- `verify_house.py` passed the new core-length and column-contact assertions for both towers and reports `150/154` overall.
+
+Remaining issues: four pre-existing verifier assumptions remain (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling); none is caused by this core-layout change.
+
+## 2026-08-23 — fix — build two residential towers with separate configurations
+
+Kept the existing tower at the origin with `2 x 17` residential groups and `18`
+long-facade rooms per floor (`76 x 32 m`, `43` storeys, roof at `172.0 m`). Added
+an adjacent procedural tower using `3 x 17` groups and `20` long-facade rooms per
+floor (`84 x 32 m`, `62` storeys, roof at `248.0 m`). The towers share the fixed
+floor, depth, pier and twin-core rules, remain `18.0 m` apart, and are framed as a
+`178.0 x 32.0 m` site. Both builds reuse the same material set so the original
+tower's emissive ceiling-light slots remain intact. Added verifier checks for the
+second tower's width, 51 glazed floors and clear gap; synchronized README and
+extra-view framing with the two-tower site.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py render_views.py floor_plan.py materials.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/highrise_house.blend` and `out/highrise_house.glb`; the build report confirmed both configurations and the 18 m gap.
+- Full Cycles preview rendered to `out/preview.png` and was visually inspected; six low-sample extra views rendered successfully, including the two-tower front elevation.
+- `verify_house.py` passed all new two-tower checks and reports `148/152`; four legacy geometry assumptions remain (`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint, and solid corner-wall sampling).
+- Final README pass now labels the saved preview as a Cycles render of both towers.
+
+Remaining issues: the four pre-existing verifier assumptions above are unchanged and unrelated to the separate tower configurations.
+
+## 2026-08-23 — fix — add clustered office ceiling lights
+
+Added warm emissive ceiling panels behind the Office tower curtain wall. Each
+of the 24 office floors now lights 31 of 103 facade modules (30.1%): most lights
+form deterministic 3–6-module work-zone clusters, with a smaller number of
+isolated late-working bays. The fixed seed gives every office floor a different
+pattern while keeping rebuilds stable. Pilotis, equipment, refuge, and roof
+levels receive no lights.
+
+Verification:
+- `python3 -m py_compile build_office.py materials.py` passed.
+- `git diff --check` passed.
+- Blender 5.2.0 LTS rebuilt `out/office_tower.blend` and
+  `out/office_tower.glb` successfully, producing 744 ceiling panels across the
+  24 office floors only.
+- Inspected the saved blend: `Office_Ceiling_Lights` has the expected 5,952
+  vertices / 4,464 faces, stays inside the 50 m curtain-wall envelope, and uses
+  `OfficeCeilingLight` with emission strength 6.0.
+- Re-rendered and visually checked `out/office_preview.png`; clustered and
+  scattered lights are visible through the glazing without lighting the blank
+  or ventilated bands.
+
+Remaining issues: None.
+
+## 2026-08-23 — fix — randomize occupied-room ceiling lights
+
+Changed the residential ceiling lights from every room window being on to a
+deterministic 36% occupancy pattern. Each facade is generated independently on
+each glazed floor: one short adjacent cluster is kept for a natural occupied
+patch, while the remaining lights are scattered. The fixed seed makes rebuilds
+stable, but all 34 glazed floors receive distinct patterns. Updated the README
+and verifier with sparse-count, per-floor, and pattern-variation checks.
+
+Verification: Python compilation and diff whitespace checks passed. Blender
+rebuilt the `.blend` and `.glb`, all six 16-sample views rendered, and front,
+corner, and floor-detail images were inspected. The model contains 612 light
+panels: 18 of 50 room-window positions per glazed floor. All new light checks
+pass; the full verifier remains at 144/148 because of the same four pre-existing
+geometry assumptions. Remaining issues for this change: None.
+
+## 2026-08-23 — fix — verify emissive ceiling-light diagnostics
+
+Corrected the ceiling-light verifier diagnostic so a present material slot is
+reported accurately when the emissive material check passes. Rebuilt the house,
+exported glTF, rendered all six low-sample views, and inspected the front,
+corner, and floor-detail views; the recessed warm light panels are visible
+behind the glazing and remain inside the facade.
+
+Verification: Python compilation, Blender rebuild, six-view render, and
+verifier checks completed. The verifier reports 141/145 checks because four
+pre-existing geometry assumptions still fail; all ceiling-light checks pass.
+Remaining issues for this change: None.
+
+## 2026-08-23 — fix — add recessed emissive ceiling lights
+
+Added one small warm-white emissive ceiling panel per room-window bay on every
+glazed floor. The panels sit just inside the existing window band, between the
+glass and the interior lining, so they read as real ceiling fixtures through the
+facade without changing the 76 x 32 m envelope. Added the `Ceiling_Lights` mesh
+object, a dedicated emissive material, and verifier checks for count, height,
+recess, and emission strength.
+
+Verification: Python compilation, Blender rebuild, low-sample render of all six
+views, and image inspection passed. The legacy verifier still reports its
+pre-existing four geometry assumptions unrelated to these lights. Remaining
+issues for this change: None.
+
+## 2026-08-23 — fix — widen and move the twin service cores
+
+Responding to the wider 76 m plate, changed each service core from 16 × 9 m at
+x = ±16 m to 20 × 9 m at x = ±18 m. This reduces the outboard clearance to each
+short end from 14 m to 10 m while preserving a 16 m clear span between cores and
+keeping every core edge on the 4 m pane grid. Synchronized `build_house.py`,
+`verify_house.py`, `floor_plan.py`, and the service-core section of `README.md`.
+
+Verification: Python compilation, floor-plan regeneration, diff whitespace check,
+and Blender rebuild passed. The build report confirms two 20 × 9 m cores at ±18 m
+with 360 m² total provision. Six low-sample Blender views rendered successfully,
+including the pilotis close-up. The legacy verifier still stops at its pre-existing
+missing `Interior_Lining` object assertion. Remaining issues: None for this change.
+
+## 2026-08-23 — fix — parameterize the two residential blocks and room count
+
+Made the requested massing controls explicit in `build_house.py`: each of the two
+residential blocks now uses `BLOCK_FLOORS = 17`, and the long facade uses
+`WINDOWS_LONG = 18` room-window modules per floor. `TOTAL_FLOORS` is derived from
+the two blocks plus the fixed pilotis, refuge and solid-band floors; `W` is derived
+from the long-facade module count and fixed piers. The verifier now mirrors these
+parameters and asserts the refuge divides the glazed floors into two 17-floor
+blocks. The floor-plan and extra-view scripts follow the 18-room width and derived
+172 m roof / 88–96 m refuge elevations; the README summary reflects the new 76 ×
+32 m, 43-storey configuration.
+
+Verification: `py_compile`, `git diff --check`, and a Blender rebuild passed. The
+build report confirms 43 total floors, 34 glazed floors split 17 + 17, 18 long-face
+windows per floor, a 76.0 × 32.0 m footprint, and a 172.0 m roof. The full legacy
+verifier still stops at its pre-existing missing `Interior_Lining` object assertion.
+Remaining issues: None for the requested parameter change.
+
+## 2026-08-23 — fix — close the upper two metres of the refuge opening
+
+Added a solid facade band from z=106.0–108.0 m above the six-metre refuge grille.
+The actual refuge void and its ceiling remain 8.0 m high, but the outside opening
+now ends at z=106.0 m and the wall is directly connected to the grille top.
+
+Verification: Python compilation, `git diff --check`, Blender rebuild, and a
+saved-Blend geometry probe passed. Remaining issue: the full verifier still stops
+at the pre-existing missing `Interior_Lining` object assertion.
+
+## 2026-08-23 — fix — revalidate the refuge grille and facade band configuration
+
+Synchronized the README with the current 49-storey model and regenerated the
+saved Blender and glTF outputs plus the five extra views. The residential
+ventilation + glass band remains 0.50–2.50 m above each floor, with the clear
+glass at 0.75–2.25 m. The 8.0 m refuge void remains z=100.0–108.0 m; its
+external grille/opening starts at z=100.0 m and ends at z=106.0 m, with a solid
+wall closing the upper 2.0 m.
+
+Verification: `py_compile`, `git diff --check`, Blender rebuild, extra-view
+renders, and a saved-Blend vertex probe passed. The full verifier still stops at
+the pre-existing missing `Interior_Lining` object assertion. The README's pane
+counts and the 20/20 glazed-floor split around the refuge are synchronized too.
+
+## 2026-08-23 — fix — bind the refuge grille to the 8 m void
+
+Made the refuge screen geometry derive from the actual 8.0 m refuge void: its
+lower edge remains at the refuge floor, its height is 8.0 minus a 2.0 m top
+blank band, and its upper edge is therefore exactly 6.0 m above the floor.
+Regenerated the `.blend`, `.glb`, preview, and extra view renders.
+
+Verification: Python compilation, `git diff --check`, and a saved-Blend probe
+passed. The refuge grille is z=100.0–106.0 m inside the z=100.0–108.0 m void;
+the next glass band resumes at z=108.75 m. The full verifier still has the
+pre-existing missing `Interior_Lining` object assertion.
+
+## 2026-08-23 — fix — expand the tower to 40 residential floors
+
+Changed the house to 49 physical storeys: 3 pilotis floors, 40 glazed
+residential floors, 4 blank floors, and a 2-storey refuge void. Regenerated
+`out/highrise_house.blend` and `out/highrise_house.glb`; the roof is now at
+196.0 m, the parapet at 197.32 m, and the core bulkheads at 201.94 m.
+
+Verification: Python compilation passed and the Blender build report confirmed
+exactly 40 glazed floors. Remaining issues: None.
+
+## 2026-08-23 — fix — shorten the refuge grille and restore glazing above
+
+Removed the 4.0 m solid separator above the refuge void, restoring the normal
+glazed facade above it. In the current 49-storey configuration the refuge
+occupies z=100.0–108.0 m; its outside grille begins at z=100.0 m and is 6.0 m
+high (z=100.0–106.0 m), leaving the upper 2.0 m open. Updated the geometry
+checks and documentation accordingly.
+
+Verification: Python compilation and `git diff --check` passed; Blender rebuilt
+`out/highrise_house.blend` and `out/highrise_house.glb`. A saved-Blend probe
+confirmed refuge grille vertices at z=100.0 and 106.0, and glass resumes above
+the refuge at z=108.75 m. The full verifier still stops at its pre-existing
+missing `Interior_Lining` object assertion.
+
+## 2026-08-23 — fix — add a solid separation floor above the refuge void
+
+Added one 4.0 m windowless facade floor directly above the double-height refuge
+garden. The refuge void remains open from z=80.0–88.0 m; its new solid separator
+band occupies z=88.0–92.0 m, with glazing and ventilation resuming above it.
+Updated the generated-floor accounting, geometry-verification constants and
+sampling heights, and the documentation. The model now has 30 glazed floors.
+
+Verification: `python3 -m py_compile build_house.py verify_house.py` and
+`git diff --check` passed; Blender regenerated `out/highrise_house.blend` and
+`out/highrise_house.glb`; a saved-Blend geometry probe confirmed z=88.0–92.0 m
+contains a full facade wall and no glass or vents. `verify_house.py` still stops
+at its pre-existing `Interior_Lining` object assertion, because the current
+generator does not create that legacy object. Remaining issues: None for the
+refuge-top separation band.
+
+## 2026-08-22 — fix — move the residential facade band down to 0.50 m above every floor
+
+Moved the per-floor ventilation + glass + ventilation assembly in `build_house.py`
+from the vertically centred position to z=0.50–2.50 m above each glazed-floor
+level. The 1.50 m glass now spans z=0.75–2.25 m; the 0.25 m louvre strips span
+z=0.50–0.75 m and z=2.25–2.50 m; the solid spandrels are 0.50 m below and
+1.50 m above. Updated `verify_house.py` and the facade-band documentation to
+assert and describe the new position.
+
+Verification: `python3 -m py_compile build_house.py verify_house.py` passed;
+Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`; a
+saved-Blend geometry probe passed for all 31 glass bands and 62 vent bands at the
+specified offsets. `verify_house.py` still stops at its pre-existing
+`Interior_Lining` object assertion, because the current generator does not create
+that object. Remaining issues: None for this facade-band change.
+
 ## 2026-08-22 — fix — restore the complete column count with corner relocation
 
 Restored all original non-corner grid columns after the erroneous perimeter-row

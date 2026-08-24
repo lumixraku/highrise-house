@@ -9,7 +9,7 @@ Renders a tight crop of the facade and reports, for glass pixels only:
   local contrast (stdev)   — THE frosted test. A rough or partly-diffuse pane
                              averages its surroundings, so neighbouring pixels
                              converge and the stdev collapses. Clear glass keeps
-                             sharp detail: sky reflection, mullion, lining edge,
+                             sharp detail: sky reflection, mullion, room fixture,
                              all distinct, so the stdev stays high.
 
 Glass pixels are found by ray-casting the camera through each pixel and keeping
@@ -103,7 +103,7 @@ def main():
         print()
         # A frosted pane is a low-variance pane: it blurs whatever is behind and
         # around it, so neighbouring pixels converge. Clear glass holds sharp
-        # sky/lining/mullion detail and stays far more varied than matte wall.
+        # sky/room-fixture/mullion detail and stays far more varied than matte wall.
         # Caveat: the wall is the DENOMINATOR, so this ratio also moves when the
         # walls themselves get more varied. Since the sky garden was added the
         # probe frame includes walls shadowed by the void, which took the wall's

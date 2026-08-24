@@ -14,10 +14,9 @@ viewport to rendered shading.
 
 import bpy
 
-# MATERIAL previews with EEVEE (fast, approximate refraction).
-# RENDERED uses the scene engine — Cycles here — and is the only mode that shows
-# the glass refracting correctly. It is slower to navigate.
-SHADING = "RENDERED"
+# Open directly in Material Preview (the third viewport sphere): its EEVEE view
+# is fast, keeps the non-ray-traced glass reflection, and shows the room lights.
+SHADING = "MATERIAL"
 
 
 def apply(mode=SHADING):
