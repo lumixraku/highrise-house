@@ -1,5 +1,71 @@
 # Progress
 
+## 2026-08-24 — fix — slightly stronger bounded glass reflection
+
+Raised the bounded EEVEE preview-glass response from 12%..28% to 14%..40%.
+The minimum reflection is slightly stronger so straight-on panes retain a
+clear glass cue, while the maximum reflection is substantially stronger at
+oblique angles without returning to a facade-wide mirror.
+
+Verification:
+- `python3 -m py_compile materials.py build_house.py verify_house.py` and
+  `git diff --check` passed.
+- Blender rebuilt the three output artifacts; the saved node range is confirmed
+  as `0.14..0.40`, with EEVEE ray tracing off.
+- `verify_house.py` reports `160/164`; all glass and lighting-specific checks
+  pass. The four failures remain the same legacy geometry assumptions.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
+## 2026-08-24 — fix — bound Material Preview glass reflection
+
+Replaced the angle-exponent experiment with a directly bounded EEVEE glass
+mix. The Fresnel response now maps to a clamped 12%..28% reflection range:
+the 12% lower bound prevents a normal-facing pane from looking like an empty
+opening, while the 28% upper bound prevents an upward-looking facade from
+turning into a broad sky reflection. The transparent lobe, non-ray-traced
+setup, room-fixture layout, and fixture brightness are unchanged.
+
+Verification:
+- `python3 -m py_compile materials.py build_house.py verify_house.py` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  `out/preview.png`; inspection confirms the clamped `Preview Glass Reflection
+  Range` is 12%..28%, with EEVEE ray tracing still off.
+- `verify_house.py` reports `160/164`; all glass and lighting-specific checks
+  pass. The four failures remain the same legacy geometry assumptions.
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
+## 2026-08-24 — fix — ray-tracing-free Material Preview glass
+
+Made EEVEE the saved scene's default render engine and explicitly disabled its
+ray tracing. Its glass now mixes transparency with an amplified Fresnel
+reflection lobe, so the real-thickness pane is not darkened twice, its room
+fixtures remain visible in Material Preview, and the windows still read as
+reflective glazing. Cycles remains available by changing `RENDER_ENGINE` for a
+slower physically refracted final render.
+
+Each 4 m window-room now carries two installed 1.2 m ceiling panels. A seeded
+per-fixture draw independently switches each panel on or off (36% on); lit
+panels independently choose daylight or warm-white, so a room can have zero,
+one, or two lights lit. The two lit materials use 100 emission strength (rather
+than the former 6). `open_in_blender.py` now opens the third Material Preview
+mode directly, rather than the fourth Rendered mode.
+
+Verification:
+- `python3 -m py_compile build_house.py materials.py verify_house.py open_in_blender.py render_views.py` and `git diff --check` passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and `out/preview.png`; image inspection confirms the angle-dependent window reflection while individual room lights remain present.
+- The final strength-100 scene inspection confirms EEVEE with ray tracing off, the Fresnel preview-glass nodes, and the daylight/warm/off material values `100/100/0`.
+- `verify_house.py` reports `160/164`: all new glass and per-fixture lighting assertions pass, including 108 installed fixtures on every glazed floor (two per 54 rooms).
+
+Remaining issues: the four pre-existing legacy verifier assumptions remain
+(`blank bands land on floor lines`, refuge corner piers, roof-overrun footprint,
+and solid corner-wall sampling).
+
 ## 2026-08-24 — fix — room-level ceiling lights without a second window layer
 
 Removed the full-height, self-illuminated `Interior_Lining` mesh that sat behind

@@ -5,8 +5,8 @@ geometry. Two engines are supported and they need different glass:
 
 * Cycles — real refraction. Transmission on a thin solid pane, low roughness,
   and a neutral base colour. This is the one that looks like glass.
-* EEVEE  — no true refraction unless raytracing is on. Uses transmission plus a
-  raised specular so the pane still reads as glazing.
+* EEVEE  — Fresnel-blended preview glass. It does not need ray tracing, keeps
+  the discrete room fixtures visible, and retains an environment reflection.
 
 The default is neutral clear glass: the IOR supplies the physical reflection,
 while discrete ceiling fixtures make occupied rooms visible behind the pane. A
@@ -52,8 +52,11 @@ GLASS_GREEN = (0.720, 0.965, 0.760)
 # Neutral clear architectural glazing. With a white base colour, the visible
 # reflection comes from the physical IOR rather than a colour cast.
 GLASS_CLEAR = (1.000, 1.000, 1.000)
-# Small warm-white fixtures used only for occupied rooms.
-CEILING_LIGHT = (1.000, 0.550, 0.250)
+# Ceiling fixture temperatures. The values are intentionally distinct under AgX:
+# daylight is cool white and warm is domestic tungsten-white, not amber signage.
+CEILING_LIGHT_DAYLIGHT = (0.600, 0.780, 1.000)
+CEILING_LIGHT_WARM = (1.000, 0.420, 0.150)
+CEILING_LIGHT_STRENGTH = 100.0
 MULLION_METAL = (0.155, 0.160, 0.165)   # dark anodised
 GROUND_GREY = (0.115, 0.120, 0.110)
 # Sky-garden planting. Foliage is much darker than it looks to the eye — a leaf
@@ -192,8 +195,10 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
     Thin-walled stays OFF: the panes have real thickness (GLASS_T) and should
     refract through both faces.
 
-    EEVEE: transmission there is a screen-space approximation, so raytraced
-    refraction is requested where available.
+    EEVEE: mix a transparent surface with an opaque reflection lobe by Fresnel.
+    The blend keeps rooms legible straight on, while reflecting the environment
+    more strongly at a shallow angle. Drawing only the front surface prevents
+    the pane's real thickness from being composited twice in Material Preview.
     """
     mat = _new(name)
     b = _bsdf(mat)
@@ -225,25 +230,76 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
         _set(b, "Transmission Weight", 1.0)
         _set(b, "Roughness", 0.0)
         _set(b, "Specular IOR Level", 0.5)
+        output = mat.node_tree.nodes.get("Material Output")
+        # The stored Principled node above remains the physical glass definition.
+        # EEVEE's real-time view uses this dedicated reflection lobe instead:
+        # alpha blending is what lets a non-ray-traced viewport see the fixtures,
+        # and Fresnel puts a convincing reflected sky back on the pane.
+        reflect = mat.node_tree.nodes.new("ShaderNodeBsdfPrincipled")
+        reflect.name = "Preview Glass Reflection"
+        reflect.label = "Preview Glass Reflection"
+        _set(reflect, "Base Color", (*tint, 1.0))
+        _set(reflect, "Metallic", 0.0)
+        _set(reflect, "Roughness", 0.035)
+        _set(reflect, "IOR", 1.52)
+        _set(reflect, "Specular IOR Level", 0.5)
+        _set(reflect, "Transmission Weight", 0.0)
+
+        transparent = mat.node_tree.nodes.new("ShaderNodeBsdfTransparent")
+        fresnel = mat.node_tree.nodes.new("ShaderNodeFresnel")
+        fresnel.inputs["IOR"].default_value = 1.52
+        reflection_mix = mat.node_tree.nodes.new("ShaderNodeMixShader")
+        reflection_mix.name = "Preview Glass Fresnel"
+        reflection_mix.label = "Preview Glass Fresnel"
+        # Keep a modest reflection at every angle so the facade reads as glass,
+        # but cap it well below a mirror. A limited 14%..40% response is more
+        # useful in Material Preview than a physical 0%..100% Fresnel curve:
+        # rooms remain visible from an upward-looking view without the lower
+        # facade turning into an indistinguishable open hole.
+        reflection_range = mat.node_tree.nodes.new("ShaderNodeMapRange")
+        reflection_range.name = "Preview Glass Reflection Range"
+        reflection_range.label = "Preview Glass Reflection Range (14%–40%)"
+        reflection_range.clamp = True
+        reflection_range.inputs["From Min"].default_value = 0.0
+        reflection_range.inputs["From Max"].default_value = 1.0
+        reflection_range.inputs["To Min"].default_value = 0.14
+        reflection_range.inputs["To Max"].default_value = 0.40
+
+        links = mat.node_tree.links
+        for link in list(output.inputs["Surface"].links):
+            links.remove(link)
+        links.new(fresnel.outputs["Fac"], reflection_range.inputs["Value"])
+        links.new(reflection_range.outputs["Result"], reflection_mix.inputs[0])
+        links.new(transparent.outputs[0], reflection_mix.inputs[1])
+        links.new(reflect.outputs[0], reflection_mix.inputs[2])
+        links.new(reflection_mix.outputs[0], output.inputs["Surface"])
+
         mat.blend_method = "BLEND"
+        if hasattr(mat, "surface_render_method"):
+            mat.surface_render_method = "BLENDED"
         mat.use_backface_culling = False
+        if hasattr(mat, "use_transparency_overlap"):
+            mat.use_transparency_overlap = False
+        if hasattr(mat, "show_transparent_back"):
+            mat.show_transparent_back = False
         if hasattr(mat, "use_screen_refraction"):
-            mat.use_screen_refraction = True
+            mat.use_screen_refraction = False
         if hasattr(mat, "use_raytrace_refraction"):
-            mat.use_raytrace_refraction = True
+            mat.use_raytrace_refraction = False
 
     return mat
 
 
-def make_ceiling_light(name="CeilingLight", color=CEILING_LIGHT):
-    """Warm emissive panels mounted on the ceiling of occupied rooms."""
+def make_ceiling_light(name="CeilingLight", color=CEILING_LIGHT_WARM,
+                       strength=CEILING_LIGHT_STRENGTH):
+    """Emissive ceiling panel; zero strength keeps a switched-off fixture."""
     mat = _new(name)
     b = _bsdf(mat)
     _set(b, "Base Color", (*color, 1.0))
     _set(b, "Roughness", 0.25)
     _set(b, "Specular IOR Level", 0.1)
     _set(b, "Emission Color", (*color, 1.0))
-    _set(b, "Emission Strength", 6.0)
+    _set(b, "Emission Strength", strength)
     return mat
 
 
@@ -335,7 +391,12 @@ def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_CLEAR):
         "concrete": make_concrete(),
         "spandrel": make_wall(color=wall_color),
         "glass": make_glass(engine=engine, tint=glass_tint),
-        "ceiling_light": make_ceiling_light(),
+        "ceiling_light_daylight": make_ceiling_light(
+            "CeilingLight_Daylight", CEILING_LIGHT_DAYLIGHT),
+        "ceiling_light_warm": make_ceiling_light(
+            "CeilingLight_Warm", CEILING_LIGHT_WARM),
+        "ceiling_light_off": make_ceiling_light(
+            "CeilingLight_Off", (0.055, 0.045, 0.035), 0.0),
         "foliage": make_foliage(),
         "trunk": make_trunk(),
         "metal": make_metal(),

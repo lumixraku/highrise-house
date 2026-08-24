@@ -45,9 +45,10 @@ H = 4.0           # floor-to-floor height
 # Footprint W (X) and D (Y) are DERIVED from the window module further down:
 # the pane size is fixed, so the building widens to fit a whole number of panes.
 
-# Look. CYCLES gives real refraction through the glass and is the reason it reads
-# as glass rather than tinted plastic; BLENDER_EEVEE is much faster but fakes it.
-RENDER_ENGINE = "CYCLES"
+# Look. EEVEE keeps the default interactive; its alpha-blended glazing shows the
+# room fixtures without ray-traced refraction. Switch to CYCLES only for a slow,
+# physically refracted final render.
+RENDER_ENGINE = "BLENDER_EEVEE"
 WALL_COLOR = materials.WARM_STONE     # or materials.COOL_STONE for pale grey
 GLASS_TINT = materials.GLASS_CLEAR
 CYCLES_SAMPLES = 128
@@ -456,17 +457,19 @@ SPANDREL_HI_H = H - SPANDREL_HI_Z               # 1.50
 
 assert abs(SPANDREL_LO_H + VENT_H + WIN_H + VENT_H + SPANDREL_HI_H - H) < 1e-9
 
-# Each pane is one room. Its fixture is a real horizontal ceiling panel, not a
-# bright strip floating behind the glass. The front edge of each panel varies
-# between these setbacks so occupied rooms have different visible depth.
+# Each pane is one room. Every room gets two real horizontal ceiling panels, not
+# a bright strip floating behind the glass. Panels stay installed when switched
+# off; the state and colour of each individual fixture are deterministic-random.
 CEILING_LIGHT_W = 1.20
 CEILING_LIGHT_D = 1.20
 CEILING_LIGHT_H = 0.06
+CEILING_LIGHTS_PER_ROOM = 2
+CEILING_LIGHT_ACROSS_OFFSETS = (-0.85, 0.85)
 CEILING_LIGHT_SETBACKS = (0.80, 2.40, 4.00)
 CEILING_LIGHT_Z = H - SLAB_T - CEILING_LIGHT_H / 2.0
-# A night-time residential facade should never have every room occupied and lit.
-# Keep the pattern deterministic so rebuilding the same scheme does not change
-# its appearance, while leaving enough adjacent windows on to read as homes.
+# Every fixture independently has this chance of being lit. Keep the seeded
+# pattern stable between rebuilds, while letting rooms have zero, one, or two
+# lights on like a real inhabited building.
 CEILING_LIGHT_SEED = 20260823
 CEILING_LIGHT_ON_RATIO = 0.36
 
@@ -682,49 +685,60 @@ def glass_ring(name, z0, height, mat):
     return parts
 
 
-def lit_window_indices(floor_index, facade_index, window_count):
-    """Fixed night-time occupancy: one small cluster plus scattered homes."""
-    rng = random.Random(CEILING_LIGHT_SEED + floor_index * 101
-                        + facade_index * 10007)
-    target = round(window_count * CEILING_LIGHT_ON_RATIO)
-    cluster_length = min(3, max(2, target // 2))
-    start = rng.randrange(window_count - cluster_length + 1)
-    lit = set(range(start, start + cluster_length))
-    while len(lit) < target:
-        isolated = [i for i in range(window_count) if i not in lit
-                    and i - 1 not in lit and i + 1 not in lit]
-        choices = isolated or [i for i in range(window_count) if i not in lit]
-        lit.add(rng.choice(choices))
-    return lit
+def ceiling_light_rng(floor_index, facade_index, room_index, fixture_index):
+    """Stable random stream for one installed room fixture."""
+    return random.Random(CEILING_LIGHT_SEED + floor_index * 101
+                         + facade_index * 10007 + room_index * 1000003
+                         + fixture_index * 100000007)
 
 
-def ceiling_light_setback(floor_index, facade_index, room_index):
+def ceiling_light_setback(floor_index, facade_index, room_index, fixture_index):
     """Pick a stable near, middle, or deep ceiling fixture for one room."""
-    rng = random.Random(CEILING_LIGHT_SEED + floor_index * 101
-                        + facade_index * 10007 + room_index * 1000003)
-    return rng.choice(CEILING_LIGHT_SETBACKS)
+    return ceiling_light_rng(floor_index, facade_index, room_index,
+                             fixture_index).choice(CEILING_LIGHT_SETBACKS)
 
 
-def ceiling_lights(name, z0, floor_index, mat):
-    """Ceiling-mounted panels for the deterministic mix of occupied rooms."""
+def ceiling_light_state(floor_index, facade_index, room_index, fixture_index):
+    """Return the independent on/off state and colour temperature of a panel."""
+    rng = ceiling_light_rng(floor_index, facade_index, room_index, fixture_index)
+    rng.choice(CEILING_LIGHT_SETBACKS)  # match the preceding stable draw
+    if rng.random() >= CEILING_LIGHT_ON_RATIO:
+        return "off"
+    return rng.choice(("daylight", "warm"))
+
+
+def ceiling_lights(name, z0, floor_index, mats):
+    """Two independently switched, colour-random ceiling panels per room."""
     zc = z0 + CEILING_LIGHT_Z
     parts = []
     for facade_index, sx in enumerate((-1, 1)):
-        for i in lit_window_indices(floor_index, facade_index, WINDOWS_SHORT):
+        for i in range(WINDOWS_SHORT):
             y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
-            setback = ceiling_light_setback(floor_index, facade_index, i)
-            x = sx * (W / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
-            parts.append(box(f"{name}_ew_{i}_{sx}", (x, y, zc),
-                             (CEILING_LIGHT_D, CEILING_LIGHT_W,
-                              CEILING_LIGHT_H), mat))
+            for fixture_index, across in enumerate(CEILING_LIGHT_ACROSS_OFFSETS):
+                setback = ceiling_light_setback(floor_index, facade_index, i,
+                                                 fixture_index)
+                x = sx * (W / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
+                parts.append(box(f"{name}_ew_{i}_{fixture_index}_{sx}",
+                                 (x, y + across, zc),
+                                 (CEILING_LIGHT_D, CEILING_LIGHT_W,
+                                  CEILING_LIGHT_H),
+                                 mats[ceiling_light_state(
+                                     floor_index, facade_index, i,
+                                     fixture_index)]))
     for facade_index, sy in enumerate((-1, 1), start=2):
-        for i in lit_window_indices(floor_index, facade_index, WINDOWS_LONG):
+        for i in range(WINDOWS_LONG):
             x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
-            setback = ceiling_light_setback(floor_index, facade_index, i)
-            y = sy * (D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
-            parts.append(box(f"{name}_ns_{i}_{sy}", (x, y, zc),
-                             (CEILING_LIGHT_W, CEILING_LIGHT_D,
-                              CEILING_LIGHT_H), mat))
+            for fixture_index, across in enumerate(CEILING_LIGHT_ACROSS_OFFSETS):
+                setback = ceiling_light_setback(floor_index, facade_index, i,
+                                                 fixture_index)
+                y = sy * (D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
+                parts.append(box(f"{name}_ns_{i}_{fixture_index}_{sy}",
+                                 (x + across, y, zc),
+                                 (CEILING_LIGHT_W, CEILING_LIGHT_D,
+                                  CEILING_LIGHT_H),
+                                 mats[ceiling_light_state(
+                                     floor_index, facade_index, i,
+                                     fixture_index)]))
     return parts
 
 
@@ -1140,7 +1154,11 @@ def build(reset=True, mats=None, add_trusses=False):
     concrete = mats["concrete"]
     spandrel = mats["spandrel"]
     glass = mats["glass"]
-    ceiling_light = mats["ceiling_light"]
+    ceiling_light_mats = {
+        "daylight": mats["ceiling_light_daylight"],
+        "warm": mats["ceiling_light_warm"],
+        "off": mats["ceiling_light_off"],
+    }
     metal = mats["metal"]
     dark = mats["dark"]
 
@@ -1256,7 +1274,7 @@ def build(reset=True, mats=None, add_trusses=False):
 
         glazing += glass_ring(f"{tag}_Glass", z0 + WIN_Z, WIN_H, glass)
         ceiling_lights_mesh += ceiling_lights(f"{tag}_CeilingLight", z0, f,
-                                              ceiling_light)
+                                              ceiling_light_mats)
         frames += mullions(f"{tag}_Mullion", z0 + WIN_Z, WIN_H, metal)
 
         # Floor plate for the level above, visible behind the glazing. Skipped
@@ -1346,16 +1364,16 @@ def setup_render():
         scene.cycles.transmission_bounces = 12
         scene.cycles.transparent_max_bounces = 12
         scene.cycles.glossy_bounces = 6
-        # Filter Glossy blurs glossy and refractive rays to reduce noise. At 1.0
-        # it frosts perfectly smooth glass all by itself, whatever the material
-        # says — so keep it off and pay for the noise in samples instead.
-        if hasattr(scene.cycles, "blur_glossy"):
-            scene.cycles.blur_glossy = 0.0
     elif hasattr(scene, "eevee"):
         for attr, value in (("taa_render_samples", 128), ("use_gtao", True),
-                            ("use_raytracing", True)):
+                            ("use_raytracing", False)):
             if hasattr(scene.eevee, attr):
                 setattr(scene.eevee, attr, value)
+
+    # Keep this stored Cycles setting clean even when EEVEE is the active engine:
+    # Filter Glossy frosts smooth glass if a later final render switches engines.
+    if hasattr(scene.cycles, "blur_glossy"):
+        scene.cycles.blur_glossy = 0.0
 
     # Filmic-style view transform: raw sRGB blows out the sunlit walls and
     # flattens the glass highlights.

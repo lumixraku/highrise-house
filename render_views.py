@@ -57,8 +57,8 @@ def main():
     scene.render.resolution_x = 900
     scene.render.resolution_y = 1400
 
-    # Engine and sampling come from the .blend (Cycles). Allow an override for
-    # quick previews: --python render_views.py -- <blend> [samples]
+    # Engine and sampling come from the .blend. Allow a Cycles sample override
+    # when a slower physically refracted render is explicitly selected.
     if len(argv) > 1 and scene.render.engine == "CYCLES":
         scene.cycles.samples = int(argv[1])
 

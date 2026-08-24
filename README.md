@@ -18,9 +18,10 @@ stays around 2 MB instead of carrying 117 MB of PNGs in its history.
 
 ## Build
 
-Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). Renders
-with Cycles — note that Blender 5.2 does not list `CYCLES` in the engine enum but
-does render with it when set, so `RENDER_ENGINE = "CYCLES"` works.
+Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). The saved
+scene uses fast EEVEE by default, with ray tracing off. For a slow physically
+refracted final render, set `RENDER_ENGINE = "CYCLES"` in `build_house.py` and
+rebuild.
 
 ```bash
 blender --background --factory-startup --python build_house.py
@@ -115,7 +116,7 @@ facade and one additional residential group.
 | reference panes per floor | 18 long face / 9 short face (54 around) |
 | pane pitch | 4.00 m mullion centres |
 | window module / clear glass | **4.00 m × 1.50 m module; 3.94 m × 1.50 m glass** |
-| ceiling lights | warm-white 1.2 m ceiling panels in a deterministic 36% mix of lit rooms, set 0.8, 2.4, or 4.0 m back from each room window |
+| ceiling lights | two 1.2 m ceiling panels in every room, set 0.8, 2.4, or 4.0 m back from its window; each is independently 36% likely to be on, randomly daylight or warm-white |
 
 ### Bottom three floors
 
@@ -441,9 +442,10 @@ materials failing. Blender starts every 3D viewport in `SOLID` shading, which
 ignores materials entirely. To see the real look, put the cursor in the 3D view and
 press `Z`, then pick:
 
-* **Material Preview** — EEVEE, fast, approximate glass
-* **Rendered** — the scene engine (Cycles), the only mode where the glass refracts
-  correctly
+* **Material Preview** — fast Fresnel-blended glass: room ceiling lights remain
+  visible without ray tracing, while the panes retain a sky/environment reflection.
+* **Rendered** — the saved scene's fast EEVEE setup. Change `RENDER_ENGINE` to
+  `"CYCLES"` only when you want physical glass refraction.
 
 or click the fourth (rightmost) of the four sphere icons at the top right of the
 viewport. `./view.sh` just does this for you at startup via `open_in_blender.py`.

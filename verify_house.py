@@ -52,11 +52,12 @@ PANE_PITCH = PANE_W
 CEILING_LIGHT_W = 1.20
 CEILING_LIGHT_D = 1.20
 CEILING_LIGHT_H = 0.06
+CEILING_LIGHTS_PER_ROOM = 2
 CEILING_LIGHT_SETBACKS = (0.80, 2.40, 4.00)
 CEILING_LIGHT_Z = H - SLAB_T - CEILING_LIGHT_H / 2.0
 CEILING_LIGHT_ON_RATIO = 0.36
-CEILING_LIGHTS_PER_FLOOR = (2 * round(WINDOWS_LONG * CEILING_LIGHT_ON_RATIO)
-                            + 2 * round(WINDOWS_SHORT * CEILING_LIGHT_ON_RATIO))
+ROOMS_PER_FLOOR = 2 * WINDOWS_LONG + 2 * WINDOWS_SHORT
+CEILING_LIGHTS_PER_FLOOR = ROOMS_PER_FLOOR * CEILING_LIGHTS_PER_ROOM
 SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
 FIRST_GLAZED = SOLID_BASE_FLOORS
@@ -681,14 +682,23 @@ def main():
     lights = objs.get("Ceiling_Lights")
     check("ceiling lights object exists", lights is not None)
     if lights:
-        light_mat = lights.data.materials[0] if lights.data.materials else None
-        check("ceiling lights use an emissive material", light_mat is not None,
-              "no material slot")
-        if light_mat:
-            inputs = light_mat.node_tree.nodes["Principled BSDF"].inputs
-            strength = inputs["Emission Strength"].default_value
-            check("ceiling light emission is visible", strength >= 2.0,
-                  f"emission strength={strength:.2f}")
+        light_mats = {mat.name: mat for mat in lights.data.materials if mat}
+        expected_light_mats = {
+            "CeilingLight_Daylight", "CeilingLight_Warm", "CeilingLight_Off"
+        }
+        check("every room fixture has daylight, warm and off material states",
+              expected_light_mats <= set(light_mats),
+              f"materials={sorted(light_mats)}")
+        if expected_light_mats <= set(light_mats):
+            daylight = light_mats["CeilingLight_Daylight"].node_tree.nodes[
+                "Principled BSDF"].inputs["Emission Strength"].default_value
+            warm = light_mats["CeilingLight_Warm"].node_tree.nodes[
+                "Principled BSDF"].inputs["Emission Strength"].default_value
+            off = light_mats["CeilingLight_Off"].node_tree.nodes[
+                "Principled BSDF"].inputs["Emission Strength"].default_value
+            check("daylight and warm room lights are bright in the real-time view",
+                  daylight >= 100.0 and warm >= 100.0 and off <= 1e-6,
+                  f"daylight={daylight:.1f}, warm={warm:.1f}, off={off:.1f}")
         light_z = z_clusters(lights)
         check("ceiling lights have one level per glazed floor",
               len(light_z) == GLAZED_FLOORS * 2,
@@ -700,24 +710,24 @@ def main():
                   for (lo, hi), base in zip(light_bands, floor_bases)),
               f"z={min(light_z):.2f}..{max(light_z):.2f}")
         light_bounds = piece_bounds(lights)
-        check("ceiling lights leave most room windows unlit",
+        check("every room has two installed ceiling fixtures",
               len(light_bounds) == GLAZED_FLOORS * CEILING_LIGHTS_PER_FLOOR,
               f"{len(light_bounds)} panels = {CEILING_LIGHTS_PER_FLOOR} per "
-              f"glazed floor ({CEILING_LIGHT_ON_RATIO:.0%} lit)")
+              f"glazed floor ({CEILING_LIGHTS_PER_ROOM} per room)")
         patterns = {}
         for lo, hi in light_bounds:
             z = round((lo[2] + hi[2]) / 2, 2)
             patterns.setdefault(z, set()).add(
                 (round((lo[0] + hi[0]) / 2, 2),
                  round((lo[1] + hi[1]) / 2, 2)))
-        check("every glazed floor has a sparse ceiling-light pattern",
+        check("every glazed floor installs its complete two-light room pattern",
               len(patterns) == GLAZED_FLOORS
               and all(len(points) == CEILING_LIGHTS_PER_FLOOR
                       for points in patterns.values()),
               f"{len(patterns)} floors, counts="
               f"{sorted(set(map(len, patterns.values())))}")
         unique_patterns = {tuple(sorted(points)) for points in patterns.values()}
-        check("ceiling-light patterns vary between floors",
+        check("room-fixture layouts vary between floors",
               len(unique_patterns) >= GLAZED_FLOORS * 0.75,
               f"{len(unique_patterns)} distinct patterns over "
               f"{GLAZED_FLOORS} glazed floors")
