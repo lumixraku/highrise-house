@@ -74,7 +74,7 @@ that opens inside the model is a defect you notice every single time:
 
 The verifier targets the existing tower at the origin and also checks the companion
 mesh for its 84 m width, 51 glazed floors, 18 m clear gap and the new truss system.
-The current run is `166/170`: the four remaining failures are legacy corner/roof-
+The current run is `163/167`: the four remaining failures are legacy corner/roof-
 boundary assumptions that do not affect the two-tower configuration.
 
 ```bash
@@ -116,7 +116,7 @@ facade and one additional residential group.
 | glazed floors | 34 (17 below + 17 above the refuge level) |
 | reference panes per floor | 18 long face / 9 short face (54 around) |
 | pane pitch | 4.00 m mullion centres |
-| window module / clear glass | **4.00 m × 1.50 m module; 3.94 m × 1.50 m glass** |
+| window module / clear glass | **4.00 m × 1.50 m module; 3.97 m typical glass, 3.985 m at the ends** |
 | ceiling lights | two 1.2 m ceiling panels in every room, set 0.8, 2.4, or 4.0 m back from its window; each is independently 36% likely to be on, randomly daylight or warm-white |
 
 ### Bottom three floors
@@ -406,9 +406,11 @@ with a reported `+90.0 mm`.
 
 ### The window is the module — the footprint follows from it
 
-The window module is fixed at **4.00 m × 1.50 m** on every facade. Each clear glass
-pane is **3.94 m × 1.50 m**, leaving a 0.06 m joint between adjacent rooms; the
-module pitch remains 4.00 m, so the building footprint is unchanged.
+The window module is fixed at **4.00 m × 1.50 m** on every facade. Interior clear
+panes are **3.97 m × 1.50 m**, leaving a 0.03 m joint between adjacent rooms; the
+two end panes are **3.985 m** wide and run to the opening edge, aligned with the
+ventilation band. The module pitch remains 4.00 m, so the building footprint is
+unchanged.
 The footprint is not an input — it is the pane count plus the piers, nothing else:
 
 ```
@@ -420,8 +422,9 @@ pane pitch = 4.00 m (identical on all four facades)
 
 Mullions are 0.09 m **cover caps centred on each pane joint**: they overlap the
 two panes they join rather than displacing them, so they consume no facade
-length. (They are 0.14 m deep, but that depth runs *inward* from the flush face —
-see above.) That is what keeps the arithmetic clean — 18 panes of 4 m is exactly
+length. They are flush with the glass/facade plane and 0.14 m deep, so the metal
+visibly closes the 0.03 m joint without leaving a recessed strip. That is what
+keeps the arithmetic clean — 18 panes of 4 m is exactly
 72 m of opening, and the footprint lands on whole metres. (An earlier version
 added each mullion's width to the facade, which pushed the dimensions to
 78.79 × 30.72 m; the caps fixed that.)

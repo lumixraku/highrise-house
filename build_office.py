@@ -38,24 +38,49 @@ PILOTIS_FLOORS = 3
 EQUIPMENT_FLOORS = OFFICE_GROUPS + 3
 TOTAL_LEVELS = PILOTIS_FLOORS + OFFICE_FLOORS + EQUIPMENT_FLOORS
 TOWER_HEIGHT = TOTAL_LEVELS * FLOOR_HEIGHT
-CLEAR_PANE_H = 3.50
+CLEAR_PANE_H = 3.75       # 75% clear glazing; upper quarter is solid wall
 CLEAR_PANE_W = 1.50
 MULLION_W = 0.11
 MULLION_D = 0.14
 GLASS_T = 0.025
 FLOOR_T = 0.24
 INTERIOR_SETBACK = 0.65
-OFFICE_LIGHT_SEED = 20260823
-OFFICE_LIGHT_RATIO = 0.30
-OFFICE_LIGHT_CLUSTER_SHARE = 0.80
-OFFICE_LIGHT_WIDTH_RATIO = 0.72
-OFFICE_LIGHT_DEPTH = 0.36
-OFFICE_LIGHT_INSET = 0.18
-OFFICE_LIGHT_T = 0.08
-OFFICE_LIGHT_TOP_CLEARANCE = 0.08
-CORE_W = 14.0
-CORE_D = 14.0
+CURTAIN_SEED = 20260826
+# Three discrete roller-curtain states: rolled up, half down, fully down.
+CURTAIN_COVERAGES = (0.0, 0.5, 1.0)
+CURTAIN_EDGE_INSET = 0.018
+# Keep the curtain visibly behind the glazing in Material Preview as well as
+# in the final render. 12 cm is still a close interior fit, but gives EEVEE
+# enough depth separation to avoid sorting noise and Z-fighting.
+CURTAIN_GAP = 0.12
+CURTAIN_T = 0.01
+CURTAIN_TOP_INSET = 0.0
+CURTAIN_BOTTOM_INSET = 0.03
+RADIAL_LIGHT_COUNT = 32
+RADIAL_LIGHT_FILL = 0.42
+RADIAL_LIGHT_CORE_GAP = 0.60
+RADIAL_LIGHT_END_INSET = 1.00
+# Make the ceiling fixtures legible through the facade at the saved overview
+# scale while keeping the three radial segments and their gaps visible.
+RADIAL_LIGHT_INNER_W = 0.34
+RADIAL_LIGHT_OUTER_W = 1.00
+RADIAL_LIGHT_T = 0.14
+RADIAL_LIGHT_TOP_CLEARANCE = 0.18
+RADIAL_LIGHT_SEGMENT_SPANS = ((0.03, 0.31), (0.36, 0.64), (0.69, 0.97))
+RADIAL_LIGHT_ON_PROBABILITY = 0.72
+RADIAL_DARK_SECTOR_WIDTH = 4
+RADIAL_LIGHT_SEED = 20260823
+# A 50 x 50 m office floor typically gives the service core roughly 12–16%
+# of the gross plate. 18 x 18 m makes the centre read as a real high-rise core
+# without consuming the deep perimeter office zone.
+CORE_W = 18.0
+CORE_D = 18.0
 PILOTIS_RADIUS = 1.20
+# Match the house's saved interactive look: EEVEE uses the shared 50/50
+# reflection/transmission preview glass. Set this to CYCLES for a physical
+# refracted render; the shared material keeps IOR/Fresnel at 1.52 there too.
+RENDER_ENGINE = "BLENDER_EEVEE"
+OFFICE_CYCLES_SAMPLES = 32
 # Three groups of eight office floors sit above a two-level equipment podium, with
 # a single equipment/refuge level between office groups and two more at the roof.
 # Equipment levels count toward physical height, never toward office-floor count.
@@ -188,56 +213,157 @@ def make_mullions(profile, cumulative, floors, modules, pitch, material):
             tangent = Vector((-normal.y, normal.x, 0.0))
             append_prism(vertices, faces, point + normal * GLASS_T / 2,
                          tangent, normal, MULLION_W, MULLION_D,
-                         floor * FLOOR_HEIGHT, (floor + 1) * FLOOR_HEIGHT)
+                         floor * FLOOR_HEIGHT,
+                         floor * FLOOR_HEIGHT + CLEAR_PANE_H)
     return mesh_object("Office_Mullions", vertices, faces, material)
 
 
-def lit_office_modules(floor, modules):
-    """Choose stable clusters plus a few isolated late-working office bays."""
-    rng = random.Random(OFFICE_LIGHT_SEED + floor)
-    target = max(1, round(modules * OFFICE_LIGHT_RATIO))
-    clustered_target = round(target * OFFICE_LIGHT_CLUSTER_SHARE)
-    lit = set()
-
-    while len(lit) < clustered_target:
-        start = rng.randrange(modules)
-        length = rng.randint(3, 6)
-        for offset in range(length):
-            if len(lit) >= clustered_target:
-                break
-            lit.add((start + offset) % modules)
-
-    isolated = [module for module in range(modules)
-                if module not in lit
-                and (module - 1) % modules not in lit
-                and (module + 1) % modules not in lit]
-    rng.shuffle(isolated)
-    lit.update(isolated[:target - len(lit)])
-
-    if len(lit) < target:
-        remaining = [module for module in range(modules) if module not in lit]
-        rng.shuffle(remaining)
-        lit.update(remaining[:target - len(lit)])
-    return lit
+def append_frosted_panel(vertices, faces, a, b, na, nb, z0, z1):
+    """Append a thin privacy-film panel just inside a glass pane."""
+    base = len(vertices)
+    outside_a = a - na * (GLASS_T / 2 + CURTAIN_GAP)
+    outside_b = b - nb * (GLASS_T / 2 + CURTAIN_GAP)
+    inside_a = outside_a - na * CURTAIN_T
+    inside_b = outside_b - nb * CURTAIN_T
+    for z in (z0, z1):
+        vertices.extend((outside_a + Vector((0, 0, z)),
+                         outside_b + Vector((0, 0, z)),
+                         inside_b + Vector((0, 0, z)),
+                         inside_a + Vector((0, 0, z))))
+    faces.extend([
+        (base, base + 1, base + 5, base + 4),
+        (base + 3, base + 7, base + 6, base + 2),
+        (base, base + 4, base + 7, base + 3),
+        (base + 1, base + 2, base + 6, base + 5),
+        (base + 4, base + 5, base + 6, base + 7),
+        (base + 3, base + 2, base + 1, base),
+    ])
 
 
-def make_ceiling_lights(profile, cumulative, modules, pitch, material):
-    """Place warm ceiling panels behind selected office curtain-wall modules."""
+def make_curtains(profile, cumulative, modules, pitch, material):
+    """Add a randomly shuffled, exactly balanced three-state curtain pattern."""
     vertices, faces = [], []
-    patterns = {}
-    width = pitch * OFFICE_LIGHT_WIDTH_RATIO
-    radial_offset = OFFICE_LIGHT_INSET + OFFICE_LIGHT_DEPTH / 2
+    rng = random.Random(CURTAIN_SEED)
+    total_windows = len(OFFICE_LEVELS) * modules
+    per_state, remainder = divmod(total_windows, len(CURTAIN_COVERAGES))
+    assert remainder == 0
+    states = [coverage for coverage in CURTAIN_COVERAGES
+              for _ in range(per_state)]
+    rng.shuffle(states)
+    state_counts = {coverage: 0 for coverage in CURTAIN_COVERAGES}
+    visible_curtain_count = 0
+    window_index = 0
     for floor in sorted(OFFICE_LEVELS):
-        patterns[floor] = lit_office_modules(floor, modules)
-        z1 = floor * FLOOR_HEIGHT + CLEAR_PANE_H - OFFICE_LIGHT_TOP_CLEARANCE
-        z0 = z1 - OFFICE_LIGHT_T
-        for module in sorted(patterns[floor]):
-            point = profile_at(profile, cumulative, (module + 0.5) * pitch)
-            normal = profile_normal(point)
-            tangent = Vector((-normal.y, normal.x, 0.0))
-            append_prism(vertices, faces, point - normal * radial_offset,
-                         tangent, normal, width, OFFICE_LIGHT_DEPTH, z0, z1)
-    return mesh_object("Office_Ceiling_Lights", vertices, faces, material), patterns
+        top = floor * FLOOR_HEIGHT + CLEAR_PANE_H - CURTAIN_TOP_INSET
+        bottom = floor * FLOOR_HEIGHT + CURTAIN_BOTTOM_INSET
+        for module in range(modules):
+            s0 = module * pitch + MULLION_W / 2 + CURTAIN_EDGE_INSET
+            s1 = (module + 1) * pitch - MULLION_W / 2 - CURTAIN_EDGE_INSET
+            a, b = profile_at(profile, cumulative, s0), profile_at(profile, cumulative, s1)
+            na, nb = profile_normal(a), profile_normal(b)
+            coverage = states[window_index]
+            state_counts[coverage] += 1
+            if coverage > 0.0:
+                z1 = top
+                z0 = z1 - (top - bottom) * coverage
+                append_frosted_panel(vertices, faces, a, b, na, nb, z0, z1)
+                visible_curtain_count += 1
+            window_index += 1
+    obj = mesh_object("Office_Frosted_Curtains", vertices, faces, material)
+    return obj, total_windows, visible_curtain_count, state_counts
+
+
+def squircle_radius(angle, half=FOOTPRINT / 2.0,
+                    exponent=SQUIRCLE_EXPONENT):
+    """Return the perimeter radius along a ray from the tower centre."""
+    c, s = abs(math.cos(angle)), abs(math.sin(angle))
+    return half / (c ** exponent + s ** exponent) ** (1.0 / exponent)
+
+
+def square_core_radius(angle):
+    """Return the core boundary radius along a ray from the tower centre."""
+    return min(CORE_W, CORE_D) / 2.0 / max(abs(math.cos(angle)),
+                                           abs(math.sin(angle)))
+
+
+def append_radial_panel(vertices, faces, corners, z0, z1):
+    """Append a thin trapezoidal ceiling panel from four XY corners."""
+    base = len(vertices)
+    for z in (z0, z1):
+        vertices.extend(Vector((point.x, point.y, z)) for point in corners)
+    faces.extend([
+        (base, base + 1, base + 2, base + 3),
+        (base + 4, base + 7, base + 6, base + 5),
+        (base, base + 4, base + 5, base + 1),
+        (base + 1, base + 5, base + 6, base + 2),
+        (base + 2, base + 6, base + 7, base + 3),
+        (base + 3, base + 7, base + 4, base),
+    ])
+
+
+def make_ceiling_lights(on_material, off_material):
+    """Place evenly spaced radial fan-shaped light bands on each office ceiling."""
+    on_vertices, on_faces = [], []
+    off_vertices, off_faces = [], []
+    angular_pitch = 2.0 * math.pi / RADIAL_LIGHT_COUNT
+    half_angle = angular_pitch * RADIAL_LIGHT_FILL / 2.0
+    on_count = off_count = 0
+    for floor in sorted(OFFICE_LEVELS):
+        # The facade's upper quarter is now a solid spandrel, so place the
+        # ceiling strips immediately below the glazed head. This keeps the
+        # radial lights visible through the rolled-up clear windows instead of
+        # hiding them behind the solid wall band above.
+        z1 = (floor * FLOOR_HEIGHT + CLEAR_PANE_H
+              - RADIAL_LIGHT_TOP_CLEARANCE)
+        z0 = z1 - RADIAL_LIGHT_T
+        rng = random.Random(RADIAL_LIGHT_SEED + floor * 1009)
+        dark_start = rng.randrange(RADIAL_LIGHT_COUNT)
+        for index in range(RADIAL_LIGHT_COUNT):
+            angle = index * angular_pitch
+            left = angle - half_angle
+            right = angle + half_angle
+            inner_left = Vector((math.cos(left), math.sin(left), 0.0)) * (
+                square_core_radius(left) + RADIAL_LIGHT_CORE_GAP)
+            inner_right = Vector((math.cos(right), math.sin(right), 0.0)) * (
+                square_core_radius(right) + RADIAL_LIGHT_CORE_GAP)
+            outer_left = Vector((math.cos(left), math.sin(left), 0.0)) * (
+                squircle_radius(left) - RADIAL_LIGHT_END_INSET)
+            outer_right = Vector((math.cos(right), math.sin(right), 0.0)) * (
+                squircle_radius(right) - RADIAL_LIGHT_END_INSET)
+            inner_mid = (inner_left + inner_right) / 2.0
+            outer_mid = (outer_left + outer_right) / 2.0
+            inner_scale = RADIAL_LIGHT_INNER_W / max(
+                (inner_right - inner_left).length, 1e-6)
+            outer_scale = RADIAL_LIGHT_OUTER_W / max(
+                (outer_right - outer_left).length, 1e-6)
+            inner_left = inner_mid + (inner_left - inner_mid) * inner_scale
+            inner_right = inner_mid + (inner_right - inner_mid) * inner_scale
+            outer_left = outer_mid + (outer_left - outer_mid) * outer_scale
+            outer_right = outer_mid + (outer_right - outer_mid) * outer_scale
+            dark_sector = ((index - dark_start) % RADIAL_LIGHT_COUNT
+                           < RADIAL_DARK_SECTOR_WIDTH)
+            for (t0, t1) in RADIAL_LIGHT_SEGMENT_SPANS:
+                segment_on = (not dark_sector
+                              and rng.random() < RADIAL_LIGHT_ON_PROBABILITY)
+                segment_left_0 = inner_left + (outer_left - inner_left) * t0
+                segment_right_0 = inner_right + (outer_right - inner_right) * t0
+                segment_left_1 = inner_left + (outer_left - inner_left) * t1
+                segment_right_1 = inner_right + (outer_right - inner_right) * t1
+                target_vertices = on_vertices if segment_on else off_vertices
+                target_faces = on_faces if segment_on else off_faces
+                append_radial_panel(
+                    target_vertices, target_faces,
+                    (segment_left_0, segment_left_1,
+                     segment_right_1, segment_right_0), z0, z1)
+                if segment_on:
+                    on_count += 1
+                else:
+                    off_count += 1
+    on_obj = mesh_object("Office_Ceiling_Lights_On", on_vertices, on_faces,
+                         on_material)
+    off_obj = mesh_object("Office_Ceiling_Lights_Off", off_vertices, off_faces,
+                          off_material)
+    return on_obj, off_obj, on_count, off_count
 
 
 def make_floor_slabs(profile, material):
@@ -255,6 +381,16 @@ def make_floor_slabs(profile, material):
         faces.append(tuple(base + i for i in range(n - 1, -1, -1)))
         faces.append(tuple(base + n + i for i in range(n)))
     return mesh_object("Office_Floor_Slabs", vertices, faces, material)
+
+
+def make_spandrel_bands(profile, material):
+    """Close the upper quarter of every glazed office storey with solid wall."""
+    return [make_profile_solid(
+                f"Office_Spandrel_{floor}", profile,
+                floor * FLOOR_HEIGHT + CLEAR_PANE_H,
+                (floor + 1) * FLOOR_HEIGHT,
+                material,
+            ) for floor in sorted(OFFICE_LEVELS)]
 
 
 def make_interior(profile, material):
@@ -324,8 +460,13 @@ def make_profile_solid(name, profile, z0, z1, material, cap=True):
 
 
 def make_pilotis(material):
+    """Create the four continuous perimeter support columns.
+
+    The lower three levels are the open pilotis zone; the columns continue
+    through the occupied and equipment levels to carry the whole tower.
+    """
     vertices, faces = [], []
-    height = PILOTIS_FLOORS * FLOOR_HEIGHT
+    height = TOWER_HEIGHT
     segments = 24
     half = FOOTPRINT / 2.0
     corner_radius = half * (2.0 ** (-1.0 / SQUIRCLE_EXPONENT))
@@ -351,7 +492,7 @@ def make_pilotis(material):
 
 
 def add_ground(material):
-    bpy.ops.mesh.primitive_plane_add(size=220, location=(0, 0, -0.05))
+    bpy.ops.mesh.primitive_plane_add(size=FOOTPRINT, location=(0, 0, -0.05))
     ground = bpy.context.object
     ground.name = "Office_Ground"
     ground.data.materials.append(material)
@@ -364,13 +505,22 @@ def point_camera(camera, target):
 
 def setup_render():
     scene = bpy.context.scene
-    scene.render.engine = "CYCLES"
-    scene.cycles.samples = 32
-    scene.cycles.use_denoising = True
-    scene.cycles.max_bounces = 12
-    scene.cycles.transmission_bounces = 12
-    scene.cycles.transparent_max_bounces = 12
-    scene.cycles.glossy_bounces = 6
+    scene.render.engine = RENDER_ENGINE
+    if RENDER_ENGINE == "CYCLES":
+        scene.cycles.samples = OFFICE_CYCLES_SAMPLES
+        scene.cycles.use_denoising = True
+        scene.cycles.max_bounces = 12
+        scene.cycles.transmission_bounces = 12
+        scene.cycles.transparent_max_bounces = 12
+        scene.cycles.glossy_bounces = 6
+    elif hasattr(scene, "eevee"):
+        for attr, value in (("taa_render_samples", 128),
+                            ("use_gtao", True),
+                            # The reflection branch must see scene geometry,
+                            # not only the world sky, just like house glass.
+                            ("use_raytracing", True)):
+            if hasattr(scene.eevee, attr):
+                setattr(scene.eevee, attr, value)
     if hasattr(scene.cycles, "blur_glossy"):
         scene.cycles.blur_glossy = 0.0
     scene.render.resolution_x = 900
@@ -389,11 +539,11 @@ def setup_render():
 
     # Pull back far enough to show the complete first-pass massing, including
     # the roof and the rounded plan turning into the visible side faces.
-    bpy.ops.object.camera_add(location=(270, -320, 270))
+    bpy.ops.object.camera_add(location=(225, -270, 225))
     camera = bpy.context.object
     camera.name = "Office_Camera"
     camera.data.lens = 62
-    point_camera(camera, Vector((0, 0, TOWER_HEIGHT * 0.38)))
+    point_camera(camera, Vector((0, 0, TOWER_HEIGHT * 0.42)))
     scene.camera = camera
 
 
@@ -409,7 +559,7 @@ def frame_viewport():
                     continue
                 region = space.region_3d
                 region.view_location = Vector((0.0, 0.0, TOWER_HEIGHT * 0.45))
-                region.view_distance = diagonal * 2.2
+                region.view_distance = diagonal * 1.55
                 region.view_rotation = Euler(
                     (math.radians(58.0), 0.0, math.radians(38.0)), "XYZ"
                 ).to_quaternion()
@@ -419,20 +569,33 @@ def frame_viewport():
 
 def main():
     reset_scene()
-    glass = materials.make_glass(name="OfficeGlass", engine="CYCLES")
+    glass = materials.make_glass(name="OfficeGlass", engine=RENDER_ENGINE)
+    frosted_curtain = materials.make_frosted_glass_film(
+        name="OfficeFrostedCurtain"
+    )
     metal = materials.make_metal(name="OfficeMullions")
     concrete = materials.make_concrete(name="OfficeConcrete")
+    spandrel = materials.make_wall(
+        name="OfficeSpandrel", color=materials.COOL_STONE
+    )
     ceiling_light = materials.make_ceiling_light(name="OfficeCeilingLight")
+    ceiling_light_off = materials.make_ceiling_light(
+        name="OfficeCeilingLight_Off", color=(0.018, 0.014, 0.010), strength=0.0
+    )
     ground = materials.make_ground(name="OfficeGround")
     profile = squircle_profile()
     cumulative, perimeter = profile_path(profile)
     floors = TOTAL_LEVELS
     tower, modules, pitch = make_glass(profile, cumulative, perimeter, glass)
+    _, total_windows, visible_curtain_count, curtain_state_counts = make_curtains(
+        profile, cumulative, modules, pitch, frosted_curtain
+    )
     make_mullions(profile, cumulative, floors, modules, pitch, metal)
-    _, light_patterns = make_ceiling_lights(
-        profile, cumulative, modules, pitch, ceiling_light
+    _, _, light_on_count, light_off_count = make_ceiling_lights(
+        ceiling_light, ceiling_light_off
     )
     make_floor_slabs(profile, concrete)
+    make_spandrel_bands(profile, spandrel)
     make_equipment_bands(profile, concrete)
     make_refuge_grilles(profile, cumulative, perimeter, metal)
     make_core(concrete)
@@ -449,14 +612,19 @@ def main():
     assert abs((max(xs) - min(xs)) - FOOTPRINT) < 1e-4
     assert abs((max(ys) - min(ys)) - FOOTPRINT) < 1e-4
     assert TOWER_HEIGHT == TOTAL_LEVELS * FLOOR_HEIGHT
+    assert abs(CLEAR_PANE_H / FLOOR_HEIGHT - 0.75) < 1e-6
     assert len(OFFICE_LEVELS) == OFFICE_FLOORS
     assert len(EQUIPMENT_LEVELS) == EQUIPMENT_FLOORS
     assert not (OFFICE_LEVELS & EQUIPMENT_LEVELS)
-    target_lights = round(modules * OFFICE_LIGHT_RATIO)
-    assert all(len(pattern) == target_lights
-               for pattern in light_patterns.values())
-    assert len({tuple(sorted(pattern)) for pattern in light_patterns.values()}) \
-        == OFFICE_FLOORS
+    total_light_segments = (OFFICE_FLOORS * RADIAL_LIGHT_COUNT
+                            * len(RADIAL_LIGHT_SEGMENT_SPANS))
+    assert light_on_count + light_off_count == total_light_segments
+    assert light_off_count > 0
+    assert total_windows == OFFICE_FLOORS * modules
+    assert sum(curtain_state_counts.values()) == total_windows
+    assert all(count == total_windows // len(CURTAIN_COVERAGES)
+               for count in curtain_state_counts.values())
+    assert visible_curtain_count == total_windows - curtain_state_counts[0.0]
 
     os.makedirs(OUT_DIR, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT_DIR, OUTPUT_STEM + ".blend"))
@@ -474,8 +642,14 @@ def main():
     print(f"Equipment/refuge levels: {sorted(EQUIPMENT_LEVELS)}")
     print(f"Physical levels: {TOTAL_LEVELS} at {FLOOR_HEIGHT:.1f} m floor-to-floor")
     print(f"Profile vertices: {len(profile)}")
-    print(f"Ceiling lights: {target_lights}/{modules} modules per office floor "
-          f"({target_lights / modules:.1%}), deterministic seed {OFFICE_LIGHT_SEED}")
+    print(f"Ceiling lights: {RADIAL_LIGHT_COUNT} radial fan strips per office "
+          f"floor, 3 segments each ({total_light_segments} total segments)")
+    print(f"Light states: {light_on_count} on / {light_off_count} off; "
+          f"dark sectors are {RADIAL_DARK_SECTOR_WIDTH} strips wide")
+    print(f"Curtain states: rolled up {curtain_state_counts[0.0]}, "
+          f"half down {curtain_state_counts[0.5]}, "
+          f"fully down {curtain_state_counts[1.0]} "
+          f"({visible_curtain_count} visible panels / {total_windows} windows)")
 
 
 if __name__ == "__main__":

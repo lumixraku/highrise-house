@@ -298,6 +298,32 @@ def make_glass_variant(name, engine, tint, roughness=None):
     return mat
 
 
+def make_frosted_glass_film(name="FrostedGlassFilm",
+                            color=(0.62, 0.64, 0.60)):
+    """Visible rough privacy curtain surface for the Office glazing.
+
+    It is kept opaque at the render-surface level so EEVEE cannot lose the
+    curtain behind the facade's transparent glass sorting. The muted colour,
+    high roughness, and small transmission weight preserve the visual feel of
+    a frosted translucent screen while reliably hiding the interior.
+    """
+    mat = _new(name)
+    b = _bsdf(mat)
+    _set(b, "Base Color", (*color, 1.0))
+    _set(b, "Alpha", 1.0)
+    _set(b, "Metallic", 0.0)
+    _set(b, "Roughness", 0.95)
+    _set(b, "Specular IOR Level", 0.12)
+    _set(b, "IOR", 1.45)
+    _set(b, "Transmission Weight", 0.0)
+    mat.diffuse_color = (*color, 1.0)
+    mat.blend_method = "OPAQUE"
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = "DITHERED"
+    mat.use_backface_culling = False
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # Environment — glass needs something to reflect
 # ---------------------------------------------------------------------------

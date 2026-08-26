@@ -32,14 +32,17 @@ WIN_Z = VENT_LO_Z + VENT_H
 VENT_HI_Z = WIN_Z + WIN_H
 SPANDREL_HI_H = H - (VENT_HI_Z + VENT_H)
 MULLION_W = 0.09
-MULLION_INSET = 0.12
+MULLION_INSET = 0.0
 PANE_W = 4.00
 WINDOWS_LONG = 18
 WINDOWS_SHORT = 9
-WINDOW_GAP = 0.06
+WINDOW_GAP = 0.03
 PANE_GLASS_W = PANE_W - WINDOW_GAP
-GLASS_OPEN_W = WINDOWS_LONG * PANE_GLASS_W + (WINDOWS_LONG - 1) * WINDOW_GAP
-GLASS_OPEN_D = WINDOWS_SHORT * PANE_GLASS_W + (WINDOWS_SHORT - 1) * WINDOW_GAP
+END_PANE_GLASS_W = PANE_W - WINDOW_GAP / 2.0
+GLASS_OPEN_W = (WINDOWS_LONG * PANE_GLASS_W
+                + (WINDOWS_LONG - 1) * WINDOW_GAP + WINDOW_GAP)
+GLASS_OPEN_D = (WINDOWS_SHORT * PANE_GLASS_W
+                + (WINDOWS_SHORT - 1) * WINDOW_GAP + WINDOW_GAP)
 # Footprint is DERIVED from the pane counts, as in the build script. Mullions are
 # cover caps over the pane joints, so they add no facade length: an opening is
 # exactly N x PANE_W and the footprint lands on whole metres.
@@ -602,14 +605,18 @@ def main():
           f"measured {pitches[0]:.4f} m")
     glass_widths = sorted({round(hi[0] - lo[0], 4) for lo, hi in piece_bounds(glass)
                            if abs((lo[1] + hi[1]) / 2 + D / 2) < 1.0})
-    check(f"each room window is {PANE_GLASS_W:.2f} m x {WIN_H:.2f} m",
-          glass_widths == [round(PANE_GLASS_W, 4)]
+    check(f"interior panes are {PANE_GLASS_W:.2f} m and end panes reach the vents",
+          glass_widths == sorted({round(PANE_GLASS_W, 4),
+                                  round(END_PANE_GLASS_W, 4)})
           and abs(heights[0] - WIN_H) < EPS,
           f"widths={glass_widths}, height={heights[0]:.2f} m")
     check(f"adjacent room windows have a {WINDOW_GAP:.2f} m vertical gap",
           abs(pitches[0] - PANE_GLASS_W - WINDOW_GAP) < 1e-3,
           f"pitch {pitches[0]:.4f} m - glass {PANE_GLASS_W:.4f} m = "
           f"gap {pitches[0] - PANE_GLASS_W:.4f} m")
+    check("metal mullion caps cover the glass joints",
+          MULLION_W >= WINDOW_GAP,
+          f"cap width={MULLION_W:.3f} m, joint={WINDOW_GAP:.3f} m")
 
     # The short facade uses the SAME module, not a stretched one.
     pitches_y = [b - a for a, b in zip(ys, ys[1:])]

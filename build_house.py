@@ -86,17 +86,20 @@ VENT_INSET = 0.0      # louvres finish on the wall plane too
 PANE_W = 4.00
 WINDOWS_LONG = 18      # room windows across each long facade  (X)
 WINDOWS_SHORT = 9       # room windows across each short facade (Y)
-WINDOW_GAP = 0.06       # real vertical joint between adjacent room windows
+WINDOW_GAP = 0.03       # real vertical joint between adjacent room windows
 PANE_GLASS_W = PANE_W - WINDOW_GAP
+# The two end panes lose only the inward half-gap: their outside edges align
+# with the opening and the full-width ventilation band.
+END_PANE_GLASS_W = PANE_W - WINDOW_GAP / 2.0
 
-# The mullion is a cover cap centred on each pane joint: it sits proud of the
-# glass line and overlaps the two panes it joins, so it costs NO facade length.
+# The mullion is a cover cap centred on each pane joint: it sits on the glass
+# line and overlaps the two panes it joins, so it costs NO facade length.
 # That keeps the arithmetic clean — an opening is exactly N x PANE_W, so the
 # footprint comes out on whole metres:
 #   W = 18 x 4.00 + 2 x 2.00 = 76.00 m
 #   D =  9 x 4.00 + 2 x 2.00 = 40.00 m
 MULLION_W = 0.09
-MULLION_INSET = 0.12     # recessed from the facade plane to deepen window joints
+MULLION_INSET = 0.0      # flush with the facade/glass plane to cover the joints
 
 # Solid wall kept at both ends of every facade, so the ribbon stops short of the
 # corners instead of wrapping them. Measured along the facade from the corner.
@@ -669,24 +672,39 @@ def cores(name, z0, height, mat):
 def glass_ring(name, z0, height, mat):
     """Separate room windows on each of the four facades.
 
-    Each 4 m room module gets its own slightly narrower pane. The resulting
-    vertical gaps are real openings between homes, not just lines on a cap.
+    Interior 4 m room modules get slightly narrower panes, leaving real joints
+    between homes. The first and last pane on every facade reach the opening
+    edges, aligned with the full-width ventilation band.
     """
     zc = z0 + height / 2.0
     off = GLASS_INSET + GLASS_T / 2.0
     parts = []
     for i in range(WINDOWS_SHORT):
-        y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
+        pane_w = (END_PANE_GLASS_W
+                  if i in (0, WINDOWS_SHORT - 1) else PANE_GLASS_W)
+        if i == 0:
+            y = -OPEN_D / 2 + pane_w / 2.0
+        elif i == WINDOWS_SHORT - 1:
+            y = OPEN_D / 2 - pane_w / 2.0
+        else:
+            y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
         for sx in (-1, 1):
             parts.append(box(f"{name}_ew_{i}_{sx}",
                              (sx * (W / 2 - off), y, zc),
-                             (GLASS_T, PANE_GLASS_W, height), mat))
+                             (GLASS_T, pane_w, height), mat))
     for i in range(WINDOWS_LONG):
-        x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
+        pane_w = (END_PANE_GLASS_W
+                  if i in (0, WINDOWS_LONG - 1) else PANE_GLASS_W)
+        if i == 0:
+            x = -OPEN_W / 2 + pane_w / 2.0
+        elif i == WINDOWS_LONG - 1:
+            x = OPEN_W / 2 - pane_w / 2.0
+        else:
+            x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
         for sy in (-1, 1):
             parts.append(box(f"{name}_ns_{i}_{sy}",
                              (x, sy * (D / 2 - off), zc),
-                             (PANE_GLASS_W, GLASS_T, height), mat))
+                             (pane_w, GLASS_T, height), mat))
     return parts
 
 
@@ -755,9 +773,9 @@ def corner_piers(name, z0, height, mat):
 def mullions(name, z0, height, mat):
     """Slim vertical frames breaking up the ribbon window.
 
-    The cap is recessed from the facade plane while the glass remains flush. This
-    makes the pane joints read as deliberate shadow gaps without changing the
-    window opening or facade dimensions.
+    The cap is flush with the facade/glass plane, so it closes the real joint
+    between adjacent panes without changing the window opening or facade
+    dimensions.
     """
     parts = []
     zc = z0 + height / 2.0
