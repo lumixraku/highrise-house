@@ -19,7 +19,8 @@ stays around 2 MB instead of carrying 117 MB of PNGs in its history.
 ## Build
 
 Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). The saved
-scene uses fast EEVEE by default, with ray tracing off. For a slow physically
+scene uses fast EEVEE by default, with ray tracing enabled for scene reflections.
+For a slow physically
 refracted final render, set `RENDER_ENGINE = "CYCLES"` in `build_house.py` and
 rebuild.
 
@@ -442,10 +443,11 @@ materials failing. Blender starts every 3D viewport in `SOLID` shading, which
 ignores materials entirely. To see the real look, put the cursor in the 3D view and
 press `Z`, then pick:
 
-* **Material Preview** — fast Fresnel-blended glass: room ceiling lights remain
-  visible without ray tracing, while the panes retain a sky/environment reflection.
-* **Rendered** — the saved scene's fast EEVEE setup. Change `RENDER_ENGINE` to
-  `"CYCLES"` only when you want physical glass refraction.
+* **Material Preview** — fast 50/50 reflection/transmission glass: room ceiling
+  lights remain visible, while the panes retain a sky/environment reflection.
+* **Rendered** — the saved scene's fast EEVEE setup with scene ray-traced
+  reflections. Change `RENDER_ENGINE` to `"CYCLES"` only when you want physical
+  glass refraction.
 
 or click the fourth (rightmost) of the four sphere icons at the top right of the
 viewport. `./view.sh` just does this for you at startup via `open_in_blender.py`.

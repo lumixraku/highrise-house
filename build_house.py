@@ -1371,7 +1371,9 @@ def setup_render():
         scene.cycles.glossy_bounces = 6
     elif hasattr(scene, "eevee"):
         for attr, value in (("taa_render_samples", 128), ("use_gtao", True),
-                            ("use_raytracing", False)):
+                            # The preview-glass reflection leg must be able to
+                            # see scene geometry, not only the world sky.
+                            ("use_raytracing", True)):
             if hasattr(scene.eevee, attr):
                 setattr(scene.eevee, attr, value)
 

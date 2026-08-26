@@ -5,8 +5,8 @@ geometry. Two engines are supported and they need different glass:
 
 * Cycles — real refraction. Transmission on a thin solid pane, low roughness,
   and a neutral base colour. This is the one that looks like glass.
-* EEVEE  — Fresnel-blended preview glass. It does not need ray tracing, keeps
-  the discrete room fixtures visible, and retains an environment reflection.
+* EEVEE  — 50/50 preview glass. With real-time ray tracing enabled, it keeps
+  the discrete room fixtures visible and retains scene/environment reflections.
 
 The default is neutral clear glass: the IOR supplies the physical reflection,
 while discrete ceiling fixtures make occupied rooms visible behind the pane. A
@@ -195,10 +195,11 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
     Thin-walled stays OFF: the panes have real thickness (GLASS_T) and should
     refract through both faces.
 
-    EEVEE: mix a transparent surface with an opaque reflection lobe by Fresnel.
-    The blend keeps rooms legible straight on, while reflecting the environment
-    more strongly at a shallow angle. Drawing only the front surface prevents
-    the pane's real thickness from being composited twice in Material Preview.
+    EEVEE: mix a transparent surface with a pure glossy reflection lobe at
+    50/50. This gives the pane enough reflected environment to pick up the
+    surrounding planting while keeping the room fixtures visible behind it.
+    Drawing only the front surface prevents the pane's real thickness from
+    being composited twice in Material Preview.
     """
     mat = _new(name)
     b = _bsdf(mat)
@@ -233,42 +234,29 @@ def make_glass(name="Glass", engine="CYCLES", tint=GLASS_CLEAR):
         output = mat.node_tree.nodes.get("Material Output")
         # The stored Principled node above remains the physical glass definition.
         # EEVEE's real-time view uses this dedicated reflection lobe instead:
-        # alpha blending is what lets a non-ray-traced viewport see the fixtures,
-        # and Fresnel puts a convincing reflected sky back on the pane.
-        reflect = mat.node_tree.nodes.new("ShaderNodeBsdfPrincipled")
+        # alpha blending is what lets the real-time viewport see the fixtures,
+        # while the reflection leg puts the environment back on the pane.
+        # A Principled node with Transmission=0 would also contribute a white
+        # diffuse lobe, which is the milky/frosted look this preview is meant
+        # to avoid. Anisotropic is Blender 5.2's pure glossy reflection node.
+        reflect = mat.node_tree.nodes.new("ShaderNodeBsdfAnisotropic")
         reflect.name = "Preview Glass Reflection"
         reflect.label = "Preview Glass Reflection"
-        _set(reflect, "Base Color", (*tint, 1.0))
-        _set(reflect, "Metallic", 0.0)
-        _set(reflect, "Roughness", 0.035)
-        _set(reflect, "IOR", 1.52)
-        _set(reflect, "Specular IOR Level", 0.5)
-        _set(reflect, "Transmission Weight", 0.0)
+        _set(reflect, "Color", (*tint, 1.0))
+        _set(reflect, "Roughness", 0.0)
 
         transparent = mat.node_tree.nodes.new("ShaderNodeBsdfTransparent")
-        fresnel = mat.node_tree.nodes.new("ShaderNodeFresnel")
-        fresnel.inputs["IOR"].default_value = 1.52
         reflection_mix = mat.node_tree.nodes.new("ShaderNodeMixShader")
-        reflection_mix.name = "Preview Glass Fresnel"
-        reflection_mix.label = "Preview Glass Fresnel"
-        # Push the reflection hard so it dominates the pane: the transparent
-        # leg is squeezed into a small window, leaving only a narrow angle where
-        # the room fixtures behind the glass can read. Still one step short of a
-        # full mirror so the facade never reads as a solid skin.
-        reflection_range = mat.node_tree.nodes.new("ShaderNodeMapRange")
-        reflection_range.name = "Preview Glass Reflection Range"
-        reflection_range.label = "Preview Glass Reflection Range (55%–90%)"
-        reflection_range.clamp = True
-        reflection_range.inputs["From Min"].default_value = 0.0
-        reflection_range.inputs["From Max"].default_value = 1.0
-        reflection_range.inputs["To Min"].default_value = 0.55
-        reflection_range.inputs["To Max"].default_value = 0.90
+        reflection_mix.name = "Preview Glass Mix"
+        reflection_mix.label = "Preview Glass 50% Reflection / 50% Transmission"
+        # A fixed 50/50 mix is deliberately used here instead of a Fresnel
+        # range: reflections of the surrounding planting should remain visible
+        # on the facade, while the interior stays readable through the pane.
+        reflection_mix.inputs[0].default_value = 0.5
 
         links = mat.node_tree.links
         for link in list(output.inputs["Surface"].links):
             links.remove(link)
-        links.new(fresnel.outputs["Fac"], reflection_range.inputs["Value"])
-        links.new(reflection_range.outputs["Result"], reflection_mix.inputs[0])
         links.new(transparent.outputs[0], reflection_mix.inputs[1])
         links.new(reflect.outputs[0], reflection_mix.inputs[2])
         links.new(reflection_mix.outputs[0], output.inputs["Surface"])

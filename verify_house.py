@@ -473,6 +473,13 @@ def main():
         check("glass does not self-illuminate (a glow flattens it to a milky "
               "film)", emit <= 1e-6, f"emission strength={emit:.3f}")
 
+        preview_mix = gmat.node_tree.nodes.get("Preview Glass Mix")
+        check("preview glass mixes reflection and transmission 50/50",
+              preview_mix is not None and
+              abs(preview_mix.inputs[0].default_value - 0.5) <= 1e-6,
+              (f"factor={preview_mix.inputs[0].default_value:.3f}"
+               if preview_mix else "Preview Glass Mix is missing"))
+
     cyc = getattr(bpy.context.scene, "cycles", None)
     if cyc and hasattr(cyc, "blur_glossy"):
         check("Filter Glossy is off (it blurs refraction and frosts the panes)",

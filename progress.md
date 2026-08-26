@@ -1,5 +1,35 @@
 # Progress
 
+## 2026-08-25 — fix — 50/50 scene-reflecting preview glass
+
+Changed the EEVEE preview glazing to a fixed 50% transparent / 50% reflection
+mix, as requested. The reflection branch is now Blender 5.2's pure glossy
+Anisotropic shader at roughness 0.0; the previous Principled reflection branch
+also contained a white diffuse lobe, which made the panes look milky. Enabled
+EEVEE ray tracing so the reflection branch can see scene geometry, including
+the planted sky-garden levels. The physical Principled glass definition remains
+Transmission 1.0, Roughness 0.0, IOR 1.52 for Cycles compatibility.
+
+Verification:
+- Rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  `out/preview.png`; refreshed all six `out/view_*.png` views.
+- Saved-scene inspection confirms EEVEE, ray tracing `True`, preview Mix factor
+  `0.5`, pure `ShaderNodeBsdfAnisotropic` reflection, reflection roughness `0.0`,
+  and physical transmission `1.0`.
+- `python3 -m py_compile materials.py build_house.py verify_house.py
+  render_views.py measure_glass.py` and `git diff --check` passed.
+- `verify_house.py` reports `162/166`; the new 50/50 glass assertion passes.
+  The four remaining failures are the existing geometry assumptions about blank
+  band floor lines, refuge corner piers, roof-overrun footprint, and corner-wall
+  sampling.
+- `measure_glass.py` reports a neutral blue-grey reflection (`R=0.435,
+  G=0.467, B=0.502`) with no green cast; the planting is visible directly in
+  the sky-garden opening, while the current whole-site camera has no exterior
+  tree backdrop to produce a broad green reflection patch.
+
+Remaining issues: the four pre-existing verifier assumptions remain; no new
+glass or build issues.
+
 ## 2026-08-24 — fix — slightly stronger bounded glass reflection
 
 Raised the bounded EEVEE preview-glass response from 12%..28% to 14%..40%.
