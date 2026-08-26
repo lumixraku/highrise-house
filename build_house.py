@@ -187,14 +187,13 @@ FIN_PITCH = 0.50           # preserve the original dense refuge screen spacing
 FIN_W = 0.10               # slim: a blade, not a pier
 FIN_DEPTH = 0.34           # depth gives it shadow and solidity at a raking angle
 # Columns carrying the tower across the void. The fins are 0.10 m blades — a
-# screen, not structure — so without these the 18 floors above would be landing
-# on the corner piers and core alone: 33.1 m2 of concrete under 486605 kN, which
-# is 14.7 MPa — inside C40 but at 82% utilisation with no margin. Adding 24
-# columns takes the load path to 67.7 m2 / 7.2 MPa, a 40% utilisation matching
-# the pilotis columns below.
+# screen, not structure — so the outer perimeter columns and the two cores remain
+# the gravity load path through the refuge levels. Interior apartment columns are
+# deliberately not used: the open residential plate is part of the architectural
+# brief, and the cores remain continuous through the tower.
 #
-# The spacing is one room window, so every column lands on a mullion line and the
-# vertical rhythm of the facade runs straight through the garden.
+# The outer ring keeps the residential plate open; the facade fins remain a
+# separate pane-aligned screen rather than additional structural columns.
 REFUGE_COL_SIZE = 1.20
 REFUGE_COL_PITCH = PANE_W         # 4.0 m — a whole number of room windows
 GARDEN_SLAB_T = 0.45       # deeper than a normal plate: it carries soil
@@ -226,7 +225,7 @@ assert abs(WINDOWS_SHORT * PANE_W - OPEN_D) < 1e-9
 assert abs(W - round(W)) < 1e-9 and abs(D - round(D)) < 1e-9, \
     "footprint should land on whole metres"
 
-COL_SIZE = 1.60       # continuous column footprint (sized for the tower load)
+COL_SIZE = 1.60       # outer-perimeter column footprint (sized for the tower load)
 CORNER_COL_SIZE = 2.00  # exactly fills each retained 2 m corner facade margin
 COL_SPACING = 9.0     # target column grid spacing
 COL_CLEAR_INSET = 2.0 # clear distance from facade plane to outer column face
@@ -412,7 +411,7 @@ def configure_tower(block_groups, windows_long, core_column_bays=CORE_COLUMN_BAY
     if CORE_OFFSET + CORE_W / 2 > W / 2 - PIER_LONG:
         raise ValueError("tower is too narrow for the configured service cores")
     if CORE_W <= COL_SIZE:
-        raise ValueError("core length must leave room for its defining columns")
+        raise ValueError("core length must leave room for the structural module")
 
     BASE_Z = PILOTIS_FLOORS * H
     TOP_Z = BASE_Z + TOWER_FLOORS * H
@@ -465,15 +464,24 @@ SPANDREL_HI_H = H - SPANDREL_HI_Z               # 1.50
 
 assert abs(SPANDREL_LO_H + VENT_H + WIN_H + VENT_H + SPANDREL_HI_H - H) < 1e-9
 
-# Each pane is one room. Every room gets two real horizontal ceiling panels, not
-# a bright strip floating behind the glass. Panels stay installed when switched
-# off; the state and colour of each individual fixture are deterministic-random.
+# House ceiling lighting is three independent rectangular rings of square panels:
+# one just outside the perimeter-column line and two on the room side of it. The
+# panels stay installed when switched off; each fixture keeps a deterministic
+# random lit/warm/off state.
 CEILING_LIGHT_W = 1.20
 CEILING_LIGHT_D = 1.20
+CEILING_LIGHT_RING_COUNT = 3
+# Setbacks are measured inward from the glass plane. The outer target is kept
+# outside the column line; the two inner rings are placed at 1/3 and 2/3 of the
+# calculated clear zone between the perimeter columns and the service cores.
+CEILING_LIGHT_OUTER_TARGET = 0.45
+CEILING_LIGHT_COLUMN_CLEAR = 0.20
+CEILING_LIGHT_CORE_CLEAR = 0.20
+# The two inner rings use one corner panel per corner. Remove the two nearest
+# bay-axis panels at each end of every side so those corner panels have clear
+# space and no two 1.20 m fixtures overlap.
+CEILING_LIGHT_CORNER_AXIS_COUNT = 2
 CEILING_LIGHT_H = 0.06
-CEILING_LIGHTS_PER_ROOM = 2
-CEILING_LIGHT_ACROSS_OFFSETS = (-0.85, 0.85)
-CEILING_LIGHT_SETBACKS = (0.80, 2.40, 4.00)
 CEILING_LIGHT_Z = H - SLAB_T - CEILING_LIGHT_H / 2.0
 # Every fixture independently has this chance of being lit. Keep the seeded
 # pattern stable between rebuilds, while letting rooms have zero, one, or two
@@ -583,11 +591,10 @@ def col_grid(span):
 def core_layout(span, core_column_bays=None):
     """Derive the twin-core long dimension from the active column grid.
 
-    Each core occupies ``core_column_bays`` long-face column bays. Its outer
+    Each core occupies ``core_column_bays`` long-face module bays. Its outer
     boundary remains one grid line in from each end, and its inner boundary
-    moves inward as bays are added. The outside faces of the boundary columns
-    become the tube ends, so those columns remain visible and structurally meet
-    the core walls instead of stopping short.
+    moves inward as bays are added. The module grid determines the core size;
+    the structural columns themselves are kept only at the outer perimeter.
     """
     grid = col_grid(span)
     bays = CORE_COLUMN_BAYS if core_column_bays is None else int(core_column_bays)
@@ -715,53 +722,103 @@ def ceiling_light_rng(floor_index, facade_index, room_index, fixture_index):
                          + fixture_index * 100000007)
 
 
-def ceiling_light_setback(floor_index, facade_index, room_index, fixture_index):
-    """Pick a stable near, middle, or deep ceiling fixture for one room."""
-    return ceiling_light_rng(floor_index, facade_index, room_index,
-                             fixture_index).choice(CEILING_LIGHT_SETBACKS)
+def ceiling_light_ring_setbacks():
+    """Return three collision-free setbacks for the active tower variant."""
+    # For a side at half-span ``edge``, the outer ring must stay between the
+    # facade and the outer face of the perimeter columns. The inner rings must
+    # start beyond the column's inner face and end before the nearest core face.
+    def outer_limit(span):
+        column = col_grid(span)[-1]
+        return (span / 2 - GLASS_T - CEILING_LIGHT_D - column
+                - COL_SIZE / 2 - CEILING_LIGHT_COLUMN_CLEAR)
+
+    def column_inner_limit(span):
+        column = col_grid(span)[-1]
+        return (span / 2 - GLASS_T - column + COL_SIZE / 2
+                + CEILING_LIGHT_COLUMN_CLEAR)
+
+    outer = min(CEILING_LIGHT_OUTER_TARGET,
+                outer_limit(W), outer_limit(D))
+    inner_start = max(column_inner_limit(W), column_inner_limit(D))
+    inner_end = min(
+        D / 2 - GLASS_T - CEILING_LIGHT_D - CORE_D / 2
+        - CEILING_LIGHT_CORE_CLEAR,
+        W / 2 - GLASS_T - CEILING_LIGHT_D
+        - max(abs(cx) + CORE_W / 2 for cx in CORE_XS)
+        - CEILING_LIGHT_CORE_CLEAR,
+    )
+    if outer <= 0.0 or inner_end <= inner_start:
+        raise ValueError("three ceiling-light rings do not fit between structure")
+    inner_span = inner_end - inner_start
+    return (outer, inner_start + inner_span / 3.0,
+            inner_start + 2.0 * inner_span / 3.0)
+
+
+def ceiling_light_axis_positions(span):
+    """Return two evenly spaced fixture axes inside every structural bay."""
+    grid = col_grid(span)
+    return [lo + (hi - lo) / 3.0 for lo, hi in zip(grid, grid[1:])] + [
+        lo + 2.0 * (hi - lo) / 3.0 for lo, hi in zip(grid, grid[1:])]
 
 
 def ceiling_light_state(floor_index, facade_index, room_index, fixture_index):
     """Return the independent on/off state and colour temperature of a panel."""
-    rng = ceiling_light_rng(floor_index, facade_index, room_index, fixture_index)
-    rng.choice(CEILING_LIGHT_SETBACKS)  # match the preceding stable draw
+    rng = ceiling_light_rng(floor_index, facade_index, room_index,
+                            fixture_index)
     if rng.random() >= CEILING_LIGHT_ON_RATIO:
         return "off"
     return rng.choice(("daylight", "warm"))
 
 
 def ceiling_lights(name, z0, floor_index, mats):
-    """Two independently switched, colour-random ceiling panels per room."""
+    """Three independent square-panel rings, with two panels per bay."""
     zc = z0 + CEILING_LIGHT_Z
     parts = []
+    ring_setbacks = ceiling_light_ring_setbacks()
     for facade_index, sx in enumerate((-1, 1)):
-        for i in range(WINDOWS_SHORT):
-            y = -OPEN_D / 2 + (i + 0.5) * PANE_PITCH
-            for fixture_index, across in enumerate(CEILING_LIGHT_ACROSS_OFFSETS):
-                setback = ceiling_light_setback(floor_index, facade_index, i,
-                                                 fixture_index)
-                x = sx * (W / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
-                parts.append(box(f"{name}_ew_{i}_{fixture_index}_{sx}",
-                                 (x, y + across, zc),
-                                 (CEILING_LIGHT_D, CEILING_LIGHT_W,
-                                  CEILING_LIGHT_H),
-                                 mats[ceiling_light_state(
-                                     floor_index, facade_index, i,
-                                     fixture_index)]))
+        for ring_index, setback in enumerate(ring_setbacks):
+            x = sx * (W / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
+            axes = ceiling_light_axis_positions(D)
+            if ring_index:
+                # Leave the two bay-axis positions nearest each corner to the
+                # single corner lamp. This keeps the 1.20 m panels separate.
+                axes = sorted(axes)[CEILING_LIGHT_CORNER_AXIS_COUNT:
+                                   -CEILING_LIGHT_CORNER_AXIS_COUNT]
+            for axis_index, y in enumerate(axes):
+                parts.append(box(
+                    f"{name}_ew_{ring_index}_{sx}_{axis_index}",
+                    (x, y, zc),
+                    (CEILING_LIGHT_D, CEILING_LIGHT_W, CEILING_LIGHT_H),
+                    mats[ceiling_light_state(
+                        floor_index, facade_index, axis_index, ring_index)]))
     for facade_index, sy in enumerate((-1, 1), start=2):
-        for i in range(WINDOWS_LONG):
-            x = -OPEN_W / 2 + (i + 0.5) * PANE_PITCH
-            for fixture_index, across in enumerate(CEILING_LIGHT_ACROSS_OFFSETS):
-                setback = ceiling_light_setback(floor_index, facade_index, i,
-                                                 fixture_index)
-                y = sy * (D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
-                parts.append(box(f"{name}_ns_{i}_{fixture_index}_{sy}",
-                                 (x + across, y, zc),
-                                 (CEILING_LIGHT_W, CEILING_LIGHT_D,
-                                  CEILING_LIGHT_H),
-                                 mats[ceiling_light_state(
-                                     floor_index, facade_index, i,
-                                     fixture_index)]))
+        for ring_index, setback in enumerate(ring_setbacks):
+            y = sy * (D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
+            axes = ceiling_light_axis_positions(W)
+            if ring_index:
+                axes = sorted(axes)[CEILING_LIGHT_CORNER_AXIS_COUNT:
+                                   -CEILING_LIGHT_CORNER_AXIS_COUNT]
+            for axis_index, x in enumerate(axes):
+                parts.append(box(
+                    f"{name}_ns_{ring_index}_{sy}_{axis_index}",
+                    (x, y, zc),
+                    (CEILING_LIGHT_W, CEILING_LIGHT_D, CEILING_LIGHT_H),
+                    mats[ceiling_light_state(
+                        floor_index, facade_index, axis_index, ring_index)]))
+    # Inner rings continue around the four corners with one panel per corner.
+    # The outer ring has no corner panel because the larger corner column occupies
+    # that position on the facade side.
+    for ring_index, setback in enumerate(ring_setbacks[1:], start=1):
+        inset = W / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2
+        corner_depth = D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2
+        for corner_index, (sx, sy) in enumerate(
+                ((-1, -1), (-1, 1), (1, -1), (1, 1))):
+            parts.append(box(
+                f"{name}_corner_{ring_index}_{corner_index}",
+                (sx * inset, sy * corner_depth, zc),
+                (CEILING_LIGHT_W, CEILING_LIGHT_D, CEILING_LIGHT_H),
+                mats[ceiling_light_state(
+                    floor_index, 4, corner_index, ring_index)]))
     return parts
 
 
@@ -1192,22 +1249,18 @@ def build(reset=True, mats=None, add_trusses=False):
     foliage_mat = mats["foliage"]
     trunk_mat = mats["trunk"]
 
-    # --- interior structural column grid --------------------------------
+    # --- outer-perimeter structural columns -----------------------------
     structure += [box("GroundSlab", (0.0, 0.0, -0.15), (W + 14.0, D + 14.0, 0.30), concrete)]
 
     x_grid, y_grid = col_grid(W), col_grid(D)
     for i, x in enumerate(x_grid):
         for j, y in enumerate(y_grid):
-            # Move only the four former grid-corner columns to the actual
-            # building corners below; retain every other original grid column.
-            if i in (0, len(x_grid) - 1) and j in (0, len(y_grid) - 1):
+            # Keep only the outermost grid layer. The four grid-corner positions
+            # are replaced by the larger corner columns below, so no duplicate
+            # supports are left at the corners.
+            if i not in (0, len(x_grid) - 1) and j not in (0, len(y_grid) - 1):
                 continue
-            # Keep the two column lines that define each core's ends. Only a
-            # column whose full section is strictly inside a core is omitted;
-            # boundary columns remain visible and touch the core walls.
-            if any(abs(x - cx) + COL_SIZE / 2 < CORE_W / 2 - CORE_T
-                   and abs(y) + COL_SIZE / 2 < CORE_D / 2 - CORE_T
-                   for cx in CORE_XS):
+            if i in (0, len(x_grid) - 1) and j in (0, len(y_grid) - 1):
                 continue
             structure.append(box(
                 f"Column_{i}_{j}", (x, y, CORE_TOP_Z / 2.0),
@@ -1451,7 +1504,10 @@ def report(objects, label="tower"):
     print(f"storeys              : {TOTAL_FLOORS} total")
     print(f"open pilotis floors  : {PILOTIS_FLOORS} (0.0 -> {BASE_Z:.1f} m)")
     print(f"occupied floors      : {TOWER_FLOORS} ({BASE_Z:.1f} -> {TOP_Z:.1f} m)")
-    print(f"continuous columns   : {len(col_grid(W))} x {len(col_grid(D))} grid, "
+    x_grid, y_grid = col_grid(W), col_grid(D)
+    perimeter_grid_columns = (2 * max(0, len(x_grid) - 2)
+                              + 2 * max(0, len(y_grid) - 2))
+    print(f"perimeter columns    : {perimeter_grid_columns} outer-grid + 4 corner, "
           f"{COL_SIZE:.2f} m square, >= {COL_CLEAR_INSET:.1f} m inside facade")
     print(f"roof parapet top     : {TOP_Z + PARAPET_H + 0.22:.2f} m")
     print(f"total height         : {CORE_TOP_Z:.2f} m to the top of the core "
@@ -1469,7 +1525,7 @@ def report(objects, label="tower"):
               f"{', '.join(map(str, REFUGE_STOREYS))}; each {REFUGE_FLOORS * H:.1f} m double height")
         print(f"garden screen        : {REFUGE_GRILLE_H:.1f} m opening + "
               f"{REFUGE_GRILLE_TOP_BLANK_H:.1f} m solid band above")
-        print("columns across void  : same continuous full-height structural grid")
+        print("columns across void  : same continuous outer-perimeter structure")
         if GRILLE_STYLE == "GRID":
             n_rows = max(1, round(REFUGE_FLOORS * H / GRILLE_CELL))
             print(f"garden screen        : GRID, {WINDOWS_LONG} x {n_rows} cells "

@@ -52,15 +52,17 @@ W = OPEN_W + 2 * PIER_LONG
 D = OPEN_D + 2 * PIER_SHORT
 PANE_GLASS_LONG = PANE_W
 PANE_PITCH = PANE_W
+GLASS_T = 0.03
 CEILING_LIGHT_W = 1.20
 CEILING_LIGHT_D = 1.20
 CEILING_LIGHT_H = 0.06
-CEILING_LIGHTS_PER_ROOM = 2
-CEILING_LIGHT_SETBACKS = (0.80, 2.40, 4.00)
+CEILING_LIGHT_RING_COUNT = 3
+CEILING_LIGHT_OUTER_TARGET = 0.45
+CEILING_LIGHT_COLUMN_CLEAR = 0.20
+CEILING_LIGHT_CORE_CLEAR = 0.20
+CEILING_LIGHT_CORNER_AXIS_COUNT = 2
 CEILING_LIGHT_Z = H - SLAB_T - CEILING_LIGHT_H / 2.0
 CEILING_LIGHT_ON_RATIO = 0.36
-ROOMS_PER_FLOOR = 2 * WINDOWS_LONG + 2 * WINDOWS_SHORT
-CEILING_LIGHTS_PER_FLOOR = ROOMS_PER_FLOOR * CEILING_LIGHTS_PER_ROOM
 SOLID_BASE_FLOORS = 2
 SOLID_TOP_FLOORS = 2
 FIRST_GLAZED = SOLID_BASE_FLOORS
@@ -93,6 +95,62 @@ def col_grid(span):
     step = usable / bays
     start = -usable / 2
     return [start + index * step for index in range(bays + 1)]
+
+
+def ceiling_light_axis_positions(span):
+    """The two fixture axes expected inside every structural bay."""
+    grid = col_grid(span)
+    return [lo + (hi - lo) / 3.0 for lo, hi in zip(grid, grid[1:])] + [
+        lo + 2.0 * (hi - lo) / 3.0 for lo, hi in zip(grid, grid[1:])]
+
+
+def ceiling_light_ring_setbacks():
+    """Reproduce the generator's three structure-derived ring setbacks."""
+    def outer_limit(span):
+        column = col_grid(span)[-1]
+        return (span / 2 - GLASS_T - CEILING_LIGHT_D - column
+                - COL_SIZE / 2 - CEILING_LIGHT_COLUMN_CLEAR)
+
+    def column_inner_limit(span):
+        column = col_grid(span)[-1]
+        return (span / 2 - GLASS_T - column + COL_SIZE / 2
+                + CEILING_LIGHT_COLUMN_CLEAR)
+
+    outer = min(CEILING_LIGHT_OUTER_TARGET,
+                outer_limit(W), outer_limit(D))
+    inner_start = max(column_inner_limit(W), column_inner_limit(D))
+    inner_end = min(
+        D / 2 - GLASS_T - CEILING_LIGHT_D - CORE_D / 2
+        - CEILING_LIGHT_CORE_CLEAR,
+        W / 2 - GLASS_T - CEILING_LIGHT_D
+        - max(abs(cx) + CORE_W / 2 for cx in CORE_XS)
+        - CEILING_LIGHT_CORE_CLEAR,
+    )
+    inner_span = inner_end - inner_start
+    return (outer, inner_start + inner_span / 3.0,
+            inner_start + 2.0 * inner_span / 3.0)
+
+
+CEILING_LIGHTS_PER_RING = 4 * (
+    len(col_grid(W)) - 1 + len(col_grid(D)) - 1)
+CEILING_LIGHTS_PER_RING_COUNTS = (
+    CEILING_LIGHTS_PER_RING,
+    CEILING_LIGHTS_PER_RING - 12,
+    CEILING_LIGHTS_PER_RING - 12,
+)
+CEILING_LIGHTS_PER_FLOOR = sum(CEILING_LIGHTS_PER_RING_COUNTS)
+
+
+def perimeter_grid_positions(span_x, span_y):
+    """Expected non-corner column centres in the outermost grid layer."""
+    xs, ys = col_grid(span_x), col_grid(span_y)
+    return {
+        (round(x, 3), round(y, 3))
+        for i, x in enumerate(xs)
+        for j, y in enumerate(ys)
+        if (i in (0, len(xs) - 1) or j in (0, len(ys) - 1))
+        and not (i in (0, len(xs) - 1) and j in (0, len(ys) - 1))
+    }
 
 
 def core_layout(span, core_column_bays=CORE_COLUMN_BAYS):
@@ -303,13 +361,16 @@ def main():
             if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
             and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
             and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
-        second_defining_lines = [
-            second_origin + cx + sign * (second_core_w / 2 - COL_SIZE / 2)
-            for cx in second_core_xs for sign in (-1, 1)]
-        check("taller tower defining columns meet both core ends",
-              all(min(abs(x - line) for x, _ in second_columns) < 0.02
-                  for line in second_defining_lines),
-              f"{len(second_columns)} continuous columns checked")
+        expected_second_columns = {
+            (round(second_origin + x, 3), round(second_origin_y + y, 3))
+            for x, y in perimeter_grid_positions(second_w, second_d)
+        }
+        measured_second_columns = {(round(x, 3), round(y, 3))
+                                   for x, y in second_columns}
+        check("taller tower keeps only its outer perimeter columns",
+              measured_second_columns == expected_second_columns,
+              f"measured={len(measured_second_columns)}, "
+              f"expected={len(expected_second_columns)} non-corner columns")
         second_core_gap = (second_core_xs[1] - second_core_w / 2
                            - (second_core_xs[0] + second_core_w / 2))
         second_column_bay_clear = (second_grid[1] - second_grid[0]) - COL_SIZE
@@ -707,7 +768,7 @@ def main():
         expected_light_mats = {
             "CeilingLight_Daylight", "CeilingLight_Warm", "CeilingLight_Off"
         }
-        check("every room fixture has daylight, warm and off material states",
+        check("ceiling light object has daylight, warm and off material states",
               expected_light_mats <= set(light_mats),
               f"materials={sorted(light_mats)}")
         if expected_light_mats <= set(light_mats):
@@ -731,26 +792,34 @@ def main():
                   for (lo, hi), base in zip(light_bands, floor_bases)),
               f"z={min(light_z):.2f}..{max(light_z):.2f}")
         light_bounds = piece_bounds(lights)
-        check("every room has two installed ceiling fixtures",
+        check("every glazed floor has three complete light rings",
               len(light_bounds) == GLAZED_FLOORS * CEILING_LIGHTS_PER_FLOOR,
               f"{len(light_bounds)} panels = {CEILING_LIGHTS_PER_FLOOR} per "
-              f"glazed floor ({CEILING_LIGHTS_PER_ROOM} per room)")
+              f"glazed floor (ring counts={CEILING_LIGHTS_PER_RING_COUNTS})")
+        check("every House ceiling fixture is an independent 1.20 m square",
+              all(abs((hi[0] - lo[0]) - CEILING_LIGHT_W) < 0.02
+                  and abs((hi[1] - lo[1]) - CEILING_LIGHT_D) < 0.02
+                  and abs((hi[2] - lo[2]) - CEILING_LIGHT_H) < 0.01
+                  for lo, hi in light_bounds),
+              "all fixture components are 1.20 x 1.20 x 0.06 m")
         patterns = {}
+        floor_pieces = {}
         for lo, hi in light_bounds:
             z = round((lo[2] + hi[2]) / 2, 2)
+            floor_pieces.setdefault(z, []).append((lo, hi))
             patterns.setdefault(z, set()).add(
                 (round((lo[0] + hi[0]) / 2, 2),
                  round((lo[1] + hi[1]) / 2, 2)))
-        check("every glazed floor installs its complete two-light room pattern",
+        check("every glazed floor installs its complete three-ring pattern",
               len(patterns) == GLAZED_FLOORS
               and all(len(points) == CEILING_LIGHTS_PER_FLOOR
                       for points in patterns.values()),
               f"{len(patterns)} floors, counts="
               f"{sorted(set(map(len, patterns.values())))}")
         unique_patterns = {tuple(sorted(points)) for points in patterns.values()}
-        check("room-fixture layouts vary between floors",
-              len(unique_patterns) >= GLAZED_FLOORS * 0.75,
-              f"{len(unique_patterns)} distinct patterns over "
+        check("every glazed floor repeats the same even three-ring pattern",
+              len(unique_patterns) == 1,
+              f"{len(unique_patterns)} geometric patterns over "
               f"{GLAZED_FLOORS} glazed floors")
         check("ceiling lights stay behind the glazing",
               max(max(abs(lo[0]), abs(hi[0])) for lo, hi in light_bounds)
@@ -758,21 +827,132 @@ def main():
               and max(max(abs(lo[1]), abs(hi[1])) for lo, hi in light_bounds)
               < D / 2 - 0.3,
               "light panels are recessed from the facade")
-        observed_setbacks = set()
+        structural_obstacles = [
+            (lo, hi) for lo, hi in piece_bounds(objs["Structure"])
+            if hi[2] - lo[2] > H * 2
+        ]
+        blocked = 0
+        for lo, hi in light_bounds:
+            if any(lo[0] < obstacle_hi[0] - EPS
+                   and hi[0] > obstacle_lo[0] + EPS
+                   and lo[1] < obstacle_hi[1] - EPS
+                   and hi[1] > obstacle_lo[1] + EPS
+                   and lo[2] < obstacle_hi[2] - EPS
+                   and hi[2] > obstacle_lo[2] + EPS
+                   for obstacle_lo, obstacle_hi in structural_obstacles):
+                blocked += 1
+        check("all three fixture rings clear the full-height columns and cores",
+              blocked == 0,
+              f"{blocked} of {len(light_bounds)} panels intersect structural obstacles")
+        overlap_count = 0
+        for pieces in floor_pieces.values():
+            for index, (lo, hi) in enumerate(pieces):
+                for other_lo, other_hi in pieces[index + 1:]:
+                    if (lo[0] < other_hi[0] - EPS
+                            and hi[0] > other_lo[0] + EPS
+                            and lo[1] < other_hi[1] - EPS
+                            and hi[1] > other_lo[1] + EPS):
+                        overlap_count += 1
+        check("no two House ceiling fixtures overlap on a floor",
+              overlap_count == 0,
+              f"{overlap_count} overlapping fixture pairs")
+
+        expected_setbacks = ceiling_light_ring_setbacks()
+        expected_x = [W / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2
+                      for setback in expected_setbacks]
+        expected_y = [D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2
+                      for setback in expected_setbacks]
+        ring_counts_by_floor = {}
+        corner_counts_by_floor = {}
+        axis_misses = 0
+        observed_ring_indices = set()
+        for z, pieces in floor_pieces.items():
+            counts = [0] * CEILING_LIGHT_RING_COUNT
+            corner_counts = [0] * CEILING_LIGHT_RING_COUNT
+            for lo, hi in pieces:
+                cx = (lo[0] + hi[0]) / 2
+                cy = (lo[1] + hi[1]) / 2
+                x_matches = [index for index, expected in enumerate(expected_x)
+                             if abs(abs(cx) - expected) < 0.02]
+                y_matches = [index for index, expected in enumerate(expected_y)
+                             if abs(abs(cy) - expected) < 0.02]
+                if len(x_matches) == 1 and len(y_matches) == 1:
+                    ring_index = x_matches[0]
+                    counts[ring_index] += 1
+                    corner_counts[ring_index] += 1
+                    observed_ring_indices.add(ring_index)
+                    continue
+                if len(x_matches) == 1 and not y_matches:
+                    ring_index = x_matches[0]
+                    axis = cy
+                    axis_positions = ceiling_light_axis_positions(D)
+                elif len(y_matches) == 1 and not x_matches:
+                    ring_index = y_matches[0]
+                    axis = cx
+                    axis_positions = ceiling_light_axis_positions(W)
+                else:
+                    axis_misses += 1
+                    continue
+                counts[ring_index] += 1
+                observed_ring_indices.add(ring_index)
+                if ring_index:
+                    axis_positions = sorted(axis_positions)[
+                        CEILING_LIGHT_CORNER_AXIS_COUNT:
+                        -CEILING_LIGHT_CORNER_AXIS_COUNT]
+                if not any(abs(axis - expected_axis) < 0.02
+                           for expected_axis in axis_positions):
+                    axis_misses += 1
+            ring_counts_by_floor[z] = counts
+            corner_counts_by_floor[z] = corner_counts
+        check("each floor has exactly three distinct depth rings",
+              observed_ring_indices == set(range(CEILING_LIGHT_RING_COUNT)),
+              f"rings={sorted(observed_ring_indices)}")
+        check("each ring has the calculated bay and corner light count",
+              all(counts == list(CEILING_LIGHTS_PER_RING_COUNTS)
+                  for counts in ring_counts_by_floor.values()),
+              f"counts={sorted(set(tuple(counts) for counts in ring_counts_by_floor.values()))}")
+        check("inner rings have one non-overlapping lamp at each corner",
+              all(counts == [0, 4, 4]
+                  for counts in corner_counts_by_floor.values()),
+              f"corner counts={sorted(set(tuple(counts) for counts in corner_counts_by_floor.values()))}")
+        check("every light sits at a bay 1/3 or 2/3 axis",
+              axis_misses == 0,
+              f"{axis_misses} fixtures are off the calculated bay axes")
+        projected_blocked = 0
+        column_half = (COL_SIZE + CEILING_LIGHT_W) / 2.0
+        ring_x = expected_x
+        ring_y = expected_y
         for lo, hi in light_bounds:
             cx = (lo[0] + hi[0]) / 2
             cy = (lo[1] + hi[1]) / 2
-            candidates = (
-                W / 2 - abs(cx) - CEILING_LIGHT_D / 2 - 0.03,
-                D / 2 - abs(cy) - CEILING_LIGHT_D / 2 - 0.03,
-            )
-            matches = [setback for setback in CEILING_LIGHT_SETBACKS
-                       if any(abs(candidate - setback) < 0.02
-                              for candidate in candidates)]
-            observed_setbacks.update(matches)
-        check("each lit room has a near, middle, or deep ceiling fixture",
-              observed_setbacks == set(CEILING_LIGHT_SETBACKS),
-              f"setbacks={sorted(observed_setbacks)} m")
+            ns_shadow = any(abs(abs(cy) - expected) < 0.02
+                            for expected in ring_y) and any(
+                                abs(cx - column) < column_half - EPS
+                                for column in col_grid(W))
+            ew_shadow = any(abs(abs(cx) - expected) < 0.02
+                            for expected in ring_x) and any(
+                                abs(cy - column) < column_half - EPS
+                                for column in col_grid(D))
+            if ns_shadow or ew_shadow:
+                projected_blocked += 1
+        check("fixture positions avoid the facade-column shadow lines",
+              projected_blocked == 0,
+              f"{projected_blocked} of {len(light_bounds)} panels overlap a "
+              "column's projected 1.60 m section")
+        check("House lights use the three calculated depth setbacks",
+              observed_ring_indices == set(range(CEILING_LIGHT_RING_COUNT)),
+              f"setbacks={[round(value, 2) for value in expected_setbacks]} m")
+        state_faces = {}
+        for poly in lights.data.polygons:
+            if 0 <= poly.material_index < len(lights.data.materials):
+                mat = lights.data.materials[poly.material_index]
+                state_faces[mat.name] = state_faces.get(mat.name, 0) + 1
+        state_pieces = {name: faces // 6 for name, faces in state_faces.items()}
+        check("individual House lights retain lit and unlit random states",
+              all(state_pieces.get(name, 0) > 0
+                  for name in ("CeilingLight_Daylight", "CeilingLight_Warm",
+                               "CeilingLight_Off")),
+              f"segments by state={state_pieces}")
 
     # --- refuge floor / sky garden -------------------------------------
     if SKY_GARDEN:
@@ -948,18 +1128,22 @@ def main():
                       f"(the blade beside that opening)")
 
         # --- the load path across the void ------------------------------
-        # The fins are 0.10 m blades and carry nothing. Real columns have to take
-        # the floors above down through the void, or the corner piers and core are
-        # left with 33.1 m2 of concrete under 486605 kN = 14.7 MPa, 82% of C40.
+        # The fins are 0.10 m blades and carry nothing. The outer perimeter
+        # columns and the cores take the floors above down through the void.
         st_ = piece_bounds(objs["Structure"])
         cols = [(lo, hi) for lo, hi in st_
                 if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
                 and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
                 and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
-        check("one continuous structural column grid crosses the whole tower",
-              len(cols) >= 16,
-              f"{len(cols)} columns of {COL_SIZE:.2f} m square spanning "
-              f"ground..{TOP_Z:.0f} m")
+        expected_columns = perimeter_grid_positions(W, D)
+        measured_columns = {
+            (round((lo[0] + hi[0]) / 2, 3), round((lo[1] + hi[1]) / 2, 3))
+            for lo, hi in cols
+        }
+        check("only the outer perimeter column layer crosses the whole tower",
+              measured_columns == expected_columns,
+              f"measured={len(measured_columns)}, expected={len(expected_columns)} "
+              f"non-corner columns of {COL_SIZE:.2f} m square")
 
         clearances = [min(W / 2 - max(abs(lo[0]), abs(hi[0])),
                           D / 2 - max(abs(lo[1]), abs(hi[1])))
@@ -1245,15 +1429,15 @@ def main():
           f"outer edge at {CORE_OFFSET + CORE_W / 2:.0f} m, "
           f"pier zone starts at {W / 2 - PIER_LONG:.0f} m")
 
-    # Core walls are set by the outer faces of the two defining column lines,
-    # not by a fixed pane-grid coordinate. This is what keeps the core and the
-    # columns connected when the long facade grows from 18 to 20 room bays.
+    # Core walls remain set by the outer faces of the module grid, not by a
+    # fixed pane-grid coordinate. This keeps the core proportions consistent
+    # when the long facade grows from 18 to 20 room bays.
     column_lines = col_grid(W)
     column_faces = [line + sign * COL_SIZE / 2
                     for line in column_lines for sign in (-1, 1)]
     core_edges = [cx + sign * CORE_W / 2
                   for cx in CORE_XS for sign in (-1, 1)]
-    check("core length is derived from the defining column faces",
+    check("core length remains aligned to the module grid",
           all(min(abs(edge - face) for face in column_faces) < 0.02
               for edge in core_edges),
           f"edges={', '.join(f'{edge:+.2f}' for edge in sorted(core_edges))}")
@@ -1264,12 +1448,15 @@ def main():
         if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
         and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
         and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
-    defining_lines = [cx + sign * (CORE_W / 2 - COL_SIZE / 2)
-                      for cx in CORE_XS for sign in (-1, 1)]
-    check("defining columns touch both ends of each core",
-          all(min(abs(x - line) for x, _ in full_height_columns) < 0.02
-              for line in defining_lines),
-          f"{len(full_height_columns)} continuous columns checked")
+    near_core_columns = [
+        (x, y) for x, y in full_height_columns
+        if any(abs(x - cx) < CORE_W / 2 + COL_SIZE / 2
+               and abs(y) < CORE_D / 2 + COL_SIZE / 2
+               for cx in CORE_XS)
+    ]
+    check("no interior columns surround the service cores",
+          not near_core_columns,
+          f"{len(near_core_columns)} columns inside the core-adjacent zone")
 
     # Unit depth either side of a core: too deep a core leaves unusable slivers.
     unit_depth = (D - CORE_D) / 2

@@ -1,5 +1,126 @@
 # Progress
 
+## 2026-08-27 — fix — remove overlapping House corner light positions
+
+The three-ring House ceiling layout had two inner-ring side panels too close to
+each corner panel. On every inner ring, removed the two bay-axis positions nearest
+each end of every side and kept one square panel at each corner. The outer ring
+remains outside the perimeter columns; the two inner rings remain between the
+columns and cores. This produces 48 outer-ring panels plus 36 panels on each inner
+ring, or 120 independent 1.20 m square fixtures per glazed floor, with the seeded
+daylight / warm / off states unchanged.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and the
+  EEVEE `out/preview.png` successfully.
+- `verify_house.py` reports `172/176`: all three-ring lighting checks pass,
+  including 4,080 panels across 34 glazed floors, 0 structural intersections,
+  and 0 overlapping fixture pairs.
+
+Remaining issues: the same four pre-existing verifier geometry assertions — blank
+bands on floor lines, refuge corner piers, roof parapet/core footprint, and solid
+corner wall — remain unrelated to House lighting.
+
+## 2026-08-26 — fix — move House lights into two column-clear depth rings
+
+The previous per-room placement kept both panels too close to the facade and did
+not account for the perimeter column grid. Reworked House lighting so each room
+still has two independent 1.20 m square fixtures, but one sits on each of two
+rectangular depth rings. Ring setbacks are calculated from the active outer
+column grid and service-core footprint (about 3.8 m and 8.0 m inward), with
+clearance checks preventing fixture/column or fixture/core intersections. Office
+lighting was not changed.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender rebuilt the House `.blend`, `.glb`, and EEVEE preview with the new
+  calculated ring positions; the close supplementary views were re-rendered.
+- `verify_house.py` checks the two-light count, independent 1.20 m square
+  geometry, zero structural-obstacle intersections, two even depth rings, and
+  the daylight/warm/off material mix. The complete run reports `166/170`; all
+  lighting checks pass and the four failures are the same pre-existing geometry
+  assumptions.
+
+Remaining issues: the same four pre-existing verifier geometry assumptions;
+none are related to the House lighting change.
+
+## 2026-08-26 — fix — restore House's individual square ceiling lights
+
+User clarified that House must use one light at a time, not continuous strips:
+each 4.00 m room module now receives two independent 1.20 m square ceiling
+panels, offset across the room. Their deterministic depth choices remain 0.80,
+2.40, or 4.00 m, and each fixture independently keeps its `off`, `daylight`, or
+`warm` state. Office lighting was not changed.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and the
+  EEVEE `out/preview.png`; all six supplementary EEVEE views were re-rendered.
+- `verify_house.py` reports `164/168`; all House lighting checks pass: 3,672
+  installed panels (108 per glazed floor, 2 per room), 1.20 m square geometry,
+  all three depth choices, and daylight/warm/off materials. The four failures
+  are the pre-existing blank-band/corner/roof-boundary assumptions.
+- The close `out/view_floor_detail.png` render was inspected for the individual
+  panel layout.
+
+Remaining issues: the same four pre-existing verifier geometry assumptions;
+none are related to the House lighting change.
+
+## 2026-08-26 — fix — House ceiling strips reach the cores and clear the columns
+
+User asked to stop the House ceiling lights from being hidden by structural
+columns, extend them to the service cores, and keep a deterministic mixture of
+lit and unlit fixtures. Replaced the old per-room pair of short panels in
+`build_house.py` with two evenly spaced 0.34 m wide linear rows in every
+perimeter-column bay. Rows through the core depth are split into outboard,
+between-core, and outboard segments, ending 0.25 m before each core wall; row
+centres sit at bay quarter points so the outer structural columns do not overlap
+the lights. Each segment keeps an independent seeded `off`, `daylight`, or
+`warm` state. Updated `verify_house.py` and the current House lighting notes in
+`README.md` to check the new layout.
+
+Verification:
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and the
+  EEVEE `out/preview.png`; the six supplementary views were re-rendered.
+- `verify_house.py`: 165/169 checks passed. The new lighting checks all pass:
+  12 strips per reference glazed floor, 34 floors covered, even bay-quarter
+  rows, all four core endpoints reached, safe perimeter-column clearance, and
+  69 daylight + 80 warm + 259 off segments in the reference tower.
+- `python3 -m py_compile build_house.py verify_house.py`, `git diff --check`,
+  and the Blender generation completed successfully.
+
+Remaining issues: four pre-existing legacy corner/roof-boundary assertions in
+`verify_house.py` remain unrelated to this lighting change.
+
+## 2026-08-26 — fix — remove interior apartment columns around the cores
+
+User asked to clear the residential floor plates of the columns surrounding the
+service cores. Updated `build_house.py` so each tower keeps only the outermost
+1.60 m perimeter-grid columns plus its four 2.00 m corner columns; the two
+service cores still run continuously from ground to the roof bulkheads. Removed
+the former intermediate grid columns around and between the cores. Updated the
+matching geometry checks in `verify_house.py` and the structural description in
+`README.md`.
+
+Verification:
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and the
+  EEVEE `out/preview.png`.
+- The existing tower reports 20 outer-grid + 4 corner columns; the companion
+  reports 22 outer-grid + 4 corner columns.
+- `verify_house.py` confirms the exact outer-perimeter column positions and
+  reports 0 columns in the core-adjacent zone. Overall result: 163/167; four
+  pre-existing legacy corner/roof-boundary assertions remain unrelated to this
+  change.
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+
+Remaining issues: None for the requested column change; the four noted legacy
+verifier assertions remain in the existing test suite.
+
 ## 2026-08-26 — fix — restore visible Office radial ceiling lights
 
 Branch: `main`.

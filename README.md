@@ -117,15 +117,16 @@ facade and one additional residential group.
 | reference panes per floor | 18 long face / 9 short face (54 around) |
 | pane pitch | 4.00 m mullion centres |
 | window module / clear glass | **4.00 m × 1.50 m module; 3.97 m typical glass, 3.985 m at the ends** |
-| ceiling lights | two 1.2 m ceiling panels in every room, set 0.8, 2.4, or 4.0 m back from its window; each is independently 36% likely to be on, randomly daylight or warm-white |
+| ceiling lights | three independent rings of 1.20 m square panels: one outside the perimeter columns and two inside toward the cores; each side is evenly divided, with the two nearest bay positions at each inner-ring corner replaced by one corner panel, with deterministic daylight / warm / off states |
 
 ### Bottom three floors
 
-Open and raised. A 1.60 m square concrete column grid on ~9 m bays carries the
-tower, with two service cores (stairs/lifts) rising through the void and a landing
-at each of the three levels. The two long-face column bays at each core define its
-length; the end columns remain in the mesh and touch the core walls. The tower's
-underside slab oversails the footprint by 0.25 m per side as a drip edge.
+Open and raised. A 1.60 m square concrete column ring on ~9 m bays, plus the four
+2.00 m corner columns, carries the tower around its perimeter. Two service cores
+(stairs/lifts) rise through the void with a landing at each of the three levels;
+the residential plate between the perimeter and cores stays clear of columns.
+The tower's underside slab oversails the footprint by 0.25 m per side as a drip
+edge.
 
 ### Two service cores, not one
 
@@ -209,12 +210,12 @@ between cores is served from both directions.
 ### Core placement and the widened plate
 
 The core layout is parameterized per `configure_tower()` call. It reads the
-long-face column grid, takes the configured number of bays per tube, and adds the
-1.60 m column faces to get the tube length. The reference uses two bays, yielding
+long-face module grid, takes the configured number of bays per tube, and adds the
+1.60 m module faces to get the tube length. The reference uses two bays, yielding
 19.20 × 11.00 m cores at ±17.60 m; the 84 m companion uses three bays, yielding
 27.73 × 11.00 m cores at ±17.42 m. The companion's inner core faces leave one
-7.11 m clear column bay, while the outboard stub remains about 10.7 m. Defining
-columns touch the core walls instead of stopping short.
+7.11 m clear bay, while the outboard stub remains about 10.7 m. No intermediate
+columns are placed around the cores.
 
 The 2 m piers and nine short-face room modules set the depth at 40 m. The cores
 are widened to 11 m, leaving 14.5 m of clear residential depth on either side.
@@ -257,14 +258,14 @@ the interior remains 8 m high. From outside, the opening and its grille stop at
         │                    │   94.0 m  wall starts above the grille
    pier  ││││█│││││█│││││█│││    slim vertical blades, 0.10 m at
         ─│││█│││││█│││││█│││─   0.50 m centres, 6 m high from 88.0 → 94.0 m
-        ─│││█│││││█│││││█│││─   █ = 1.20 m structural column on the pane grid
+        ─│││█│││││█│││││█│││─   █ = 0.10 m facade fin; it is a screen, not structure
         └│││█│││││█│││││█│││┘   88.0 m  garden slab (0.45 m, carries soil)
              trees + planters behind, 1.2 m balustrade at the edge
 ```
 
-The blades screen the void; the continuous structural column grid carries the
-tower across it. The 18-room reference tower has 20 such columns in the merged
-structure; the 20-room companion uses its widened grid.
+The blades screen the void; the continuous outer-perimeter structure carries the
+tower across it. The 18-room reference tower has 20 non-corner outer-grid columns
+plus four corner columns; the 20-room companion has 22 plus four corner columns.
 
 ### The screen aligns with the windows
 
@@ -289,7 +290,8 @@ at a blade is blocked.
 | `"GRID"` | 2.0 m square openings in 0.34 m members — after 432 Park Avenue. Heavier, and the horizontals read as four stacked bands rather than one tall void. |
 
 The grille is a screen and nothing more — a 0.10 m blade carries no load. The
-floors above cross the void on 24 dedicated columns behind it (see below).
+floors above cross the void on the same outer-perimeter columns and continuous
+service cores used by the rest of the tower.
 
 What holds the elevation together where the facade stops:
 
@@ -297,10 +299,9 @@ What holds the elevation together where the facade stops:
   corners exactly as it does on a glazed floor.
 * **A 1.2 m balustrade** runs between the piers on all four sides, on the same
   clear opening the windows use, so the vertical rhythm is unbroken.
-* The continuous 1.20 m structural columns carry the floors above across the
-  void. They land on the pane module, so the garden keeps the same vertical rhythm
-  as the glazed floors. The bay has to *divide* the pane count, not just come close
-  to a target pitch.
+* The continuous outer-perimeter columns carry the floors above across the void;
+  the cores carry the interior load path. The garden remains open between them,
+  without extra columns around the cores.
 * **Both lift/stair cores are exposed**, which is what makes it read as a level you
   arrive at rather than a gap. With two of them the garden reads as running
   *between* two solid piers, with 16 m of clear span between — a better reading
@@ -390,9 +391,15 @@ around each pane, and that strip is precisely what reads as a window sill — at
 0.09 m it was clearly visible.
 
 Depth still comes from what sits *behind* the plane, not in front of it: the
-louvres are tilted 30° over a dark shadowbox 0.10 m back. There is no full-window
-interior lining: each illuminated pane represents one room and shows only its
-ceiling fixture, set 0.8, 2.4, or 4.0 m into that room.
+louvres are tilted 30° over a dark shadowbox 0.10 m back. Each 4.00 m room module
+has three separate rectangular rings of 1.20 m square ceiling panels: one between
+the glass and the perimeter columns, then two between those columns and the
+service cores. The two inner setbacks are calculated from the active column and
+core boundaries and divide that clear zone into thirds. Along every side, each
+structural bay receives one panel at 1/3 and one at 2/3, so no fixture sits on a
+column line. Every fixture keeps its own deterministic 36% on / 64% off state,
+so the rings remain visibly broken up rather than becoming continuous light
+strips.
 
 One subtlety in the geometry: a tilted slat sweeps deeper than half its own
 thickness, so the louvre offset is keyed to its *rotated* extent
@@ -469,7 +476,7 @@ putting sRGB values straight into a Blender colour socket renders washed out.
 | --- | --- |
 | walls | warm pale stone, matte (roughness 0.72), `WALL_COLOR` |
 | glass | neutral clear, transmission 1.0, IOR 1.52, roughness 0.0, no emission |
-| ceiling lights | warm-white 1.2 m emissive panels mounted under each lit room's ceiling, at varied room depths |
+| ceiling lights | 1.20 m square emissive panels on three structure-derived depth rings; two panels at 1/3 and 2/3 of every structural bay, with daylight / warm / off states |
 | mullions / louvres | dark anodised metal, roughness 0.38 |
 | structure | grey concrete, roughness 0.85 |
 | foliage | dark matte green, 12% transmission for backlit leaves |
@@ -502,9 +509,11 @@ tuning.
 
 The catch with fully clear glass is that it shows whatever is behind it. Rather
 than hiding every pane behind a glowing surface — which reads as a second layer of
-glass — the scene lights individual rooms with ceiling panels. Each lit panel is
-mounted below its actual room ceiling and uses one of three setbacks, so some are
-near the window and others read deeper in plan.
+glass — the ceiling uses three separate panel rings. Their setbacks are calculated
+from the structural columns and cores, and the panels are evenly divided along
+each side. The two positions nearest each inner-ring corner are omitted and
+replaced by one corner panel, so the lighting gives the rooms depth without
+fixtures overlapping or disappearing behind the columns.
 
 Three things mattered more than the material parameters, each found by measuring
 rendered pixels rather than by eye:
