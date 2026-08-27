@@ -1,15 +1,15 @@
 # highrise-house
 
-Procedural Blender model of two adjacent high-rise houses: each is a ribbon-window
-tower lifted off the ground on three open pilotis floors, while the two towers keep
-their own residential-group and room-count configuration.
+Procedural Blender model of two adjacent high-rise houses: a continuous glass
+podium occupies the complete base footprints of both ribbon-window towers, while
+the two towers keep their own residential-group and room-count configuration.
 
 | | |
 | --- | --- |
 | ![Front elevation](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_front.png) | ![Corner](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_corner.png) |
-| **Front elevation** — both towers in one frame: the 253.94 m core top of the taller companion and the shorter 177.94 m core top of the existing tower. | **Corner** — showing the two footprints side by side and how each ribbon window stops short of its solid corner piers. |
-| ![Sky garden](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_sky_garden.png) | ![Pilotis base](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_base_pilotis.png) |
-| **Refuge floor / sky garden** — camera inside one of the 8 m double-height voids, looking past the fin screen and planting. | **Pilotis base** — looking up the open base: the 1.60 m columns, the two service cores behind them, and the soffit oversailing as a drip edge. |
+| **Front elevation** — both towers in one frame: the 269.94 m core top of the taller companion and the shorter 193.94 m core top of the existing tower. | **Corner** — showing the two footprints side by side and how each ribbon window stops short of its solid corner piers. |
+| ![Sky garden](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_sky_garden.png) | ![Podium base](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_base_pilotis.png) |
+| **Refuge floor / sky garden** — camera inside one of the 8 m double-height voids, looking past the fin screen and planting. | **Podium base** — the lower two podium floors remain open, with its own continuous perimeter frame and the tower cores inside. |
 | ![Facade detail](https://github.com/lumixraku/highrise-house/releases/download/renders-v1/view_floor_detail.png) | **Facade detail** — one floor at 70 mm: the 4.00 × 1.50 m pane, its mullions, the 0.25 m vent bands flush above and below the glass, and the spandrel between. Every pane in the building is this same fixed module; the footprint is derived from how many of them fit, not the other way round. |
 
 Renders live in the [`renders-v1` release](https://github.com/lumixraku/highrise-house/releases/tag/renders-v1),
@@ -19,10 +19,7 @@ stays around 2 MB instead of carrying 117 MB of PNGs in its history.
 ## Build
 
 Requires Blender 5.x on `PATH` (developed against Blender 5.2.0 LTS). The saved
-scene uses fast EEVEE by default, with ray tracing enabled for scene reflections.
-For a slow physically
-refracted final render, set `RENDER_ENGINE = "CYCLES"` in `build_house.py` and
-rebuild.
+scene uses EEVEE by default, with ray tracing enabled for scene reflections.
 
 ```bash
 blender --background --factory-startup --python build_house.py
@@ -34,14 +31,14 @@ Writes into `out/`:
 | --- | --- |
 | `highrise_house.blend` | full scene: geometry, materials, sun, camera, framed viewport |
 | `highrise_house.glb` | glTF export for web/DCC viewers |
-| `preview.png` | Cycles render, 3/4 view of both towers |
+| `preview.png` | EEVEE render, 3/4 view of both towers and the podium |
 
 Add `--no-render` after the script name to skip rendering.
 
 The `.blend` also saves a **framed viewport**, so opening it puts you well outside
-the 178 m-wide site and looking at both towers rather than inside either one.
+the 221.6 m-wide site and looking at both towers rather than inside either one.
 Blender's factory default is a 15 m view distance orbiting the origin, which for a
-254 m-high building means the file opens somewhere inside the pilotis level.
+270 m-high building means the file opens somewhere inside the pilotis level.
 `frame_viewport()`
 derives the distance from the building diagonal and pivots about mid-height, and
 sets all ten workspaces, so `Layout`, `Modeling`, `Shading` and the rest all open
@@ -57,7 +54,7 @@ blender --background --factory-startup --python render_views.py -- out/highrise_
 
 ## Verify
 
-170 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
+192 geometry and material assertions over the saved `.blend` — derived footprint, band heights,
 window centring, exact 4.00 × 1.50 m pane size on both facades, pane count and
 pitch, per-face pier widths, the one-pane long-facade pier and the drift it
 costs, solid corners,
@@ -73,9 +70,13 @@ module, and stress against the C40 limit). Also the saved viewport, since a file
 that opens inside the model is a defect you notice every single time:
 
 The verifier targets the existing tower at the origin and also checks the companion
-mesh for its 84 m width, 51 glazed floors, 18 m clear gap and the new truss system.
-The current run is `163/167`: the four remaining failures are legacy corner/roof-
-boundary assumptions that do not affect the two-tower configuration.
+mesh for its 84 m width, 51 glazed floors, 30 m clear gap and the new truss system.
+It also checks the continuous curved podium: 120-degree included bend, 60 m depth,
+complete coverage of both enlarged tower footprints, two lower open floors, two
+3 m-grid glass floors, two upper open floors, two-floor support blades, and the clear
+`Glass` material. The current run is `190/194`: the four remaining
+failures are legacy corner/roof-boundary assumptions that do not affect this
+podium or the two-tower configuration.
 
 ```bash
 blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
@@ -87,15 +88,15 @@ The scene contains two procedural residential towers with separate configuration
 
 | tower | residential groups | long-facade rooms/floor | footprint | roof / core top |
 | --- | ---: | ---: | ---: | ---: |
-| existing tower (at x = 0) | 2 × 17 glazed floors | 18 | 76 × 40 m | 172.0 / 177.94 m |
-| adjacent tower | 3 × 17 glazed floors | 20 | 84 × 40 m | 248.0 / 253.94 m |
+| existing tower (at x = 0) | 2 × 17 glazed floors | 18 | 76 × 40 m | 188.0 / 193.94 m |
+| adjacent tower | 3 × 17 glazed floors | 20 | 84 × 40 m | 264.0 / 269.94 m |
 
 They share the fixed 4.0 m floor height, 9 short-facade rooms, 2.0 m corner
-piers and an 18.0 m clear site gap. Core length and centre are derived
+piers and a 30.0 m clear site gap. Core length and centre are derived
 independently from each tower's long-face column grid: the reference uses two
 bays, or 19.20 × 11.00 m at x = ±17.60 m; the companion uses three bays, or
 27.73 × 11.00 m at x = ±17.42 m, leaving one clear column bay between its cores.
-The overall envelope is 178 × 40 m. The sections below use the existing tower as
+The overall envelope including the podium is 221.6 × 114.2 m. The sections below use the existing tower as
 the reference plan; the companion repeats the same geometry rules with its wider
 facade and one additional residential group.
 
@@ -104,29 +105,55 @@ facade and one additional residential group.
 | reference footprint | 76 × 40 m (derived, see below) |
 | clear internal depth | 39.40 m |
 | floor-to-floor height | 4.0 m |
-| reference storeys | 43 total |
-| open pilotis floors | 3 (0.0 → 12.0 m) |
-| reference occupied floors | 40 (12.0 → 172.0 m), of which 2 are the refuge level |
-| reference total height | 173.32 m to top of parapet, 177.94 m to top of the core bulkheads |
+| reference storeys | 47 total |
+| open pilotis floors | 7 (0.0 → 28.0 m) |
+| reference occupied floors | 40 (28.0 → 188.0 m), of which 2 are the refuge level |
+| reference total height | 189.32 m to top of parapet, 193.94 m to top of the core bulkheads |
 | corner piers | 2.0 m on all four faces (one pane) |
 | clear window opening | 72 m long face / 36 m short face |
-| blank base band | 2 floors = 8.0 m (12.0 → 20.0 m) |
-| blank top band | 2 floors = 8.0 m (164.0 → 172.0 m) |
-| reference refuge floor / sky garden | storeys 23–24, 8.0 m interior void 88.0 → 96.0 m; 6.0 m grille/opening from its floor, 2.0 m solid wall above |
+| blank base band | 2 floors = 8.0 m (28.0 → 36.0 m) |
+| blank top band | 2 floors = 8.0 m (180.0 → 188.0 m) |
+| reference refuge floor / sky garden | storeys 27–28, 8.0 m interior void 104.0 → 112.0 m; 6.0 m grille/opening from its floor, 2.0 m solid wall above |
 | glazed floors | 34 (17 below + 17 above the refuge level) |
 | reference panes per floor | 18 long face / 9 short face (54 around) |
 | pane pitch | 4.00 m mullion centres |
 | window module / clear glass | **4.00 m × 1.50 m module; 3.97 m typical glass, 3.985 m at the ends** |
 | ceiling lights | three independent rings of 1.20 m square panels: one outside the perimeter columns and two inside toward the cores; each side is evenly divided, with the two nearest bay positions at each inner-ring corner replaced by one corner panel, with deterministic daylight / warm / off states |
 
-### Bottom three floors
+### Seven-level podium stack
 
-Open and raised. A 1.60 m square concrete column ring on ~9 m bays, plus the four
-2.00 m corner columns, carries the tower around its perimeter. Two service cores
-(stairs/lifts) rise through the void with a landing at each of the three levels;
-the residential plate between the perimeter and cores stays clear of columns.
-The tower's underside slab oversails the footprint by 0.25 m per side as a drip
-edge.
+The complete 96 × 60 m and 104 × 60 m podium footprints cover the 76 × 40 m and
+84 × 40 m tower bases, extending 10 m beyond each tower end in the long direction.
+They form one continuous podium system, with the central connector retaining its 120-degree
+included bend as one smooth circular arc. Its lower two floors (0.0 → 8.0 m) are
+open, the middle two floors (8.0 → 20.0 m) are full-height glass at 6.0 m each,
+and the upper two floors (20.0 → 28.0 m) are open again. The two glazed floors
+use 3.00 m × 3.00 m square window modules with 0.28 m wide and 0.30 m deep
+metal blades plus horizontal transoms. The lower two and upper two floors remain
+open, so neither the facade blades nor the separate 0.30 m podium support blades
+continue into those voids. The apartment tower's
+original perimeter columns still run continuously from ground to each core
+bulkhead, and the two service cores remain continuous.
+
+### The curved glass podium
+
+The two tower inner ends are connected by one continuous circular-arc podium
+whose included bend is 120 degrees; the same podium continues across every point
+of both enlarged tower bases rather than stopping at the central gap. Its net depth
+is 60 m, so it projects beyond the towers on both sides. The podium rises to the
+tower soffit at 28 m: the bottom two floors (0.0 → 8.0 m) remain open, the middle
+two floors (8.0 → 20.0 m) are fully glazed at 6.0 m each, and the upper two floors
+(20.0 → 28.0 m) remain open. The arc is built as one continuous floor and
+floor volume, so the middle joint has no disconnected rectangular wings or
+triangular notch. The curved and straight glazed facades use the same 3.00 m
+square modules with 0.28 m wide and 0.30 m deep vertical metal blades and
+horizontal transoms. The blades stop at the two glazed podium floors; both two-floor open zones remain free of facade
+panels and podium support blades. Rounded base plates use a 6.0 m corner radius.
+The generated scene keeps the podium facade, mullions, floor plates, and
+two-floor perimeter support blades as separate objects so the open lower levels
+and the glass upper volume remain inspectable. The glass zone has three horizontal
+plate levels at 8.0 m, 14.0 m, and 20.0 m: the lower floor, the inter-floor slab,
+and the top ceiling.
 
 ### Two service cores, not one
 
@@ -226,9 +253,9 @@ two solid piers with the derived clear span between them, and up past the parape
 
 | | |
 | --- | --- |
-| reference roof parapet top | 173.32 m |
-| reference core bulkhead top | **177.94 m** — 4.62 m clear of the parapet |
-| companion roof parapet / core top | **249.32 / 253.94 m** |
+| reference roof parapet top | 189.32 m |
+| reference core bulkhead top | **193.94 m** — 4.62 m clear of the parapet |
+| companion roof parapet / core top | **265.32 / 269.94 m** |
 | above the roof slab | 5.72 m (lift overtravel + machine room + stair door) |
 
 The thing projecting at the top **is** the cores, sized and placed by them, not a
@@ -239,9 +266,9 @@ where the lifts are.
 
 ### Refuge floor / sky garden
 
-The reference tower gives two storeys at mid-height (23–24, **88.0 → 96.0 m**)
+The reference tower gives two storeys at mid-height (27–28, **104.0 → 112.0 m**)
 over to a planted refuge level. The taller companion has two such levels, at
-23–24 (**88.0 → 96.0 m**) and 42–43 (**164.0 → 172.0 m**). Each external opening
+27–28 (**104.0 → 112.0 m**) and 46–47 (**180.0 → 188.0 m**). Each external opening
 is 6.0 m high, screened by slim vertical fins,
 with a solid 2.0 m wall band above it, in the
 Singapore manner. Singapore's SCDF
@@ -254,12 +281,12 @@ the interior remains 8 m high. From outside, the opening and its grille stop at
 6.0 m; the connected wall band fills the upper 2.0 m.
 
 ```
-        ┌────────────────────┐   96.0 m  top of the 2 m wall band
-        │                    │   94.0 m  wall starts above the grille
+        ┌────────────────────┐   112.0 m  top of the 2 m wall band
+        │                    │   110.0 m  wall starts above the grille
    pier  ││││█│││││█│││││█│││    slim vertical blades, 0.10 m at
-        ─│││█│││││█│││││█│││─   0.50 m centres, 6 m high from 88.0 → 94.0 m
+        ─│││█│││││█│││││█│││─   0.50 m centres, 6 m high from 104.0 → 110.0 m
         ─│││█│││││█│││││█│││─   █ = 0.10 m facade fin; it is a screen, not structure
-        └│││█│││││█│││││█│││┘   88.0 m  garden slab (0.45 m, carries soil)
+        └│││█│││││█│││││█│││┘   104.0 m  garden slab (0.45 m, carries soil)
              trees + planters behind, 1.2 m balustrade at the edge
 ```
 
@@ -320,7 +347,7 @@ off-centre — and asserts fail the build if it lands on a blank band or breaks 
 ### The blank bands, and what frames the long facade
 
 Four of the reference tower's 40 occupied floors carry no openings at all — two at the bottom
-(12.0 → 20.0 m) and two at the top (164.0 → 172.0 m), 8 m each. The piers left
+(28.0 → 36.0 m) and two at the top (180.0 → 188.0 m), 8 m each. The piers left
 and right are 2 m, one pane, so the frame is deliberately asymmetric: heavy top
 and bottom, nearly open at the ends.
 
@@ -591,12 +618,13 @@ To try the pale grey wall instead of beige, set
 Each tower is generated from boxes and joined into the base facade/structure
 objects (the saved scene contains the two sets with Blender's `.001` suffixes),
 with one additional truss mesh on the taller companion, so the scene stays light
-for a 178 m-wide site:
+for a 221.6 m-wide site including the podium:
 
 `Facade_Spandrels` · `Windows_Glass` · `Ceiling_Lights` · `Window_Mullions` ·
 `Vent_Louvres` · `Vent_Shadowboxes` · `Sky_Garden_Grille` ·
 `Sky_Garden_Planting` · `Sky_Garden_Trunks` · `Floor_Plates` · `Structure` ·
-`Structural_Trusses` ·
+`Structural_Trusses` · `Podium_Glass` · `Podium_Mullions` ·
+`Podium_Floor_Plates` · `Podium_Structure` ·
 `Ground`
 
 ## Changing the design

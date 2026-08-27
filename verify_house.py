@@ -12,7 +12,7 @@ import bpy
 from mathutils import Vector
 
 H = 4.0
-PILOTIS_FLOORS = 3
+PILOTIS_FLOORS = 7
 BLOCK_GROUPS = 2
 BLOCK_FLOORS = 17
 REFUGE_FLOORS = 2
@@ -86,6 +86,27 @@ TOWER_GAP = 30.0
 BOOK_OPEN_ANGLE = 150.0
 BOOK_EDGE_CLEARANCE = 42.0
 BOOK_FIRST_OUTWARD_DEG = 180.0
+PODIUM_TOTAL_FLOORS = 7
+PODIUM_PILOTIS_FLOORS = 2
+PODIUM_OPEN_TOP_FLOORS = 2
+PODIUM_GLASS_FLOORS = 2
+PODIUM_GLASS_FLOOR_HEIGHT = 6.0
+PODIUM_GLASS_MODULE = 3.0
+PODIUM_GLASS_ROWS = 2
+PODIUM_GLASS_JOINT = 0.03
+PODIUM_BEND_ANGLE = 120.0
+PODIUM_BEND_SIDE = -1.0
+PODIUM_FLOOR_JOIN_CLEARANCE = 0.02
+PODIUM_DEPTH = 60.0
+PODIUM_ARC_MIN_RADIUS = PODIUM_DEPTH * 0.75
+PODIUM_LENGTH_MARGIN = 10.0
+PODIUM_GRID_PITCH = 3.00
+PODIUM_GRID_W = 0.28
+PODIUM_GRID_DEPTH = 0.30
+PODIUM_CORNER_RADIUS = 6.0
+PODIUM_COLUMN_SIZE = 0.30
+PODIUM_FIRST_WIDTH = W + 2.0 * PODIUM_LENGTH_MARGIN
+PODIUM_SECOND_WIDTH = 84.0 + 2.0 * PODIUM_LENGTH_MARGIN
 TRUSS_FACADE_INSET = 0.55
 TRUSS_PLAN_MEMBER = 0.20
 TRUSS_CLAW_GROUPS = 3
@@ -204,6 +225,11 @@ CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
 ROOF_GARDEN = True
 ROOF_GARDEN_Z0 = TOP_Z + 0.22
 ROOF_GARDEN_GRILLE_H = 2 * H
+COMPANION_TOWER_FLOORS = (3 * BLOCK_FLOORS + 2 * REFUGE_FLOORS
+                          + FIXED_SOLID_BAND_FLOORS)
+COMPANION_TOP_Z = BASE_Z + COMPANION_TOWER_FLOORS * H
+COMPANION_CORE_TOP_Z = (COMPANION_TOP_Z + 0.22 + CORE_OVERRUN
+                        + 0.22 + CORE_ROOF_PARAPET)
 EPS = 1e-4
 
 failures = []
@@ -309,6 +335,64 @@ def polygon_distance(first, second):
                for i in range(len(first)) for j in range(len(second)))
 
 
+def podium_layout(first_w, second_w, second_center, second_rotation):
+    """Reproduce the generator's podium endpoints and included bend."""
+    first_end = (first_w / 2.0, 0.0)
+    angle = math.radians(second_rotation)
+    second_end = (second_center[0] + math.cos(angle) * second_w / 2.0,
+                  second_center[1] + math.sin(angle) * second_w / 2.0)
+    chord = (second_end[0] - first_end[0], second_end[1] - first_end[1])
+    chord_length = math.hypot(*chord)
+    axis = (chord[0] / chord_length, chord[1] / chord_length)
+    normal = (-axis[1], axis[0])
+    bend_height = chord_length / (2.0 * math.tan(
+        math.radians(PODIUM_BEND_ANGLE / 2.0)))
+    bend = ((first_end[0] + second_end[0]) / 2.0 - normal[0] * bend_height,
+            (first_end[1] + second_end[1]) / 2.0 - normal[1] * bend_height)
+    return first_end, bend, second_end
+
+
+def podium_arc_geometry(points, pane_count=None):
+    """Reproduce the generator's continuous circular podium centreline."""
+    start, _, end = points
+    chord = (end[0] - start[0], end[1] - start[1])
+    chord_length = math.hypot(*chord)
+    axis = (chord[0] / chord_length, chord[1] / chord_length)
+    normal = (-axis[1], axis[0])
+    turn = math.radians(180.0 - PODIUM_BEND_ANGLE)
+    radius = max(chord_length / (2.0 * math.sin(turn / 2.0)),
+                 PODIUM_ARC_MIN_RADIUS)
+    midpoint = ((start[0] + end[0]) / 2.0,
+                (start[1] + end[1]) / 2.0)
+    effective_half_chord = radius * math.sin(turn / 2.0)
+    arc_start = (midpoint[0] - axis[0] * effective_half_chord,
+                 midpoint[1] - axis[1] * effective_half_chord)
+    offset = radius * math.cos(turn / 2.0)
+    centre = (midpoint[0] - PODIUM_BEND_SIDE * normal[0] * offset,
+              midpoint[1] - PODIUM_BEND_SIDE * normal[1] * offset)
+    start_angle = math.atan2(arc_start[1] - centre[1],
+                             arc_start[0] - centre[0])
+    sweep = -PODIUM_BEND_SIDE * turn
+    arc_length = radius * abs(sweep)
+    pane_count = pane_count or max(12, round(arc_length / PODIUM_GRID_PITCH))
+    arc_points = []
+    for index in range(pane_count + 1):
+        theta = start_angle + sweep * index / pane_count
+        arc_points.append((centre[0] + math.cos(theta) * radius,
+                           centre[1] + math.sin(theta) * radius))
+    return arc_points, radius, abs(sweep)
+
+
+def rounded_rectangle_counts(width, depth, radius, pitch):
+    """Return straight-side steps, corner steps, and closed-path point count."""
+    radius = min(float(radius), width / 2.0, depth / 2.0)
+    long_steps = max(1, round((width - 2.0 * radius) / pitch))
+    short_steps = max(1, round((depth - 2.0 * radius) / pitch))
+    arc_steps = max(2, round(math.pi * radius / (2.0 * pitch)))
+    point_count = (2 * long_steps + 2 * short_steps + 4 * arc_steps)
+    return long_steps, short_steps, arc_steps, point_count
+
+
 def gb_low(obj):
     return world_bounds(obj)[2][0]
 
@@ -354,6 +438,31 @@ def piece_bounds(obj, frame_origin=None, frame_angle_deg=0.0):
     return out
 
 
+def component_points(obj):
+    """World-space vertices grouped by connected mesh component."""
+    verts = [obj.matrix_world @ v.co for v in obj.data.vertices]
+    adj = {i: set() for i in range(len(verts))}
+    for poly in obj.data.polygons:
+        vs = list(poly.vertices)
+        for a in vs:
+            adj[a].update(vs)
+    seen, out = set(), []
+    for start in range(len(verts)):
+        if start in seen:
+            continue
+        stack, comp = [start], []
+        seen.add(start)
+        while stack:
+            index = stack.pop()
+            comp.append(verts[index])
+            for neighbour in adj[index]:
+                if neighbour not in seen:
+                    seen.add(neighbour)
+                    stack.append(neighbour)
+        out.append(comp)
+    return out
+
+
 def facade_span(obj, side):
     """Extent of the geometry belonging to ONE facade of a joined object.
 
@@ -391,7 +500,9 @@ def main():
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
                  "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
                  "Ceiling_Lights", "Sky_Garden_Grille",
-                 "Structure", "Structural_Trusses"):
+                 "Structure", "Structural_Trusses", "Podium_Glass",
+                 "Podium_Mullions", "Podium_Floor_Plates",
+                 "Podium_Structure"):
         check(f"object present: {name}", name in objs)
     second_facade = objs.get("Facade_Spandrels.001")
     second_glass = objs.get("Windows_Glass.001")
@@ -456,7 +567,7 @@ def main():
         second_columns = [
             ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
             for lo, hi in second_pieces
-            if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
+            if lo[2] <= 0.05 and hi[2] >= COMPANION_CORE_TOP_Z - 0.05
             and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
             and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
         expected_second_columns = {
@@ -465,7 +576,7 @@ def main():
         }
         measured_second_columns = {(round(x, 3), round(y, 3))
                                    for x, y in second_columns}
-        check("taller tower keeps only its outer perimeter columns",
+        check("taller tower preserves its original ground-to-core-top perimeter columns",
               measured_second_columns == expected_second_columns,
               f"measured={len(measured_second_columns)}, "
               f"expected={len(expected_second_columns)} non-corner columns")
@@ -611,6 +722,299 @@ def main():
                       for lo, hi in truss_parts),
                   f"max extents x={max(max(abs(lo[0]), abs(hi[0])) for lo, hi in truss_parts):.2f}, "
                   f"y={max(max(abs(lo[1]), abs(hi[1])) for lo, hi in truss_parts):.2f} m")
+
+    # --- glass podium --------------------------------------------------
+    # The podium is deliberately checked independently of the tower meshes:
+    # it must connect the two inner tower ends with one continuous 120-degree arc,
+    # cover the complete raised footprint beneath both towers. Only its middle
+    # two floors are glass; the lower two and upper two remain open.
+    podium_first, podium_bend, podium_second = podium_layout(
+        PODIUM_FIRST_WIDTH, PODIUM_SECOND_WIDTH, second_center, second_rotation)
+    arc_points, arc_radius, arc_sweep = podium_arc_geometry(
+        (podium_first, podium_bend, podium_second))
+    arc_turn = math.degrees(arc_sweep)
+    check("podium is one continuous circular 120-degree arc",
+          abs(180.0 - arc_turn - PODIUM_BEND_ANGLE) < 0.02
+          and arc_radius >= PODIUM_DEPTH / 2.0 + 1.0
+          and len(arc_points) >= 13,
+          f"included angle={180.0 - arc_turn:.3f} degrees,"
+          f" radius={arc_radius:.2f} m,"
+          f" {len(arc_points) - 1} pane bays")
+    check("the podium uses a 60 m net depth",
+          abs(PODIUM_DEPTH - 60.0) < 0.02,
+          f"depth={PODIUM_DEPTH:.2f} m")
+    check("podium uses 3 m facade modules and 3 x 3 window rows",
+          abs(PODIUM_GRID_PITCH - 3.00) < 1e-6
+          and abs(PODIUM_GLASS_MODULE - 3.00) < 1e-6
+          and abs(PODIUM_GLASS_FLOOR_HEIGHT - 6.00) < 1e-6
+          and PODIUM_GLASS_ROWS == 2
+          and abs(PODIUM_GRID_W - 0.28) < 1e-6
+          and abs(PODIUM_GRID_DEPTH - 0.30) < 1e-6,
+          f"bay/module={PODIUM_GRID_PITCH:.2f}/{PODIUM_GLASS_MODULE:.2f} m, "
+          f"floor={PODIUM_GLASS_FLOOR_HEIGHT:.2f} m, rows={PODIUM_GLASS_ROWS}, "
+          f"blade={PODIUM_GRID_W:.2f} m wide / {PODIUM_GRID_DEPTH:.2f} m deep")
+    arc_pane_count = len(arc_points) - 1
+
+    expected_first_end = (PODIUM_FIRST_WIDTH / 2.0, 0.0)
+    second_angle = math.radians(second_rotation)
+    expected_second_end = (
+        second_center[0] + math.cos(second_angle) * PODIUM_SECOND_WIDTH / 2.0,
+        second_center[1] + math.sin(second_angle) * PODIUM_SECOND_WIDTH / 2.0)
+    chord_axis = ((expected_second_end[0] - expected_first_end[0])
+                  / math.hypot(expected_second_end[0] - expected_first_end[0],
+                               expected_second_end[1] - expected_first_end[1]),
+                  (expected_second_end[1] - expected_first_end[1])
+                  / math.hypot(expected_second_end[0] - expected_first_end[0],
+                               expected_second_end[1] - expected_first_end[1]))
+    start_extension = ((expected_first_end[0] - arc_points[0][0])
+                       * chord_axis[0]
+                       + (expected_first_end[1] - arc_points[0][1])
+                       * chord_axis[1])
+    end_extension = ((arc_points[-1][0] - expected_second_end[0])
+                     * chord_axis[0]
+                     + (arc_points[-1][1] - expected_second_end[1])
+                     * chord_axis[1])
+    check("podium arc is embedded into both base footprints",
+          start_extension > 0.02 and end_extension > 0.02,
+          f"extensions={start_extension:.2f}/{end_extension:.2f} m")
+
+    podium_glass = objs.get("Podium_Glass")
+    podium_floor_plates = objs.get("Podium_Floor_Plates")
+    podium_structure = objs.get("Podium_Structure")
+    if podium_glass and podium_floor_plates and podium_structure:
+        glass_z0 = PODIUM_PILOTIS_FLOORS * H
+        glass_z1 = (glass_z0
+                    + PODIUM_GLASS_FLOORS * PODIUM_GLASS_FLOOR_HEIGHT)
+        podium_top_z = PODIUM_TOTAL_FLOORS * H
+        glass_levels = z_clusters(podium_glass)
+        expected_glass_levels = []
+        for floor in range(PODIUM_GLASS_FLOORS):
+            floor_z = glass_z0 + floor * PODIUM_GLASS_FLOOR_HEIGHT
+            for row in range(PODIUM_GLASS_ROWS):
+                row_z0 = (floor_z + row * PODIUM_GLASS_MODULE
+                          + PODIUM_GLASS_JOINT / 2.0)
+                row_z1 = min(
+                    floor_z + (row + 1) * PODIUM_GLASS_MODULE
+                    - PODIUM_GLASS_JOINT / 2.0,
+                    floor_z + PODIUM_GLASS_FLOOR_HEIGHT - SLAB_T)
+                expected_glass_levels.extend((row_z0, row_z1))
+        expected_glass_levels.sort()
+        check("podium has two glazed floors with two 3 m rows each",
+              len(glass_levels) == PODIUM_GLASS_FLOORS * PODIUM_GLASS_ROWS * 2
+              and all(abs(actual - expected) < EPS
+                      for actual, expected in zip(glass_levels,
+                                                  expected_glass_levels)),
+              f"z-levels={glass_levels}")
+        check("bottom two and top two podium levels remain open",
+              gb_low(podium_glass) >= glass_z0 - EPS
+              and gb_high(podium_glass) <= glass_z1 + EPS
+              and abs(glass_z1 - (podium_top_z - PODIUM_OPEN_TOP_FLOORS * H)) < EPS,
+              f"glass z={gb_low(podium_glass):.2f}..{gb_high(podium_glass):.2f} m, "
+              f"podium top={podium_top_z:.2f} m")
+
+        base_specs = (
+            ((0.0, 0.0), PODIUM_FIRST_WIDTH, PODIUM_DEPTH, 0.0),
+            (second_center, PODIUM_SECOND_WIDTH, PODIUM_DEPTH, second_rotation),
+        )
+        base_path_counts = []
+        base_side_counts = []
+        for _, width, depth, _ in base_specs:
+            long_steps, short_steps, arc_steps, point_count = (
+                rounded_rectangle_counts(
+                    width, depth, PODIUM_CORNER_RADIUS, PODIUM_GRID_PITCH))
+            base_path_counts.append(point_count)
+            base_side_counts.append((long_steps, short_steps, arc_steps))
+        expected_connector_glass = (PODIUM_GLASS_FLOORS
+                                     * PODIUM_GLASS_ROWS
+                                     * 2 * arc_pane_count)
+        expected_base_glass = (PODIUM_GLASS_FLOORS
+                               * PODIUM_GLASS_ROWS
+                               * sum(path_count for path_count in base_path_counts))
+        expected_glass_pieces = expected_connector_glass + expected_base_glass
+        check("podium glass is divided into separate facade panes",
+              len(piece_bounds(podium_glass)) == expected_glass_pieces,
+              f"{len(piece_bounds(podium_glass))} panes/caps, expected "
+              f"{expected_glass_pieces}")
+
+        # Every tower base gets its own complete rectangular glass envelope.
+        # Probe pane centres against each of the four expected side lines; this
+        # catches the old connector-only model even though its V centreline was
+        # geometrically correct.
+        glass_parts = piece_bounds(podium_glass)
+        base_side_checks = []
+        for base_index, (centre, width, depth, rotation) in enumerate(base_specs):
+            cx, cy = centre
+            angle = math.radians(rotation)
+            axis = (math.cos(angle), math.sin(angle))
+            normal = (-math.sin(angle), math.cos(angle))
+            long_steps, short_steps, _ = base_side_counts[base_index]
+            for side_name, edge_axis, edge_normal, edge_length, edge_offset in (
+                    ("south", axis, normal, width, -depth / 2.0),
+                    ("north", axis, normal, width, +depth / 2.0),
+                    ("west", normal, axis, depth, -width / 2.0),
+                    ("east", normal, axis, depth, +width / 2.0)):
+                straight_steps = (long_steps if side_name in ("south", "north")
+                                  else short_steps)
+                expected_panes = (PODIUM_GLASS_FLOORS
+                                  * PODIUM_GLASS_ROWS * straight_steps)
+                hits = 0
+                for lo, hi in glass_parts:
+                    px = (lo[0] + hi[0]) / 2.0 - cx
+                    py = (lo[1] + hi[1]) / 2.0 - cy
+                    along = px * edge_axis[0] + py * edge_axis[1]
+                    across = px * edge_normal[0] + py * edge_normal[1]
+                    if (abs(across - edge_offset) < 0.06
+                            and abs(along) <= edge_length / 2.0 + 0.06):
+                        hits += 1
+                base_side_checks.append((side_name, hits, expected_panes))
+        check("podium covers both complete tower footprints on all four sides",
+              all(hits >= expected for _, hits, expected in base_side_checks),
+              "; ".join(f"{side}={hits}/{expected}"
+                        for side, hits, expected in base_side_checks))
+
+        # The base floor plates use the same perimeter path. A square corner
+        # would have a vertex at the plan corner; a rounded corner keeps every
+        # vertex away from each theoretical sharp corner. The path is
+        # intentionally faceted at the 3 m grid pitch, so use the same sampled
+        # quarter-circle points here rather than measuring a continuous arc.
+        rounded_corner_clearances = []
+        plate_components = component_points(podium_floor_plates)
+        expected_corner_clearances = []
+        for centre, width, depth, rotation in base_specs:
+            angle = math.radians(rotation)
+            cos_a, sin_a = math.cos(angle), math.sin(angle)
+            _, _, arc_steps, _ = rounded_rectangle_counts(
+                width, depth, PODIUM_CORNER_RADIUS, PODIUM_GRID_PITCH)
+            half_w, half_d = width / 2.0, depth / 2.0
+            radius = PODIUM_CORNER_RADIUS
+            path_points = []
+
+            def add_arc(cx, cy, start_angle, end_angle):
+                for index in range(arc_steps + 1):
+                    theta = (start_angle
+                             + (end_angle - start_angle) * index / arc_steps)
+                    path_points.append((cx + radius * math.cos(theta),
+                                        cy + radius * math.sin(theta)))
+
+            add_arc(half_w - radius, -half_d + radius,
+                    -math.pi / 2.0, 0.0)
+            add_arc(half_w - radius, half_d - radius,
+                    0.0, math.pi / 2.0)
+            add_arc(-half_w + radius, half_d - radius,
+                    math.pi / 2.0, math.pi)
+            add_arc(-half_w + radius, -half_d + radius,
+                    math.pi, 3.0 * math.pi / 2.0)
+            expected_corner_clearances.extend(
+                min(math.hypot(x - sx * half_w, y - sy * half_d)
+                    for x, y in path_points)
+                for sx, sy in ((-1, -1), (-1, 1), (1, 1), (1, -1)))
+            local_points = []
+            for component in plate_components:
+                component_local = []
+                for point in component:
+                    dx, dy = point.x - centre[0], point.y - centre[1]
+                    component_local.append((cos_a * dx + sin_a * dy,
+                                            -sin_a * dx + cos_a * dy))
+                xs = [point[0] for point in component_local]
+                ys = [point[1] for point in component_local]
+                if (abs((min(xs) + max(xs)) / 2.0) < 0.05
+                        and abs((min(ys) + max(ys)) / 2.0) < 0.05
+                        and abs(max(xs) - min(xs) - width) < 0.05
+                        and abs(max(ys) - min(ys) - depth) < 0.05):
+                    local_points.extend(component_local)
+            for sx, sy in ((-1, -1), (-1, 1), (1, 1), (1, -1)):
+                corner = (sx * width / 2.0, sy * depth / 2.0)
+                distances = [math.hypot(x - corner[0], y - corner[1])
+                             for x, y in local_points
+                             if abs(x) <= width / 2.0 + EPS
+                             and abs(y) <= depth / 2.0 + EPS]
+                if distances:
+                    rounded_corner_clearances.append(min(distances))
+        check("podium base plates have rounded corners",
+              len(rounded_corner_clearances) == 8
+              and len(expected_corner_clearances) == 8
+              and all(abs(clearance - expected) < 0.05
+                      for clearance, expected in zip(
+                          rounded_corner_clearances, expected_corner_clearances)),
+              "corner clearances="
+              + ", ".join(f"{clearance:.2f} m"
+                           for clearance in rounded_corner_clearances))
+
+        floor_levels = z_clusters(podium_floor_plates)
+        expected_floor_levels = []
+        expected_floor_levels.extend((
+            glass_z0 - SLAB_T - PODIUM_FLOOR_JOIN_CLEARANCE,
+            glass_z0 - SLAB_T,
+            glass_z0 - PODIUM_FLOOR_JOIN_CLEARANCE,
+            glass_z0,
+        ))
+        for floor in range(PODIUM_GLASS_FLOORS):
+            floor_top = (glass_z0
+                         + (floor + 1) * PODIUM_GLASS_FLOOR_HEIGHT)
+            expected_floor_levels.extend((
+                floor_top - SLAB_T,
+                floor_top,
+                floor_top - SLAB_T - PODIUM_FLOOR_JOIN_CLEARANCE,
+                floor_top - PODIUM_FLOOR_JOIN_CLEARANCE,
+            ))
+        expected_floor_levels = sorted(expected_floor_levels)
+        expected_plate_count = (PODIUM_GLASS_FLOORS + 1) * (1 + len(base_specs))
+        plate_parts = piece_bounds(podium_floor_plates)
+        base_plate_counts = []
+        for centre, _, _, _ in base_specs:
+            base_plate_counts.append(sum(
+                math.hypot((lo[0] + hi[0]) / 2.0 - centre[0],
+                           (lo[1] + hi[1]) / 2.0 - centre[1]) < 0.05
+                for lo, hi in plate_parts))
+        check("podium has three horizontal plates at the glass-zone levels",
+              len(plate_parts) == expected_plate_count
+              and base_plate_counts == [PODIUM_GLASS_FLOORS + 1] * len(base_specs)
+              and len(floor_levels) == len(expected_floor_levels)
+              and all(abs(actual - expected) < EPS
+                      for actual, expected in zip(
+                          floor_levels, expected_floor_levels))
+              and abs(gb_high(podium_floor_plates) - glass_z1) < EPS,
+              f"{len(plate_parts)} plates (including the 8 m base slab), "
+              f"tower-base counts={base_plate_counts}, "
+              f"z-levels={floor_levels}, top={gb_high(podium_floor_plates):.2f} m")
+
+        expected_connector_columns = 2 * (arc_pane_count + 1)
+        expected_base_columns = sum(
+            point_count for point_count in base_path_counts)
+        expected_columns = expected_connector_columns + expected_base_columns
+        structure_parts = piece_bounds(podium_structure)
+        support_height = glass_z1 - glass_z0
+        glazed_supports = [
+            (lo, hi) for lo, hi in structure_parts
+            if abs((hi[2] - lo[2]) - support_height) < EPS]
+        check("podium support blades exist only across the two glazed floors",
+              len(glazed_supports) == expected_columns
+              and all(abs(lo[2] - glass_z0) < EPS
+                      and abs(hi[2] - glass_z1) < EPS
+                      for lo, hi in glazed_supports)
+              and gb_low(podium_structure) <= -0.30 + EPS,
+              f"{len(glazed_supports)} support blades, z={glass_z0:.1f}.."
+              f"{glass_z1:.1f} m; open levels have none")
+        podium_mullions = objs.get("Podium_Mullions")
+        expected_vertical_mullions = PODIUM_GLASS_FLOORS * (
+            expected_connector_columns + expected_base_columns)
+        expected_transoms = PODIUM_GLASS_FLOORS * (
+            2 * arc_pane_count + sum(base_path_counts))
+        expected_mullions = expected_vertical_mullions + expected_transoms
+        mullion_parts = piece_bounds(podium_mullions)
+        check("podium facade frames exist only on the two glazed floors",
+              len(mullion_parts) == expected_mullions
+              and gb_low(podium_mullions) >= glass_z0 - EPS
+              and gb_high(podium_mullions) <= glass_z1 - SLAB_T + EPS,
+              f"{len(mullion_parts)} frame pieces, expected {expected_mullions} "
+              f"({expected_vertical_mullions} vertical + {expected_transoms} transom), "
+              f"z={gb_low(podium_mullions):.2f}..{gb_high(podium_mullions):.2f} m; "
+              f"open levels have none")
+        podium_mat_names = {mat.name for mat in podium_glass.data.materials}
+        glass_mat = bpy.data.materials.get("Glass")
+        check("podium facade uses the clear Glass material",
+              glass_mat is not None and glass_mat.name in podium_mat_names,
+              f"materials={sorted(podium_mat_names)}")
     if failures:
         sys.exit(1)
 
@@ -1222,12 +1626,13 @@ def main():
                       f"{hits_through(member, z_probe)} hits at x={member:.2f} "
                       f"(the blade beside that opening)")
 
-        # --- the load path across the void ------------------------------
-        # The fins are 0.10 m blades and carry nothing. The outer perimeter
-        # columns and the cores take the floors above down through the void.
+        # --- the original tower perimeter load path ----------------------
+        # The podium wraps around the tower base; it does not replace the
+        # apartment tower's original perimeter columns. Each remains one
+        # continuous member from ground to the core bulkhead.
         st_ = piece_bounds(objs["Structure"])
         cols = [(lo, hi) for lo, hi in st_
-                if lo[2] <= 0.05 and hi[2] >= TOP_Z - 0.05
+                if lo[2] <= 0.05 and hi[2] >= CORE_TOP_Z - 0.05
                 and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
                 and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
         expected_columns = perimeter_grid_positions(W, D)
@@ -1235,10 +1640,10 @@ def main():
             (round((lo[0] + hi[0]) / 2, 3), round((lo[1] + hi[1]) / 2, 3))
             for lo, hi in cols
         }
-        check("only the outer perimeter column layer crosses the whole tower",
+        check("original perimeter columns run from ground to the core top",
               measured_columns == expected_columns,
               f"measured={len(measured_columns)}, expected={len(expected_columns)} "
-              f"non-corner columns of {COL_SIZE:.2f} m square")
+              f"non-corner columns, each {COL_SIZE:.2f} m square")
 
         clearances = [min(W / 2 - max(abs(lo[0]), abs(hi[0])),
                           D / 2 - max(abs(lo[1]), abs(hi[1])))
@@ -1255,7 +1660,7 @@ def main():
         floors_above = TOWER_FLOORS - REFUGE_END - 1
         load = floors_above * W * D * (1.35 * 7.0 + 1.5 * 2.5)      # kN, factored
         stress = load / (pier_area + core_area + col_area) / 1e3    # MPa
-        check("the void's load path is within C40 capacity", stress < 18.0,
+        check("the upper tower load path is within C40 capacity", stress < 18.0,
               f"{load:.0f} kN over {pier_area + core_area + col_area:.1f} m2 "
               f"= {stress:.2f} MPa ({stress / 18 * 100:.0f}% of 18 MPa), "
               f"{floors_above} floors above")

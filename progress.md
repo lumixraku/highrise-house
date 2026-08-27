@@ -1,5 +1,187 @@
 # Progress
 
+## 2026-08-28 — fix — add the missing bottom slab to the two-floor podium glass zone
+
+Added the lower glass-zone floor plate at z=8.0 m. The existing intermediate
+plate at z=14.0 m and top plate/ceiling at z=20.0 m now form the requested three
+horizontal levels across the curved connector and both rounded tower-base wings.
+The lower and upper open zones remain otherwise free of facade panels and support
+blades.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender regenerated `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  the EEVEE `out/preview.png`.
+- `verify_house.py` reports `190/194`; the podium plate check passes with 9 plate
+  components and levels at 7.76/7.78–7.98/8.00, 13.76/13.78–13.98/14.00,
+  and 19.76/19.78–19.98/20.00 m, accounting for the arc/base join clearance.
+- Refreshed EEVEE close views are in `out/podium_close_grid.png` and
+  `out/podium_close_grid_back.png`.
+- Remaining issues: the same four pre-existing high-rise checks unrelated to the
+  podium remain failing.
+
+## 2026-08-28 — change — make the podium curtain wall two 6 m floors with 3 x 3 modules
+
+Changed the podium's middle glazed zone from three 4 m floors to two 6 m floors,
+keeping the same 8.0 → 20.0 m total height. Each glazed floor now has two nominal
+3.0 m window rows, with 3.0 m facade bays, vertical blades, and horizontal transoms
+forming square curtain-wall modules. The lower two and upper two podium levels stay
+open, and the support blades remain limited to the middle glazed volume.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender regenerated `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  the EEVEE `out/preview.png`.
+- `verify_house.py` reports `190/194`; all podium checks pass, including the
+  2 + 6 m floor stack, two 3 m rows per floor, 952 glass panes, 956 frame pieces,
+  240 middle-zone support blades, and the clear `Glass` material.
+- Close EEVEE views `out/podium_close_grid.png` and
+  `out/podium_close_grid_back.png` visually confirm the square grid on both
+  elevations.
+- Remaining issues: the same four pre-existing high-rise checks unrelated to the
+  podium remain failing (legacy floor-line, refuge-corner, roof-boundary, and
+  solid-corner assumptions).
+
+## 2026-08-28 — fix — make both podium elevations one continuous arc
+
+Fixed the malformed central podium connector where a 60 m depth was offset from
+an overly tight centreline. The connector now uses a minimum 45 m parent radius,
+so its two facade edges remain valid concentric arcs instead of folding into a
+triangular fan. Both sides use the same ordered arc samples for the glass,
+vertical metal blades, support lines, and floor plates; the arc extends into the
+two rounded podium bases at each end, and its floor plates sit 0.02 m below the
+base plates to avoid z-fighting at the overlap.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender regenerated `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  the EEVEE `out/preview.png`.
+- `verify_house.py` reports `190/194`; all continuous-arc, concentric-edge,
+  glass, 2 m bay, floor-plate, rounded-base, and three-floor support checks pass.
+  The four remaining failures are pre-existing tower checks unrelated to this
+  connector.
+- Close EEVEE views `out/podium_close_widearc.png` and
+  `out/podium_close_widearc_back.png` visually confirm the front and rear
+  elevations are both smooth, ordered arcs.
+
+## 2026-08-27 — change — set the podium blades to a 2 m, three-floor screen
+
+Reworked the seven-level podium stack to match the clarified section: two lower
+open levels (0.0 → 8.0 m), three glazed podium floors (8.0 → 20.0 m), and two
+upper open levels (20.0 → 28.0 m) before the apartment towers begin. Both tower
+bases are enlarged to 96 × 60 m and 104 × 60 m: 60 m net depth and 10 m of
+extra length at each end. The continuous 120-degree connector and both rounded
+base envelopes now use 2.00 m facade bays with 0.28 m wide and 0.30 m deep
+metal blades. The blades exist only in the three glazed floors; the lower and
+upper two-floor voids remain free of facade panels and podium support blades.
+All 338 podium support blades span only the middle `z=8.0 → 20.0 m` glass
+volume; the original tower columns remain separate and continuous as previously
+required.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender regenerated `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  the EEVEE `out/preview.png`; a fresh top-view check is in
+  `out/podium_plan_check.png`.
+- `verify_house.py` reports `190/194`: all podium checks pass, including the
+  2 + 3 + 2 level split, 60 m depth, 2.00 m facade bays, rounded base corners,
+  enlarged base coverage, 9 podium plates, and 338 three-floor support blades.
+- The same four legacy tower assertions remain: blank bands on floor lines,
+  refuge corner piers, roof-overrun footprint, and solid corner-wall sampling.
+
+## 2026-08-27 — change — replace the podium V-joint with a continuous arc
+
+Replaced the central two-wing rectangular connector with one continuous circular
+arc. It keeps the 120-degree included bend and 40.0 m depth, but the five glass
+levels now use curved facade bays, while each floor plate and the two open-level
+support lines are continuous through the middle joint. The complete glass bases
+under both towers remain unchanged.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender regenerated `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  `out/preview.png`; a new top-view check is in `out/podium_plan_check.png`.
+- `verify_house.py` reports `187/191`: the continuous arc, 120-degree bend,
+  complete base coverage, 15 podium plates, and 146 continuous supports all pass.
+- The same four pre-existing legacy checks remain unrelated to this change.
+
+## 2026-08-27 — verify — confirm podium spans both tower footprints
+
+Rechecked the clarified requirement that the podium is not only a bridge between
+the towers: the generated system covers every point of both tower bases, with
+the central 120-degree bent section retained. Rebuilt the EEVEE scene and
+verified the complete-base facade, floor, and continuous-support checks.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender regenerated `out/highrise_house.blend`, `out/highrise_house.glb`, and
+  `out/preview.png` successfully.
+- `verify_house.py` reports `187/191`; all podium checks pass. The four remaining
+  failures are pre-existing legacy checks unrelated to the podium.
+
+## 2026-08-27 — change — extend the podium across both complete tower bases
+
+Kept the central 120-degree V-shaped connector, then extended the same podium
+system across the entire 76 × 40 m reference-tower base and 84 × 40 m companion
+base. Each base now has five glazed floors from 8.0 to 28.0 m, two open podium
+floors from 0.0 to 8.0 m, floor plates, mullions, and a continuous perimeter
+support frame. The tower perimeter columns now begin at the 28.0 m soffit; the
+service cores remain continuous to the ground, so the lower area reads as one
+podium instead of two towers standing on exposed pilotis columns.
+
+Updated `verify_house.py` to check all four facade sides of both complete tower
+footprints, 20 podium plates, 148 continuous podium supports, and the expanded
+glass-pane count. Updated `README.md` and the build report to describe the
+continuous podium base.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and the
+  EEVEE `out/preview.png` successfully.
+- `verify_house.py` reports `187/191`; all new podium/base-coverage checks pass.
+- `out/podium_plan_check.png` was rendered and visually confirms the two full
+  rectangular bases plus the central bent connector.
+
+Remaining issues: the same four pre-existing verifier assertions remain — blank
+bands on floor lines, refuge corner piers, roof parapet/core footprint, and solid
+corner wall. They are unrelated to this podium change.
+
+## 2026-08-27 — change — raise the pilotis and add the V-shaped glass podium
+
+Raised both towers' open pilotis from three floors to seven floors, so their
+undersides now align at 28.0 m. Added a two-wing podium connecting the inner ends
+of the towers: its centreline bends through 120 degrees, its depth is 40.0 m to
+match the tower short dimension, and it reaches the tower soffit at 28.0 m. The
+podium keeps its lower two floors open (0.0 → 8.0 m) and uses five fully glazed
+floors above (8.0 → 28.0 m), with pane joints, metal mullions, floor plates, and
+continuous perimeter supports in separate meshes.
+
+Updated `verify_house.py` with checks for the podium's 120-degree bend, both
+40.0 m wing depths and tower connections, five glass floors, the two-floor open
+base, pane/component counts, floor plates, continuous supports, and the clear
+`Glass` material. Updated `README.md` to document the new heights, envelope,
+podium, and EEVEE preview.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and the
+  EEVEE `out/preview.png` successfully.
+- `verify_house.py` reports `186/190`; all new tower/podium checks pass, including
+  7 tower pilotis floors, 120.000 degrees, 40.00 m depth, 2 open + 5 glass
+  podium floors, 28 continuous supports, and `Glass` material assignment.
+
+Remaining issues: the four pre-existing verifier assertions remain — blank bands
+on floor lines, refuge corner piers, roof parapet/core footprint, and solid corner
+wall. None is caused by the seven-floor pilotis or the new podium.
+
 ## 2026-08-27 — change — arrange the two House towers as a 150-degree open book
 
 Replaced the old parallel, Y-staggered companion-tower placement in
