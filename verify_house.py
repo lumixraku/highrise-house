@@ -82,7 +82,10 @@ COL_SPACING = 9.0
 COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 CORE_COLUMN_BAYS = 2
 COMPANION_CORE_COLUMN_BAYS = 3
-TOWER_STAGGER = 40.0     # companion tower's Y offset (full-depth stagger)
+TOWER_GAP = 30.0
+BOOK_OPEN_ANGLE = 150.0
+BOOK_EDGE_CLEARANCE = 42.0
+BOOK_FIRST_OUTWARD_DEG = 180.0
 TRUSS_FACADE_INSET = 0.55
 TRUSS_PLAN_MEMBER = 0.20
 TRUSS_CLAW_GROUPS = 3
@@ -225,6 +228,87 @@ def world_bounds(obj):
     )
 
 
+def book_layout(first_w, second_w):
+    """Reproduce the generator's open-book centre and rotation."""
+    second_outward_deg = BOOK_FIRST_OUTWARD_DEG - BOOK_OPEN_ANGLE
+    spine_x = first_w / 2.0 + BOOK_EDGE_CLEARANCE / 2.0
+    radius = second_w / 2.0 + BOOK_EDGE_CLEARANCE / 2.0
+    angle = math.radians(second_outward_deg)
+    return ((spine_x + math.cos(angle) * radius,
+             math.sin(angle) * radius),
+            second_outward_deg + 180.0)
+
+
+def oriented_span(obj, angle_deg, axis):
+    """Measure a mesh along its rotated local X (0) or Y (1) axis."""
+    angle = math.radians(angle_deg)
+    axes = ((math.cos(angle), math.sin(angle)),
+            (-math.sin(angle), math.cos(angle)))
+    ux, uy = axes[axis]
+    values = [ux * (obj.matrix_world @ v.co).x
+              + uy * (obj.matrix_world @ v.co).y
+              for v in obj.data.vertices]
+    return max(values) - min(values)
+
+
+def rectangle_corners(center, width, depth, angle_deg):
+    angle = math.radians(angle_deg)
+    axis = (math.cos(angle), math.sin(angle))
+    normal = (-math.sin(angle), math.cos(angle))
+    return [
+        (center[0] + sx * axis[0] * width / 2.0
+         + sy * normal[0] * depth / 2.0,
+         center[1] + sx * axis[1] * width / 2.0
+         + sy * normal[1] * depth / 2.0)
+        for sx, sy in ((-1, -1), (-1, 1), (1, 1), (1, -1))
+    ]
+
+
+def segment_distance(a, b, c, d):
+    def cross(u, v):
+        return u[0] * v[1] - u[1] * v[0]
+
+    def subtract(u, v):
+        return (u[0] - v[0], u[1] - v[1])
+
+    def dot(u, v):
+        return u[0] * v[0] + u[1] * v[1]
+
+    def orient(p, q, r):
+        return cross(subtract(q, p), subtract(r, p))
+
+    def on_segment(p, q, r):
+        return (abs(orient(p, q, r)) < 1e-8
+                and dot(subtract(r, p), subtract(r, q)) <= 1e-8)
+
+    orientations = (orient(a, b, c), orient(a, b, d),
+                    orient(c, d, a), orient(c, d, b))
+    if (orientations[0] * orientations[1] < 0
+            and orientations[2] * orientations[3] < 0):
+        return 0.0
+    if any(on_segment(p, q, r) for p, q, r in (
+            (a, c, d), (b, c, d), (c, a, b), (d, a, b))):
+        return 0.0
+
+    def point_segment_distance(p, q, r):
+        direction = subtract(r, q)
+        length_sq = dot(direction, direction)
+        t = max(0.0, min(1.0, dot(subtract(p, q), direction) / length_sq))
+        nearest = (q[0] + t * direction[0], q[1] + t * direction[1])
+        return math.hypot(p[0] - nearest[0], p[1] - nearest[1])
+
+    return min(point_segment_distance(a, c, d),
+               point_segment_distance(b, c, d),
+               point_segment_distance(c, a, b),
+               point_segment_distance(d, a, b))
+
+
+def polygon_distance(first, second):
+    return min(segment_distance(first[i], first[(i + 1) % len(first)],
+                                second[j], second[(j + 1) % len(second)])
+               for i in range(len(first)) for j in range(len(second)))
+
+
 def gb_low(obj):
     return world_bounds(obj)[2][0]
 
@@ -233,9 +317,16 @@ def gb_high(obj):
     return world_bounds(obj)[2][1]
 
 
-def piece_bounds(obj):
+def piece_bounds(obj, frame_origin=None, frame_angle_deg=0.0):
     """Bounding box of every connected component (i.e. every original box)."""
     verts = [obj.matrix_world @ v.co for v in obj.data.vertices]
+    if frame_origin is not None:
+        angle = math.radians(frame_angle_deg)
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        ox, oy = frame_origin
+        verts = [Vector((cos_a * (p.x - ox) + sin_a * (p.y - oy),
+                         -sin_a * (p.x - ox) + cos_a * (p.y - oy), p.z))
+                 for p in verts]
     adj = {i: set() for i in range(len(verts))}
     for poly in obj.data.polygons:
         vs = list(poly.vertices)
@@ -309,42 +400,49 @@ def main():
           second_facade is not None and second_glass is not None
           and second_struct is not None)
     if second_facade and second_glass and second_struct:
-        second_fb = world_bounds(second_facade)
-        first_fb = world_bounds(objs["Facade_Spandrels"])
+        second_w = 84.0
+        second_d = 40.0
+        second_center, second_rotation = book_layout(W, second_w)
         second_gz = z_clusters(second_glass)
         check("second tower is 84 m wide for 20 long-face rooms",
-              abs(second_fb[0][1] - second_fb[0][0] - 84.0) < 0.02,
-              f"width={second_fb[0][1] - second_fb[0][0]:.3f} m")
+              abs(oriented_span(second_facade, second_rotation, 0)
+                  - second_w) < 0.02,
+              f"width={oriented_span(second_facade, second_rotation, 0):.3f} m")
+        check("second tower keeps its 40 m short-face depth",
+              abs(oriented_span(second_facade, second_rotation, 1)
+                  - second_d) < 0.02,
+              f"depth={oriented_span(second_facade, second_rotation, 1):.3f} m")
         check("second tower has 3 x 17 glazed floors",
               len(second_gz) == 51 * 2,
               f"{len(second_gz) // 2} glazed floors")
+        check("the two towers form the requested 150 degree open book",
+              abs((BOOK_FIRST_OUTWARD_DEG - (second_rotation - 180.0))
+                  - BOOK_OPEN_ANGLE) < 0.02,
+              f"angle={BOOK_OPEN_ANGLE:.1f} degrees")
+        first_footprint = rectangle_corners((0.0, 0.0), W, D, 0.0)
+        second_footprint = rectangle_corners(second_center, second_w,
+                                              second_d, second_rotation)
+        gap = polygon_distance(first_footprint, second_footprint)
         check("the two tower envelopes keep a 30 m clear gap",
-              abs(second_fb[0][0] - first_fb[0][1] - 30.0) < 0.02,
-              f"gap={second_fb[0][0] - first_fb[0][1]:.3f} m")
-        second_w = second_fb[0][1] - second_fb[0][0]
-        second_d = second_fb[1][1] - second_fb[1][0]
-        second_origin = first_fb[0][1] + 30.0 + second_w / 2
-        second_origin_y = (second_fb[1][0] + second_fb[1][1]) / 2.0
-        first_origin_y = (first_fb[1][0] + first_fb[1][1]) / 2.0
-        check("the two towers are fully staggered in Y, not on the same line",
-              abs(second_origin_y - first_origin_y - TOWER_STAGGER) < 0.02,
-              f"y offset={second_origin_y - first_origin_y:.3f} m")
+              gap >= TOWER_GAP - 0.02,
+              f"gap={gap:.3f} m")
         second_grid = col_grid(second_w)
         second_core_w, second_core_offset, second_core_xs = core_layout(
             second_w, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
-        second_pieces = piece_bounds(second_struct)
+        second_pieces = piece_bounds(second_struct, second_center,
+                                     second_rotation)
         second_core_pieces = [
             (lo, hi) for lo, hi in second_pieces
             if lo[2] < 1.0 and hi[2] > BASE_Z - 1.0
             and (hi[0] - lo[0]) < second_w * 0.5
-            and lo[1] - second_origin_y > -CORE_D / 2 - 0.5
-            and hi[1] - second_origin_y < CORE_D / 2 + 0.5
+            and lo[1] > -CORE_D / 2 - 0.5
+            and hi[1] < CORE_D / 2 + 0.5
             and not (abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
                      and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02)]
         measured_second_widths = []
         for cx in second_core_xs:
             here = [(lo, hi) for lo, hi in second_core_pieces
-                    if abs((lo[0] + hi[0]) / 2 - (second_origin + cx))
+                    if abs((lo[0] + hi[0]) / 2 - cx)
                     < second_core_w / 2 + 0.5]
             if here:
                 measured_second_widths.append(
@@ -362,7 +460,7 @@ def main():
             and abs((hi[0] - lo[0]) - COL_SIZE) < 0.02
             and abs((hi[1] - lo[1]) - COL_SIZE) < 0.02]
         expected_second_columns = {
-            (round(second_origin + x, 3), round(second_origin_y + y, 3))
+            (round(x, 3), round(y, 3))
             for x, y in perimeter_grid_positions(second_w, second_d)
         }
         measured_second_columns = {(round(x, 3), round(y, 3))
@@ -394,11 +492,8 @@ def main():
                   and truss_mat == facade_mat,
                   f"truss={truss_mat.name if truss_mat else 'none'}, "
                   f"facade={facade_mat.name if facade_mat else 'none'}")
-            truss_parts_world = piece_bounds(truss_obj)
-            truss_parts = [
-                ((lo[0] - second_origin, lo[1] - second_origin_y, lo[2]),
-                 (hi[0] - second_origin, hi[1] - second_origin_y, hi[2]))
-                for lo, hi in truss_parts_world]
+            truss_parts = piece_bounds(truss_obj, second_center,
+                                       second_rotation)
             companion_refuge_starts = [FIRST_GLAZED + (index + 1) * BLOCK_FLOORS
                                        + index * REFUGE_FLOORS
                                        for index in range(3 - 1)]
@@ -455,7 +550,7 @@ def main():
                       and p[1][1] - p[0][1] < 1.0
                       and p[1][2] - p[0][2] > 1.0
                       and abs(abs((p[0][1] + p[1][1]) / 2) -
-                              (D / 2 - TRUSS_FACADE_INSET)) < 0.8]
+                              (second_d / 2 - TRUSS_FACADE_INSET)) < 0.8]
             check("long facades complete the refuge-level truss ring",
                   len(long_z) == refuge_levels * 2 * long_perimeter_bays,
                   f"{len(long_z)} diagonal members on the two front/rear faces")

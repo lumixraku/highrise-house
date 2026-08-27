@@ -1,5 +1,36 @@
 # Progress
 
+## 2026-08-27 — change — arrange the two House towers as a 150-degree open book
+
+Replaced the old parallel, Y-staggered companion-tower placement in
+`build_house.py` with an open-book plan. The reference tower stays at the
+origin; the companion tower is rotated to 210 degrees and placed so the two
+outward page directions subtend 150 degrees. The footprint calculation now
+handles the rotated envelope, and the generated scene reports a 30 m target
+central clearance. Group placement uses a world transform so every merged
+mesh keeps its local geometry, materials, and lighting intact.
+
+Updated `verify_house.py` to measure the companion footprint in its rotated
+local frame and to validate the polygon-to-polygon gap, open-book angle,
+core layout, perimeter columns, and refuge trusses without the old staggered
+world-coordinate assumptions.
+
+Verification:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender rebuilt `out/highrise_house.blend`, `out/highrise_house.glb`, and the
+  EEVEE `out/preview.png` successfully.
+- `verify_house.py` reports `173/177`; the new open-book checks all pass:
+  150.0 degrees, 30.216 m minimum envelope gap, correct rotated dimensions,
+  cores, perimeter columns, and 176 refuge-truss members.
+- `out/open_book_plan.png` was rendered from the saved blend to visually
+  confirm the two footprints open toward one another with a clear central
+  space.
+
+Remaining issues: the same four pre-existing verifier assertions remain —
+blank bands on floor lines, refuge corner piers, roof parapet/core footprint,
+and solid corner wall. They are unrelated to this layout change.
+
 ## 2026-08-27 — fix — remove overlapping House corner light positions
 
 The three-ring House ceiling layout had two inner-ring side panels too close to

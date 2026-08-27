@@ -63,11 +63,15 @@ TOTAL_FLOORS = (PILOTIS_FLOORS + BLOCK_GROUPS * BLOCK_FLOORS
                 + FIXED_SOLID_BAND_FLOORS)
 TOWER_FLOORS = TOTAL_FLOORS - PILOTIS_FLOORS   # occupied floors above
 
-TOWER_GAP = 30.0       # clear horizontal gap between the two building envelopes
-# The two towers are fully staggered, not in the same line: the companion tower
-# is offset one full depth in Y, so its front face lands on the first tower's
-# rear face and the two footprints never overlap in Y projection.
-TOWER_STAGGER = 40.0   # companion tower's Y offset from the first (full depth)
+TOWER_GAP = 30.0       # target clear distance inside the open-book arrangement
+# The two towers form an open book in plan. Their inner short ends face the
+# central gap; the two outward page directions subtend 150 degrees.
+BOOK_OPEN_ANGLE = 150.0
+# The end clearance is measured along each page before the oblique corners are
+# accounted for. At 150 degrees it produces a little over 30 m of true corner-
+# to-corner clearance between the two rectangular envelopes.
+BOOK_EDGE_CLEARANCE = 42.0
+BOOK_FIRST_OUTWARD_DEG = 180.0
 
 WALL_T = 0.30     # facade wall thickness
 SLAB_T = 0.22     # floor plate thickness
@@ -448,9 +452,9 @@ def configure_tower(block_groups, windows_long, core_column_bays=CORE_COLUMN_BAY
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 SITE_WIDTH = 2 * W + TOWER_GAP
-SITE_CENTER_X = (W + TOWER_GAP) / 2.0
-SITE_CENTER_Y = TOWER_STAGGER / 2.0
-SITE_DEPTH = TOWER_STAGGER + D
+SITE_CENTER_X = 0.0
+SITE_CENTER_Y = 0.0
+SITE_DEPTH = D
 SITE_TOP_Z = CORE_TOP_Z
 
 # Band offsets inside one floor. The vent + glass + vent band starts 0.50 m
@@ -1607,12 +1611,37 @@ def frame_viewport():
                 space.lens = 35.0
 
 
-def translate_objects(objects, x_offset, y_offset=0.0):
-    """Move one generated tower as a group without changing its local geometry."""
+def transform_objects(objects, x_offset, y_offset, rotation_deg=0.0):
+    """Place one generated tower as a group around its local (0, 0) centre."""
+    transform = (Matrix.Translation(Vector((x_offset, y_offset, 0.0)))
+                 @ Matrix.Rotation(math.radians(rotation_deg), 4, "Z"))
     for obj in objects.values():
         if obj is not None:
-            obj.location.x += x_offset
-            obj.location.y += y_offset
+            obj.matrix_world = transform @ obj.matrix_world
+
+
+def book_layout(first_w, second_w):
+    """Return the second tower centre/rotation for the open-book plan."""
+    second_outward_deg = BOOK_FIRST_OUTWARD_DEG - BOOK_OPEN_ANGLE
+    spine_x = first_w / 2.0 + BOOK_EDGE_CLEARANCE / 2.0
+    second_radius = second_w / 2.0 + BOOK_EDGE_CLEARANCE / 2.0
+    outward = Vector((math.cos(math.radians(second_outward_deg)),
+                      math.sin(math.radians(second_outward_deg))))
+    second_center = Vector((spine_x, 0.0)) + outward * second_radius
+    # The local +X end is the inner short end; the outward page direction is -X.
+    second_rotation = second_outward_deg + 180.0
+    return second_center, second_rotation
+
+
+def footprint_bounds(center, width, depth, rotation_deg):
+    """Axis-aligned bounds of a rotated rectangular tower footprint."""
+    angle = math.radians(rotation_deg)
+    half_x = (abs(math.cos(angle)) * width / 2.0
+              + abs(math.sin(angle)) * depth / 2.0)
+    half_y = (abs(math.sin(angle)) * width / 2.0
+              + abs(math.cos(angle)) * depth / 2.0)
+    return ((center.x - half_x, center.x + half_x),
+            (center.y - half_y, center.y + half_y))
 
 
 def main():
@@ -1629,20 +1658,28 @@ def main():
     configure_tower(3, 20, core_column_bays=COMPANION_CORE_COLUMN_BAYS)
     second_objects = build(reset=False, mats=shared_mats, add_trusses=True)
     second_w, second_d, second_top = W, D, CORE_TOP_Z
-    second_center_x = first_w / 2.0 + TOWER_GAP + second_w / 2.0
-    second_center_y = TOWER_STAGGER
-    translate_objects(second_objects, second_center_x, second_center_y)
+    second_center, second_rotation = book_layout(first_w, second_w)
+    transform_objects(second_objects, second_center.x, second_center.y,
+                      second_rotation)
 
-    SITE_WIDTH = first_w + TOWER_GAP + second_w
-    SITE_CENTER_X = (TOWER_GAP + second_w) / 2.0
-    SITE_CENTER_Y = (TOWER_STAGGER + (second_d - first_d) / 2.0) / 2.0
-    SITE_DEPTH = TOWER_STAGGER + (first_d + second_d) / 2.0
+    first_bounds = footprint_bounds(Vector((0.0, 0.0)), first_w, first_d, 0.0)
+    second_bounds = footprint_bounds(second_center, second_w, second_d,
+                                     second_rotation)
+    SITE_WIDTH = max(first_bounds[0][1], second_bounds[0][1]) - min(
+        first_bounds[0][0], second_bounds[0][0])
+    SITE_CENTER_X = (max(first_bounds[0][1], second_bounds[0][1])
+                     + min(first_bounds[0][0], second_bounds[0][0])) / 2.0
+    SITE_DEPTH = max(first_bounds[1][1], second_bounds[1][1]) - min(
+        first_bounds[1][0], second_bounds[1][0])
+    SITE_CENTER_Y = (max(first_bounds[1][1], second_bounds[1][1])
+                     + min(first_bounds[1][0], second_bounds[1][0])) / 2.0
     SITE_TOP_Z = max(first_top, second_top)
 
     report(second_objects, "new adjacent tower (3 groups x 17 floors, 20 rooms)")
     print("=== two-tower site ===")
-    print(f"clear gap            : {TOWER_GAP:.1f} m")
-    print(f"tower stagger        : {TOWER_STAGGER:.1f} m in Y")
+    print(f"open-book angle     : {BOOK_OPEN_ANGLE:.1f} degrees")
+    print(f"central clear gap    : {TOWER_GAP:.1f} m target")
+    print(f"second tower rotation: {second_rotation:.1f} degrees")
     print(f"overall envelope     : {SITE_WIDTH:.1f} x {SITE_DEPTH:.1f} m")
     print(f"site centre          : x = {SITE_CENTER_X:.1f}, y = {SITE_CENTER_Y:.1f} m")
     print(f"highest core top     : {SITE_TOP_Z:.2f} m")
