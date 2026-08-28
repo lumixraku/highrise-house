@@ -1,5 +1,43 @@
 # Progress
 
+## 2026-08-28 — main — add the missing third-level retail floor base
+
+Added a continuous 0.22 m floor plate at z=7.78–8.00 m beneath the third
+podium level's glass enclosure.  The two lower 0–8 m levels remain wholly
+open; the new plate begins exactly at the top of that pilotis zone and uses the
+same filled two-edge Bézier outline as all upper podium plates.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py` and `git diff --check` passed.
+- Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`.
+- Inspecting `Podium_Floor_Plates` confirms surfaces at 7.78/8.00,
+  11.78/12.00, 15.78/16.00, and 19.78/20.00 m.
+
+Remaining issues: None for this requested floor-base correction.
+
+## 2026-08-28 — main — rebuild podium as one continuous two-edge Bézier plate
+
+Replaced the disconnected/overlapping podium connection with one closed floor
+outline: its upper edge is a cubic Bézier from the upper inner edge of the
+first rounded podium to the matching upper inner edge of the second, and its
+lower edge does the same below.  All four Bézier handles follow the round-end
+tangents, making the two podium volumes and the filled region between them read
+as one smooth, continuous slab.  The three occupied podium levels reuse this
+same single outline; the two lower levels remain fully open, leaving only the
+support columns and tower cores.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py` and `git diff --check` passed.
+- Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`.
+- A fresh orthographic plan render at `out/view_podium_only_plan.png` visually
+  confirms one connected, filled floor plate with no seam, detached bridge, or
+  V-shaped joint; the generated plate has exactly three slabs at 12, 16, and
+  20 m (each 0.22 m thick).
+
+Remaining issues:
+- `verify_house.py` still encodes the superseded seven-level circular-arc
+  podium, so it is not used for this replaced podium geometry.
+
 ## 2026-08-28 — fix — add the missing bottom slab to the two-floor podium glass zone
 
 Added the lower glass-zone floor plate at z=8.0 m. The existing intermediate

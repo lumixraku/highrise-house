@@ -34,6 +34,7 @@ import sys
 
 import bpy
 from mathutils import Euler, Matrix, Vector
+from mathutils.geometry import tessellate_polygon
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import materials     # noqa: E402  (needs the path set up first)
@@ -74,35 +75,25 @@ BOOK_OPEN_ANGLE = 150.0
 BOOK_EDGE_CLEARANCE = 42.0
 BOOK_FIRST_OUTWARD_DEG = 180.0
 
-# The podium reaches the underside of the raised towers. Its seven-level stack
-# is two open levels below, two six-metre glazed levels, and two open levels
-# above before the apartment tower begins.
-PODIUM_TOTAL_FLOORS = 7
+# Two fully open pilotis floors support three occupied podium floors.  Every
+# occupied floor is one continuous plate: its two lateral connection edges are
+# cubic Bezier curves, not overlapping capsule outlines.
+PODIUM_TOTAL_FLOORS = 5
 PODIUM_PILOTIS_FLOORS = 2
-PODIUM_OPEN_TOP_FLOORS = 2
-PODIUM_GLASS_FLOORS = 2
-PODIUM_GLASS_FLOOR_HEIGHT = 6.0
-PODIUM_GLASS_MODULE = 3.0
-PODIUM_GLASS_ROWS = 2
-PODIUM_BEND_ANGLE = 120.0
-PODIUM_BEND_SIDE = -1.0
-PODIUM_GLASS_JOINT = 0.03
-# The curved connector underlaps the rectangular base plates by a hair at each
-# join.  Their footprints overlap by design, but equal-height top faces would
-# z-fight where the arc enters a rounded base corner.
-PODIUM_FLOOR_JOIN_CLEARANCE = 0.02
-PODIUM_DEPTH = 60.0
-# The two tower ends are close together, while the podium is 60 m deep.  A
-# literal offset of that short-radius arc would fold its inner edge through the
-# circle centre.  Use a wider parent arc and let its ends disappear into the
-# two complete base footprints, keeping both facade edges smooth and valid.
-PODIUM_ARC_MIN_RADIUS = PODIUM_DEPTH * 0.75
-PODIUM_LENGTH_MARGIN = 10.0
+PODIUM_OCCUPIED_FLOORS = PODIUM_TOTAL_FLOORS - PODIUM_PILOTIS_FLOORS
+PODIUM_DEPTH = 66.0
+PODIUM_BOTTOM_DEPTH = 80.0
+PODIUM_LENGTH_MARGIN = 20.0
+PODIUM_BOTTOM_LENGTH_MARGIN = 12.0
+PODIUM_CORRIDOR_DEPTH = 3.0
 PODIUM_GRID_PITCH = 3.00
-PODIUM_GRID_W = 0.28
-PODIUM_GRID_DEPTH = 0.30
-PODIUM_CORNER_RADIUS = 6.0
-PODIUM_COLUMN_SIZE = 0.30
+PODIUM_CORRIDOR_RAIL_H = 1.20
+PODIUM_PILOTIS_COLUMN_SIZE = 1.20
+PODIUM_PILOTIS_COLUMN_PITCH = 12.0
+# Use the full upper and lower edges of each inward round end as the two link
+# faces.  One cubic connects the two upper edges and one connects the two lower
+# edges, leaving a broad, continuously filled floor plate between them.
+PODIUM_BEZIER_ATTACH_ANGLE = math.pi / 2.0
 
 WALL_T = 0.30     # facade wall thickness
 SLAB_T = 0.22     # floor plate thickness
@@ -1464,107 +1455,6 @@ def build(reset=True, mats=None, add_trusses=False):
     return merged
 
 
-def podium_layout(first_w, second_w, second_center, second_rotation):
-    """Return the two tower ends and the included bend of the podium arc."""
-    first_end = Vector((first_w / 2.0, 0.0))
-    angle = math.radians(second_rotation)
-    second_end = Vector(second_center) + Vector(
-        (math.cos(angle), math.sin(angle))) * (second_w / 2.0)
-    chord = second_end - first_end
-    chord_length = chord.length
-    chord_axis = chord / chord_length
-    chord_normal = Vector((-chord_axis.y, chord_axis.x))
-    bend_height = chord_length / (2.0 * math.tan(
-        math.radians(PODIUM_BEND_ANGLE / 2.0)))
-    bend = ((first_end + second_end) / 2.0
-            + PODIUM_BEND_SIDE * chord_normal * bend_height)
-    return first_end, bend, second_end
-
-
-def podium_arc_geometry(points, pane_count=None):
-    """Return a continuous, depth-safe circular centreline for the connector.
-
-    The old podium used the three points as two independent rectangular wings.
-    Those wings met only at their centreline vertex, leaving a visible notch at
-    the joint.  The same 120-degree included bend is now realised as one smooth
-    circular arc.  If the requested depth is wider than the tight endpoint
-    chord allows, the arc grows into the two base footprints instead of folding
-    its inner offset through the circle centre.
-    """
-    start, _, end = (Vector(point) for point in points)
-    chord = end - start
-    chord_length = chord.length
-    if chord_length <= 1e-6:
-        raise ValueError("podium arc endpoints must be distinct")
-    chord_axis = chord / chord_length
-    chord_normal = Vector((-chord_axis.y, chord_axis.x))
-    turn = math.radians(180.0 - PODIUM_BEND_ANGLE)
-    if turn <= 0.0 or turn >= math.pi:
-        raise ValueError("podium bend must produce a minor circular arc")
-    radius = max(chord_length / (2.0 * math.sin(turn / 2.0)),
-                 PODIUM_ARC_MIN_RADIUS)
-    midpoint = (start + end) / 2.0
-    effective_half_chord = radius * math.sin(turn / 2.0)
-    arc_start = midpoint - chord_axis * effective_half_chord
-    centre_offset = radius * math.cos(turn / 2.0)
-    centre = (midpoint
-              - PODIUM_BEND_SIDE * chord_normal * centre_offset)
-    start_angle = math.atan2(arc_start.y - centre.y,
-                             arc_start.x - centre.x)
-    sweep = -PODIUM_BEND_SIDE * turn
-    arc_length = radius * abs(sweep)
-    pane_count = pane_count or max(12, round(arc_length / PODIUM_GRID_PITCH))
-    points_out, tangents = [], []
-    for index in range(pane_count + 1):
-        fraction = index / pane_count
-        theta = start_angle + sweep * fraction
-        point = centre + Vector((math.cos(theta), math.sin(theta))) * radius
-        tangent = Vector((-math.sin(theta), math.cos(theta)))
-        tangent *= 1.0 if sweep > 0.0 else -1.0
-        points_out.append(point)
-        tangents.append(tangent.normalized())
-    return points_out, tangents, radius, abs(sweep)
-
-
-def curved_strip(name, centerline, tangents, width, z0, z1, mat):
-    """Create one watertight extruded strip around a curved centreline."""
-    left, right = [], []
-    half_width = width / 2.0
-    for point, tangent in zip(centerline, tangents):
-        normal = Vector((-tangent.y, tangent.x))
-        left.append(Vector(point) + normal * half_width)
-        right.append(Vector(point) - normal * half_width)
-
-    verts = []
-    for point in left + right:
-        verts.append((point.x, point.y, z0))
-    for point in left + right:
-        verts.append((point.x, point.y, z1))
-    count = len(centerline)
-    faces = []
-    for index in range(count - 1):
-        next_index = index + 1
-        faces.extend((
-            (index, next_index, count + next_index, count + index),
-            (2 * count + index, 3 * count + index,
-             3 * count + next_index, 2 * count + next_index),
-            (index, 2 * count + index, 2 * count + next_index, next_index),
-            (count + index, count + next_index,
-             3 * count + next_index, 3 * count + index),
-        ))
-    faces.extend((
-        (0, count, 3 * count, 2 * count),
-        (count - 1, 2 * count - 1, 4 * count - 1, 3 * count - 1),
-    ))
-    mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(verts, [], faces)
-    mesh.validate()
-    obj = bpy.data.objects.new(name, mesh)
-    obj.data.materials.append(mat)
-    bpy.context.collection.objects.link(obj)
-    return obj
-
-
 def rounded_rectangle_path(center, width, depth, rotation_deg, radius, pitch):
     """Return a faceted, constant-radius rounded-rectangle perimeter.
 
@@ -1649,231 +1539,211 @@ def rounded_prism(name, center, width, depth, rotation_deg, radius, z0, z1, mat)
     return obj
 
 
-def build_podium(points, depth, mats, base_rectangles=None):
-    """Build the curved podium plus full glass bases beneath both towers.
+def build_podium(mats, base_rectangles):
+    """Build one smooth, two-edge Bezier podium around the two tower bases."""
+    glass, metal, concrete = mats["glass"], mats["metal"], mats["concrete"]
+    glass_parts, rail_parts, slab_parts, column_parts = [], [], [], []
+    first, second = base_rectangles[:2]
 
-    ``points`` is the central 120-degree connector endpoints/bend. The optional
-    ``base_rectangles`` list carries the complete tower footprints, so the
-    podium occupies every part of both raised tower bases rather than only the
-    space between their inner ends.
-    """
-    glass = mats["glass"]
-    metal = mats["metal"]
-    glass_parts, mullion_parts, structure_parts = [], [], []
-    glass_z0 = PODIUM_PILOTIS_FLOORS * H
-    facade_height = PODIUM_GLASS_FLOOR_HEIGHT - SLAB_T
-    arc_points, arc_tangents, _, _ = podium_arc_geometry(points)
-    arc_pane_count = len(arc_points) - 1
+    def sample_cubic(start, control_1, control_2, end, steps=12):
+        points = []
+        for index in range(steps + 1):
+            t = index / steps
+            u = 1.0 - t
+            points.append(u**3 * start + 3.0 * u*u*t * control_1
+                          + 3.0 * u*t*t * control_2 + t**3 * end)
+        return points
 
-    def glass_row_span(floor_z, row_index):
-        """Return one nominal 3 m window row inside a 6 m podium floor."""
-        row_z0 = (floor_z + row_index * PODIUM_GLASS_MODULE
-                  + PODIUM_GLASS_JOINT / 2.0)
-        row_z1 = (floor_z + (row_index + 1) * PODIUM_GLASS_MODULE
-                  - PODIUM_GLASS_JOINT / 2.0)
-        # Keep the upper row below the structural slab while retaining the
-        # three-metre frame rhythm between floor and transom.
-        row_z1 = min(row_z1, floor_z + PODIUM_GLASS_FLOOR_HEIGHT - SLAB_T)
-        return row_z0, row_z1
+    def append_arc(points, centre, radius, start_angle, end_angle, steps):
+        for index in range(steps + 1):
+            angle = start_angle + (end_angle - start_angle) * index / steps
+            point = centre + radius * Vector((math.cos(angle), math.sin(angle)))
+            if not points or (point - points[-1]).length > 1e-6:
+                points.append(point)
 
-    def rounded_base_path(centre, width, rect_depth, rotation):
-        return rounded_rectangle_path(
-            centre, width, rect_depth, rotation, PODIUM_CORNER_RADIUS,
-            PODIUM_GRID_PITCH)
+    def append_line(points, start, end):
+        steps = max(1, round((end - start).length / PODIUM_GRID_PITCH))
+        for index in range(steps + 1):
+            point = start.lerp(end, index / steps)
+            if not points or (point - points[-1]).length > 1e-6:
+                points.append(point)
 
-    def add_rounded_facade(tag, centre, width, rect_depth, rotation,
-                           floor_index):
-        """Add a 3 x 3 framed curtain-wall grid around a rounded base."""
-        path, tangents = rounded_base_path(centre, width, rect_depth, rotation)
-        floor_z = glass_z0 + floor_index * PODIUM_GLASS_FLOOR_HEIGHT
-        for pane_index, point in enumerate(path):
-            next_point = path[(pane_index + 1) % len(path)]
-            axis = (next_point - point).normalized()
-            outward = Vector((axis.y, -axis.x)).normalized()
-            midpoint = (point + next_point) / 2.0
-            pane_length = (next_point - point).length
-            glass_centre = midpoint - outward * GLASS_T / 2.0
-            for row_index in range(PODIUM_GLASS_ROWS):
-                row_z0, row_z1 = glass_row_span(floor_z, row_index)
-                glass_parts.append(box(
-                    f"{tag}_Glass_{floor_index}_{pane_index}_{row_index}",
-                    (glass_centre.x, glass_centre.y,
-                     (row_z0 + row_z1) / 2.0),
-                    (pane_length - PODIUM_GLASS_JOINT, GLASS_T,
-                     row_z1 - row_z0),
-                    glass, rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
-            mullion_parts.append(box(
-                f"{tag}_Transom_{floor_index}_{pane_index}",
-                (midpoint.x + outward.x * PODIUM_GRID_DEPTH / 2.0,
-                 midpoint.y + outward.y * PODIUM_GRID_DEPTH / 2.0,
-                 floor_z + PODIUM_GLASS_MODULE),
-                (pane_length, PODIUM_GRID_DEPTH, PODIUM_GRID_W),
-                metal, rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
-        for joint_index, (point, tangent) in enumerate(zip(path, tangents)):
-            outward = Vector((tangent.y, -tangent.x)).normalized()
-            blade_centre = point + outward * PODIUM_GRID_DEPTH / 2.0
-            mullion_parts.append(box(
-                f"{tag}_Blade_{floor_index}_{joint_index}",
-                (blade_centre.x, blade_centre.y,
-                 floor_z + facade_height / 2.0),
-                (PODIUM_GRID_W, PODIUM_GRID_DEPTH, facade_height),
-                metal,
-                rot=(0.0, 0.0, math.atan2(tangent.y, tangent.x))))
-        return len(path)
+    def capsule_outer_route(spec, extra):
+        """Outer capsule boundary from its lower to its upper link face."""
+        centre, width, depth, rotation = spec
+        width, depth = width + 2.0 * extra, depth + 2.0 * extra
+        radius, half_width = depth / 2.0, width / 2.0
+        axis = Vector((math.cos(math.radians(rotation)),
+                       math.sin(math.radians(rotation))))
+        normal = Vector((-axis.y, axis.x))
+        inner_cap = Vector(centre) + axis * (half_width - radius)
+        outer_cap = Vector(centre) - axis * (half_width - radius)
 
-    # The fine podium support blades belong to the glazed middle volume only.
-    # The lower two and upper two levels are deliberately open and must not
-    # acquire a seven-storey row of facade columns.
-    support_z0 = glass_z0
-    support_z1 = (glass_z0
-                  + PODIUM_GLASS_FLOORS * PODIUM_GLASS_FLOOR_HEIGHT)
-    support_height = support_z1 - support_z0
-    support_zc = (support_z0 + support_z1) / 2.0
+        def world(point):
+            return Vector(centre) + axis * point.x + normal * point.y
 
-    def add_rounded_supports(tag, centre, width, rect_depth, rotation):
-        """Add support blades only across the two glazed podium floors."""
-        path, tangents = rounded_base_path(centre, width, rect_depth, rotation)
-        for support_index, (point, tangent) in enumerate(zip(path, tangents)):
-            outward = Vector((tangent.y, -tangent.x)).normalized()
-            support_centre = point - outward * PODIUM_COLUMN_SIZE / 2.0
-            structure_parts.append(box(
-                f"{tag}_Support_{support_index}",
-                (support_centre.x, support_centre.y, support_zc),
-                (PODIUM_COLUMN_SIZE, PODIUM_COLUMN_SIZE, support_height),
-                metal,
-                rot=(0.0, 0.0, math.atan2(tangent.y, tangent.x))))
+        # In local space the route deliberately takes the long way around the
+        # outward end.  Its two missing inner-cap arcs are replaced below by
+        # the two Bezier connection edges.
+        angle = PODIUM_BEZIER_ATTACH_ANGLE
+        local_points = []
+        append_arc(local_points, Vector((half_width - radius, 0.0)), radius,
+                   -angle, -math.pi / 2.0, 6)
+        append_line(local_points, Vector((half_width - radius, -radius)),
+                    Vector((-half_width + radius, -radius)))
+        append_arc(local_points, Vector((-half_width + radius, 0.0)), radius,
+                   -math.pi / 2.0, -3.0 * math.pi / 2.0, 22)
+        append_line(local_points, Vector((-half_width + radius, radius)),
+                    Vector((half_width - radius, radius)))
+        append_arc(local_points, Vector((half_width - radius, 0.0)), radius,
+                   math.pi / 2.0, angle, 6)
+        route = [world(point) for point in local_points]
 
-    def add_arc_facade(floor_index, side):
-        """Add one continuous curved elevation with a 3 x 3 grid."""
-        floor_z = glass_z0 + floor_index * PODIUM_GLASS_FLOOR_HEIGHT
-        edge_offset = side * (depth / 2.0 - GLASS_T / 2.0)
-        # Offset the sampled circular centreline itself.  Using each chord's
-        # midpoint plus that chord's normal makes a subtly different boundary
-        # at every bay; at the joint this reads as a twisted/triangular facade.
-        # These points stay on one exact concentric arc on both sides.
-        edge_points = [
-            point + Vector((-tangent.y, tangent.x)) * edge_offset
-            for point, tangent in zip(arc_points, arc_tangents)
-        ]
-        for pane_index in range(arc_pane_count):
-            p0, p1 = edge_points[pane_index:pane_index + 2]
-            axis = (p1 - p0).normalized()
-            midpoint = (p0 + p1) / 2.0
-            pane_length = (p1 - p0).length
-            for row_index in range(PODIUM_GLASS_ROWS):
-                row_z0, row_z1 = glass_row_span(floor_z, row_index)
-                glass_parts.append(box(
-                    f"PodiumArc_Glass_{floor_index}_{side}_{pane_index}_{row_index}",
-                    (midpoint.x, midpoint.y, (row_z0 + row_z1) / 2.0),
-                    (pane_length - PODIUM_GLASS_JOINT, GLASS_T,
-                     row_z1 - row_z0),
-                    glass, rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
-            blade_outward = Vector((-axis.y, axis.x)) * side
-            mullion_parts.append(box(
-                f"PodiumArc_Transom_{floor_index}_{side}_{pane_index}",
-                (midpoint.x + blade_outward.x *
-                 (PODIUM_GRID_DEPTH / 2.0 + GLASS_T / 2.0),
-                 midpoint.y + blade_outward.y *
-                 (PODIUM_GRID_DEPTH / 2.0 + GLASS_T / 2.0),
-                 floor_z + PODIUM_GLASS_MODULE),
-                (pane_length, PODIUM_GRID_DEPTH, PODIUM_GRID_W), metal,
+        lower = world(Vector((half_width - radius + radius * math.cos(-angle),
+                              radius * math.sin(-angle))))
+        upper = world(Vector((half_width - radius + radius * math.cos(angle),
+                              radius * math.sin(angle))))
+        # Tangents of this outward capsule route at lower/start and upper/end.
+        lower_tangent = (axis * math.sin(-angle)
+                         - normal * math.cos(-angle)).normalized()
+        upper_tangent = (axis * math.sin(angle)
+                         - normal * math.cos(angle)).normalized()
+        return route, lower, upper, lower_tangent, upper_tangent
+
+    def continuous_outline(extra):
+        first_route, first_lower, first_upper, first_lower_t, first_upper_t = (
+            capsule_outer_route(first, extra))
+        (second_route, second_lower, second_upper, second_lower_t,
+         second_upper_t) = capsule_outer_route(second, extra)
+
+        # The local winding of the second inward round end is reversed in the
+        # open-book plan.  These are therefore the two same-side pairs in world
+        # space: upper-to-upper and lower-to-lower.  Each endpoint handle follows
+        # its round end's tangent, so the slab boundary is G1-continuous at all
+        # four joins rather than forming a V-shaped kink.
+        span_a = second_lower - first_upper
+        span_b = first_lower - second_upper
+        upper_handle = span_a.length * 0.46
+        lower_handle = span_b.length * 0.46
+        edge_a = sample_cubic(
+            first_upper,
+            first_upper + first_upper_t * upper_handle,
+            second_lower - second_lower_t * upper_handle,
+            second_lower)
+        edge_b = sample_cubic(
+            second_upper,
+            second_upper + second_upper_t * lower_handle,
+            first_lower - first_lower_t * lower_handle,
+            first_lower)
+        # The ring is: podium 1 outer boundary, first Bezier edge, podium 2
+        # outer boundary, second Bezier edge.  There are exactly two connecting
+        # faces and neither can introduce an internal rail or a sharp joint.
+        return first_route + edge_a[1:] + second_route[1:] + edge_b[1:-1]
+
+    def ring_prism(name, ring, z0, z1):
+        count = len(ring)
+        vertices = [(point.x, point.y, z0) for point in ring]
+        vertices += [(point.x, point.y, z1) for point in ring]
+        # The joined podium outline is concave.  A single n-gon lets Blender
+        # choose an invalid diagonal across the connection; tessellate it
+        # explicitly so only the area bounded by the two Bezier edges is filled.
+        plan_points = [Vector((point.x, point.y, 0.0)) for point in ring]
+        plan_triangles = tessellate_polygon([plan_points])
+        faces = []
+        for triangle in plan_triangles:
+            indices = list(triangle)
+            faces.append(tuple(reversed(indices)))
+            faces.append(tuple(count + index for index in indices))
+        for index in range(count):
+            next_index = (index + 1) % count
+            faces.append((index, next_index, count + next_index, count + index))
+        mesh = bpy.data.meshes.new(name)
+        mesh.from_pydata(vertices, [], faces)
+        mesh.validate()
+        obj = bpy.data.objects.new(name, mesh)
+        obj.data.materials.append(concrete)
+        bpy.context.collection.objects.link(obj)
+        return obj
+
+    def add_perimeter_glass(ring, floor_index, z0, z1):
+        for edge_index, point in enumerate(ring):
+            nxt = ring[(edge_index + 1) % len(ring)]
+            axis = (nxt - point).normalized()
+            length = (nxt - point).length
+            if length < 0.05:
+                continue
+            midpoint = (point + nxt) / 2.0
+            glass_parts.append(box(
+                f"Podium_Glass_{floor_index}_{edge_index}",
+                (midpoint.x, midpoint.y, (z0 + z1) / 2.0),
+                (max(0.08, length - 0.03), GLASS_T, z1 - z0), glass,
                 rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
-        for joint_index, (point, tangent) in enumerate(
-                zip(arc_points, arc_tangents)):
-            edge_point = edge_points[joint_index]
-            blade_outward = Vector((-tangent.y, tangent.x)) * side
-            blade_centre = edge_point + blade_outward * (
-                PODIUM_GRID_DEPTH / 2.0 + GLASS_T / 2.0)
-            mullion_parts.append(box(
-                f"PodiumArc_Mullion_{floor_index}_{side}_{joint_index}",
-                (blade_centre.x, blade_centre.y,
-                 floor_z + facade_height / 2.0),
-                (PODIUM_GRID_W, PODIUM_GRID_DEPTH, facade_height), metal,
-                rot=(0.0, 0.0, math.atan2(tangent.y, tangent.x))))
 
-    def add_arc_supports(side):
-        edge_offset = side * (depth / 2.0 - PODIUM_COLUMN_SIZE / 2.0)
-        for support_index, (point, tangent) in enumerate(
-                zip(arc_points, arc_tangents)):
-            edge_normal = Vector((-tangent.y, tangent.x))
-            centre = point + edge_normal * edge_offset
-            structure_parts.append(box(
-                f"PodiumArc_Support_{side}_{support_index}",
-                (centre.x, centre.y, support_zc),
-                (PODIUM_COLUMN_SIZE, PODIUM_COLUMN_SIZE, support_height),
-                metal,
-                rot=(0.0, 0.0, math.atan2(tangent.y, tangent.x))))
+    def add_guardrail(ring, floor_index, deck_z):
+        for edge_index, point in enumerate(ring):
+            nxt = ring[(edge_index + 1) % len(ring)]
+            axis = (nxt - point).normalized()
+            length = (nxt - point).length
+            if length < 0.05:
+                continue
+            midpoint = (point + nxt) / 2.0
+            rail_parts.append(box(
+                f"Podium_GalleryRail_{floor_index}_{edge_index}",
+                (midpoint.x, midpoint.y, deck_z + PODIUM_CORRIDOR_RAIL_H),
+                (length, 0.14, 0.14), metal,
+                rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
+            count = max(1, round(length / 4.0))
+            for post_index in range(count + 1):
+                post = point.lerp(nxt, post_index / count)
+                rail_parts.append(box(
+                    f"Podium_GalleryPost_{floor_index}_{edge_index}_{post_index}",
+                    (post.x, post.y, deck_z + PODIUM_CORRIDOR_RAIL_H / 2.0),
+                    (0.12, 0.14, PODIUM_CORRIDOR_RAIL_H), metal,
+                    rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
 
-    def add_arc():
-        """Build the central link as one continuous curved podium volume."""
-        join_clearance = PODIUM_FLOOR_JOIN_CLEARANCE
-        # The glazed zone starts on a real floor plate at z=8 m. The two
-        # upper plates then provide the inter-floor slab and the ceiling at
-        # z=14 m and z=20 m respectively.
-        structure_parts.append(curved_strip(
-            "PodiumArcFloorBase", arc_points, arc_tangents, depth,
-            glass_z0 - SLAB_T - join_clearance,
-            glass_z0 - join_clearance, mats["concrete"]))
-        for floor_index in range(PODIUM_GLASS_FLOORS):
-            floor_z = glass_z0 + floor_index * PODIUM_GLASS_FLOOR_HEIGHT
-            for side in (-1, 1):
-                add_arc_facade(floor_index, side)
-            structure_parts.append(curved_strip(
-                f"PodiumArcFloor_{floor_index}", arc_points, arc_tangents,
-                depth,
-                floor_z + PODIUM_GLASS_FLOOR_HEIGHT - SLAB_T - join_clearance,
-                floor_z + PODIUM_GLASS_FLOOR_HEIGHT - join_clearance,
-                mats["concrete"]))
-        for side in (-1, 1):
-            add_arc_supports(side)
-        join_clearance = PODIUM_FLOOR_JOIN_CLEARANCE
-        structure_parts.append(curved_strip(
-            "PodiumArcGround", arc_points, arc_tangents, depth,
-            -0.30 - join_clearance, -join_clearance, mats["concrete"]))
+    pilotis_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
+    stride = max(1, round(PODIUM_PILOTIS_COLUMN_PITCH / PODIUM_GRID_PITCH))
+    for index in range(0, len(pilotis_ring), stride):
+        point = pilotis_ring[index]
+        column_parts.append(box(
+            f"Podium_PilotisColumn_{index}", (point.x, point.y, H),
+            (PODIUM_PILOTIS_COLUMN_SIZE, PODIUM_PILOTIS_COLUMN_SIZE, 2.0 * H),
+            concrete))
 
-    def add_rectangle(rect_index, centre, width, rect_depth, rotation):
-        """Add a rounded-rectangle glass base and its perimeter structure."""
-        centre = Vector(centre)
-        # Match the connector's bottom plate at the start of the glazed zone.
-        structure_parts.append(rounded_prism(
-            f"PodiumBaseFloor_{rect_index}_Base", centre, width, rect_depth,
-            rotation, PODIUM_CORNER_RADIUS,
-            glass_z0 - SLAB_T, glass_z0, mats["concrete"]))
-        for floor_index in range(PODIUM_GLASS_FLOORS):
-            floor_z = glass_z0 + floor_index * PODIUM_GLASS_FLOOR_HEIGHT
-            add_rounded_facade(
-                f"PodiumBase_{rect_index}", centre, width, rect_depth,
-                rotation, floor_index)
-            structure_parts.append(rounded_prism(
-                f"PodiumBaseFloor_{rect_index}_{floor_index}",
-                centre, width, rect_depth, rotation, PODIUM_CORNER_RADIUS,
-                floor_z + PODIUM_GLASS_FLOOR_HEIGHT - SLAB_T,
-                floor_z + PODIUM_GLASS_FLOOR_HEIGHT, mats["concrete"]))
+    for floor_index in range(PODIUM_PILOTIS_FLOORS, PODIUM_TOTAL_FLOORS):
+        fraction = (floor_index + 1) / PODIUM_TOTAL_FLOORS
+        body_specs = []
+        for centre, top_width, top_depth, rotation in (first, second):
+            width = top_width + 2.0 * PODIUM_BOTTOM_LENGTH_MARGIN * (1.0 - fraction)
+            depth = top_depth + (PODIUM_BOTTOM_DEPTH - top_depth) * (1.0 - fraction)
+            body_specs.append((centre, width, depth, rotation))
+        # Reuse the same two Bezier edges at the facade and at the outer
+        # gallery rail; only the offset changes, so no duplicate inner edge
+        # or railing can appear in the connection zone.
+        saved_first, saved_second = first, second
+        first, second = body_specs
+        facade_ring = continuous_outline(0.0)
+        gallery_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
+        first, second = saved_first, saved_second
+        z0, z1 = floor_index * H, (floor_index + 1) * H
+        # The third podium level starts directly above the two-storey pilotis.
+        # Give its glazed retail enclosure a real continuous floor at z=8 m;
+        # the later plates remain the ceiling/floor plates between upper levels.
+        if floor_index == PODIUM_PILOTIS_FLOORS:
+            slab_parts.append(ring_prism(
+                f"Podium_ContinuousBezierFloor_{floor_index}_Base", gallery_ring,
+                z0 - SLAB_T, z0))
+        slab_parts.append(ring_prism(
+            f"Podium_ContinuousBezierFloor_{floor_index}", gallery_ring,
+            z1 - SLAB_T, z1))
+        add_perimeter_glass(facade_ring, floor_index, z0, z1 - SLAB_T)
+        add_guardrail(gallery_ring, floor_index, z1)
 
-        add_rounded_supports(
-            f"PodiumBase_{rect_index}", centre, width, rect_depth, rotation)
-        structure_parts.append(rounded_prism(
-            f"PodiumBaseGround_{rect_index}",
-            centre, width + 2.0, rect_depth + 2.0, rotation,
-            PODIUM_CORNER_RADIUS + 1.0, -0.30, 0.0, mats["concrete"]))
-
-    # First build the connector, then the two complete tower footprints. The
-    # connector is one smooth arc; the bases deliberately extend 10 m beyond
-    # each tower end while keeping the tower rotations.
-    add_arc()
-    for rect_index, (centre, width, rect_depth, rotation) in enumerate(
-            base_rectangles or ()):
-        add_rectangle(rect_index, centre, width, rect_depth, rotation)
-
-    floor_parts = [part for part in structure_parts
-                   if "Floor" in part.name and "Ground" not in part.name]
-    other_structure_parts = [part for part in structure_parts
-                              if part not in floor_parts]
     return {
         "Podium_Glass": join(glass_parts, "Podium_Glass"),
-        "Podium_Mullions": join(mullion_parts, "Podium_Mullions"),
-        "Podium_Floor_Plates": join(floor_parts, "Podium_Floor_Plates"),
-        "Podium_Structure": join(other_structure_parts, "Podium_Structure"),
+        "Podium_Mullions": join(rail_parts, "Podium_Mullions"),
+        "Podium_Floor_Plates": join(slab_parts, "Podium_Floor_Plates"),
+        "Podium_Structure": join(column_parts, "Podium_Structure"),
     }
 
 
@@ -2128,29 +1998,19 @@ def main():
     podium_first_w = first_w + 2.0 * PODIUM_LENGTH_MARGIN
     podium_second_w = second_w + 2.0 * PODIUM_LENGTH_MARGIN
     podium_depth = PODIUM_DEPTH
-    podium_points = podium_layout(podium_first_w, podium_second_w, second_center,
-                                  second_rotation)
     podium_bases = (
         (Vector((0.0, 0.0)), podium_first_w, podium_depth, 0.0),
         (second_center, podium_second_w, podium_depth, second_rotation),
     )
-    podium_objects = build_podium(
-        podium_points, podium_depth, shared_mats, base_rectangles=podium_bases)
-
-    podium_curve, podium_tangents, _, _ = podium_arc_geometry(podium_points)
+    podium_objects = build_podium(shared_mats, podium_bases)
     first_bounds = footprint_bounds(Vector((0.0, 0.0)), first_w, first_d, 0.0)
     second_bounds = footprint_bounds(second_center, second_w, second_d,
                                      second_rotation)
     podium_footprint = []
-    for point, tangent in zip(podium_curve, podium_tangents):
-        normal = Vector((-tangent.y, tangent.x))
-        podium_footprint.extend((tuple(point + normal * podium_depth / 2.0),
-                                 tuple(point - normal * podium_depth / 2.0)))
     footprint_points = [corner for width, depth, angle, centre in (
         (podium_first_w, podium_depth, 0.0, Vector((0.0, 0.0))),
         (podium_second_w, podium_depth, second_rotation, second_center))
         for corner in rectangle_corners(centre, width, depth, angle)]
-    footprint_points += podium_footprint
     min_x = min(point[0] for point in footprint_points)
     max_x = max(point[0] for point in footprint_points)
     min_y = min(point[1] for point in footprint_points)
@@ -2169,12 +2029,11 @@ def main():
     print(f"overall envelope     : {SITE_WIDTH:.1f} x {SITE_DEPTH:.1f} m")
     print(f"site centre          : x = {SITE_CENTER_X:.1f}, y = {SITE_CENTER_Y:.1f} m")
     print(f"highest core top     : {SITE_TOP_Z:.2f} m")
-    print("=== glass podium ===")
-    print(f"bend angle           : {PODIUM_BEND_ANGLE:.1f} degrees")
-    print(f"depth                : {podium_depth:.1f} m")
-    print(f"bottom open floors   : {PODIUM_PILOTIS_FLOORS}")
-    print(f"glass floors         : {PODIUM_GLASS_FLOORS}")
-    print(f"top open floors      : {PODIUM_OPEN_TOP_FLOORS}")
+    print("=== continuous Bezier podium ===")
+    print(f"top / bottom depth   : {podium_depth:.1f} / {PODIUM_BOTTOM_DEPTH:.1f} m")
+    print(f"open pilotis floors  : {PODIUM_PILOTIS_FLOORS}")
+    print(f"occupied floors      : {PODIUM_OCCUPIED_FLOORS}")
+    print("connection edges     : 2 cubic Bezier curves")
     print(f"base widths          : {podium_first_w:.1f} / {podium_second_w:.1f} m")
     print(f"top / tower soffit   : {PODIUM_TOTAL_FLOORS * H:.1f} m")
     print("=====================\n")
