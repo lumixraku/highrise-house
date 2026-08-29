@@ -90,6 +90,18 @@ PODIUM_GRID_PITCH = 3.00
 PODIUM_CORRIDOR_RAIL_H = 1.20
 PODIUM_PILOTIS_COLUMN_SIZE = 1.20
 PODIUM_PILOTIS_COLUMN_PITCH = 12.0
+# A generous diamond lattice sits on the OUTSIDE of the curtain wall.  The
+# visible glass height is divided into exactly two diamond cells per storey,
+# so the pattern reads as an elegant large-scale facade rather than a fine mesh.
+PODIUM_DIAMOND_ROWS = 2
+PODIUM_DIAMOND_MEMBER = 0.14
+PODIUM_DIAMOND_STANDOFF = 0.08
+# The public podium ceilings use many small exposed globes.  Three-metre pitch
+# is dense enough to read as a galaxy from outside without becoming a luminous
+# ceiling panel; every fixture is on, with a sparse warm-white accent.
+PODIUM_CEILING_LIGHT_PITCH = 3.00
+PODIUM_CEILING_LIGHT_RADIUS = 0.14
+PODIUM_CEILING_LIGHT_EDGE_CLEARANCE = 1.20
 # Use the full upper and lower edges of each inward round end as the two link
 # faces.  One cubic connects the two upper edges and one connects the two lower
 # edges, leaving a broad, continuously filled floor plate between them.
@@ -225,8 +237,24 @@ REFUGE_COL_PITCH = PANE_W         # 4.0 m — a whole number of room windows
 GARDEN_SLAB_T = 0.45       # deeper than a normal plate: it carries soil
 PLANTER_H = 0.85
 PLANTER_W = 2.4
-TREE_H = 4.6               # fits comfortably inside 8 m of double height
-CANOPY_D = 3.2
+# Enclosed refuge trees stay safely below their 8 m void. Trees on the open
+# tower and podium roofs use a broad, foliage-led 8 m waterdrop profile: green
+# begins low and keeps tapering toward one high tip rather than forming a spindle.
+TREE_TRUNK_H = 2.35
+TREE_CANOPY_RADIUS = 1.65
+TREE_CANOPY_H = 3.15
+TREE_CROWN_OVERLAP = 0.28
+TALL_TREE_TOTAL_H = 8.0
+TALL_TREE_CANOPY_H = 6.40
+TALL_TREE_CANOPY_RADIUS = 2.20
+TALL_TREE_TRUNK_H = TALL_TREE_TOTAL_H - TALL_TREE_CANOPY_H + TREE_CROWN_OVERLAP
+# The open podium roof is a real sky garden: individual planted islands leave
+# generous walking room instead of reading as continuous, crowded hedge rows.
+PODIUM_GARDEN_ISLAND_RADIUS = 4.0
+PODIUM_GARDEN_SOIL_RADIUS = 3.50
+PODIUM_GARDEN_ISLANDS_PER_SIDE = 5
+PODIUM_GARDEN_ISLAND_Y = 25.0
+TALL_ROOF_TREES_PER_FACE = 11
 
 # An opening is exactly N panes wide; the mullions cap the joints without
 # consuming any of it.
@@ -490,16 +518,17 @@ SPANDREL_HI_H = H - SPANDREL_HI_Z               # 1.50
 
 assert abs(SPANDREL_LO_H + VENT_H + WIN_H + VENT_H + SPANDREL_HI_H - H) < 1e-9
 
-# House ceiling lighting is three independent rectangular rings of square panels:
-# one just outside the perimeter-column line and two on the room side of it. The
-# panels stay installed when switched off; each fixture keeps a deterministic
-# random lit/warm/off state.
+# House ceiling lighting is seven independent rectangular rings of square
+# panels: one outside the perimeter-column line, one centred on that structural
+# line, and five on the room side of it. The panels stay installed when switched
+# off; each fixture keeps a deterministic random lit/warm/off state.
 CEILING_LIGHT_W = 1.20
 CEILING_LIGHT_D = 1.20
-CEILING_LIGHT_RING_COUNT = 3
+CEILING_LIGHT_INTERIOR_RING_COUNT = 5
+CEILING_LIGHT_RING_COUNT = CEILING_LIGHT_INTERIOR_RING_COUNT + 2
 # Setbacks are measured inward from the glass plane. The outer target is kept
-# outside the column line; the two inner rings are placed at 1/3 and 2/3 of the
-# calculated clear zone between the perimeter columns and the service cores.
+# outside the column line; the five inner rings span the complete clear zone
+# between the perimeter columns and the service cores.
 CEILING_LIGHT_OUTER_TARGET = 0.45
 CEILING_LIGHT_COLUMN_CLEAR = 0.20
 CEILING_LIGHT_CORE_CLEAR = 0.20
@@ -583,6 +612,47 @@ def beam_between(name, start, end, width, mat):
                (width, width, length), mat, rot=rotation)
 
 
+def spheres_mesh(name, centers, radius, mat, segments=10, latitudes=5):
+    """Create many low-poly, genuinely round light globes in one mesh."""
+    if not centers:
+        return None
+    vertices, faces = [], []
+    for center in centers:
+        base = len(vertices)
+        x, y, z = center
+        vertices.append((x, y, z + radius))
+        for latitude in range(1, latitudes):
+            theta = math.pi * latitude / latitudes
+            ring_z = z + radius * math.cos(theta)
+            ring_r = radius * math.sin(theta)
+            for segment in range(segments):
+                phi = 2.0 * math.pi * segment / segments
+                vertices.append((x + ring_r * math.cos(phi),
+                                 y + ring_r * math.sin(phi), ring_z))
+        bottom = len(vertices)
+        vertices.append((x, y, z - radius))
+        first_ring = base + 1
+        last_ring = first_ring + (latitudes - 2) * segments
+        for segment in range(segments):
+            nxt = (segment + 1) % segments
+            faces.append((base, first_ring + nxt, first_ring + segment))
+            faces.append((bottom, last_ring + segment, last_ring + nxt))
+        for latitude in range(latitudes - 2):
+            lower = first_ring + latitude * segments
+            upper = lower + segments
+            for segment in range(segments):
+                nxt = (segment + 1) % segments
+                faces.append((lower + segment, lower + nxt,
+                              upper + nxt, upper + segment))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.validate()
+    obj = bpy.data.objects.new(name, mesh)
+    obj.data.materials.append(mat)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
 def join(objects, name):
     """Join a list of objects into one; returns the merged object."""
     objects = [o for o in objects if o is not None]
@@ -599,6 +669,132 @@ def join(objects, name):
     merged.data.name = name
     bpy.ops.object.select_all(action="DESELECT")
     return merged
+
+
+def tapered_cylinder(name, center, radius_bottom, radius_top, height, mat,
+                     vertices=12):
+    """Create one smooth tapered round element, such as a tree trunk."""
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=vertices, radius1=radius_bottom, radius2=radius_top,
+        depth=height, location=center)
+    obj = bpy.context.object
+    obj.name = name
+    obj.data.name = name
+    obj.data.materials.append(mat)
+    return obj
+
+
+def waterdrop_canopy(name, center, radius, height, mat, segments=16):
+    """Create a broad-bottomed, continuously tapering waterdrop tree crown."""
+    # The lower crown is already wide, like a dense painted tree mass. From its
+    # broadest point it only narrows towards the tip, so it cannot read as the
+    # old symmetric spindle.
+    profile = (
+        (0.72, -0.50), (0.93, -0.43), (1.00, -0.29), (0.96, -0.12),
+        (0.84, 0.06), (0.66, 0.23), (0.43, 0.38), (0.18, 0.47),
+    )
+    verts = [(0.0, 0.0, -height / 2.0)]
+    ring_starts = []
+    for radius_factor, z_factor in profile:
+        ring_starts.append(len(verts))
+        for segment in range(segments):
+            angle = 2.0 * math.pi * segment / segments
+            verts.append((radius * radius_factor * math.cos(angle),
+                          radius * radius_factor * math.sin(angle),
+                          height * z_factor))
+    top_index = len(verts)
+    verts.append((0.0, 0.0, height / 2.0))
+
+    faces = []
+    for segment in range(segments):
+        next_segment = (segment + 1) % segments
+        faces.append((0, ring_starts[0] + next_segment,
+                      ring_starts[0] + segment))
+    for ring_start, next_start in zip(ring_starts, ring_starts[1:]):
+        for segment in range(segments):
+            next_segment = (segment + 1) % segments
+            faces.append((ring_start + segment, ring_start + next_segment,
+                          next_start + next_segment, next_start + segment))
+    for segment in range(segments):
+        next_segment = (segment + 1) % segments
+        faces.append((ring_starts[-1] + segment,
+                      ring_starts[-1] + next_segment, top_index))
+
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], faces)
+    mesh.validate()
+    obj = bpy.data.objects.new(name, mesh)
+    obj.location = center
+    obj.data.materials.append(mat)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
+def planted_tree(name, center, soil_z, foliage_mat, trunk_mat, scale=1.0,
+                 tall=False):
+    """Build one reusable curved tree: tapered trunk below a waterdrop crown."""
+    x, y = center
+    trunk_h = (TALL_TREE_TRUNK_H if tall else TREE_TRUNK_H) * scale
+    canopy_h = (TALL_TREE_CANOPY_H if tall else TREE_CANOPY_H) * scale
+    canopy_radius = (TALL_TREE_CANOPY_RADIUS if tall else TREE_CANOPY_RADIUS) * scale
+    trunk = tapered_cylinder(
+        f"{name}_Trunk", (x, y, soil_z + trunk_h / 2.0),
+        0.20 * scale, 0.12 * scale, trunk_h, trunk_mat)
+    canopy = waterdrop_canopy(
+        f"{name}_WaterdropCanopy",
+        (x, y, soil_z + trunk_h + canopy_h / 2.0 - TREE_CROWN_OVERLAP * scale),
+        canopy_radius, canopy_h, foliage_mat)
+    return canopy, trunk
+
+
+def podium_point(spec, local_x, local_y):
+    """Transform a local point on one podium lobe into the overall plan."""
+    centre, _, _, rotation = spec
+    angle = math.radians(rotation)
+    axis = Vector((math.cos(angle), math.sin(angle)))
+    normal = Vector((-axis.y, axis.x))
+    return Vector(centre) + axis * local_x + normal * local_y
+
+
+def podium_roof_garden(podium_specs, deck_z, mats):
+    """Turn the highest podium deck into a spacious planted sky garden."""
+    planters, foliage, trunks = [], [], []
+    concrete, foliage_mat, trunk_mat = (mats["concrete"], mats["foliage"],
+                                        mats["trunk"])
+    for lobe_index, spec in enumerate(podium_specs):
+        # Place five separate green islands along each outer side of a wing.
+        # The two bands sit beyond the 40 m tower depth, leaving the centre of
+        # the roof clear and distributing trees across the whole sky garden.
+        _, lobe_width, _, _ = spec
+        island_margin = PODIUM_GARDEN_ISLAND_RADIUS + 6.0
+        island_span = lobe_width - 2.0 * island_margin
+        island_xs = [(-island_span / 2.0
+                      + index * island_span
+                      / (PODIUM_GARDEN_ISLANDS_PER_SIDE - 1))
+                     for index in range(PODIUM_GARDEN_ISLANDS_PER_SIDE)]
+        for side in (-1, 1):
+            local_y = side * PODIUM_GARDEN_ISLAND_Y
+            for island_index, local_x in enumerate(island_xs):
+                position = podium_point(spec, local_x, local_y)
+                island_name = f"PodiumRoof_Lobe{lobe_index}_Island_{side}_{island_index}"
+                planter = tapered_cylinder(
+                    f"{island_name}_Planter",
+                    (position.x, position.y, deck_z + PLANTER_H / 2.0),
+                    PODIUM_GARDEN_ISLAND_RADIUS, PODIUM_GARDEN_ISLAND_RADIUS,
+                    PLANTER_H, concrete, vertices=32)
+                planting = tapered_cylinder(
+                    f"{island_name}_Lawn",
+                    (position.x, position.y, deck_z + PLANTER_H + 0.10),
+                    PODIUM_GARDEN_SOIL_RADIUS, PODIUM_GARDEN_SOIL_RADIUS,
+                    0.20, foliage_mat, vertices=32)
+                canopy, trunk = planted_tree(
+                    f"{island_name}_Tree", position,
+                    deck_z + PLANTER_H + 0.20, foliage_mat, trunk_mat,
+                    tall=True)
+                planters.append(planter)
+                foliage.extend((planting, canopy))
+                trunks.append(trunk)
+    return planters, foliage, trunks
 
 
 def col_grid(span):
@@ -749,7 +945,7 @@ def ceiling_light_rng(floor_index, facade_index, room_index, fixture_index):
 
 
 def ceiling_light_ring_setbacks():
-    """Return three collision-free setbacks for the active tower variant."""
+    """Return the exterior plus evenly spaced interior fixture-ring setbacks."""
     # For a side at half-span ``edge``, the outer ring must stay between the
     # facade and the outer face of the perimeter columns. The inner rings must
     # start beyond the column's inner face and end before the nearest core face.
@@ -773,11 +969,20 @@ def ceiling_light_ring_setbacks():
         - max(abs(cx) + CORE_W / 2 for cx in CORE_XS)
         - CEILING_LIGHT_CORE_CLEAR,
     )
-    if outer <= 0.0 or inner_end <= inner_start:
-        raise ValueError("three ceiling-light rings do not fit between structure")
-    inner_span = inner_end - inner_start
-    return (outer, inner_start + inner_span / 3.0,
-            inner_start + 2.0 * inner_span / 3.0)
+    interior_span = inner_end - inner_start
+    required_span = ((CEILING_LIGHT_INTERIOR_RING_COUNT - 1)
+                     * CEILING_LIGHT_D)
+    if outer <= 0.0 or interior_span < required_span:
+        raise ValueError("ceiling-light rings do not fit between structure")
+    # Use the full clear interval for the interior rings.  The previous
+    # ``count + 1`` interpolation packed five 1.20 m fixtures into 5.80 m
+    # with only 0.97 m between centres, so neighbouring rings overlapped.
+    # Putting the first and last rings on the two structural limits gives the
+    # available space back to the layout (1.45 m centre-to-centre here).
+    return (outer,) + tuple(
+        inner_start + interior_span * ring_index
+        / (CEILING_LIGHT_INTERIOR_RING_COUNT - 1)
+        for ring_index in range(CEILING_LIGHT_INTERIOR_RING_COUNT))
 
 
 def ceiling_light_axis_positions(span):
@@ -785,6 +990,35 @@ def ceiling_light_axis_positions(span):
     grid = col_grid(span)
     return [lo + (hi - lo) / 3.0 for lo, hi in zip(grid, grid[1:])] + [
         lo + 2.0 * (hi - lo) / 3.0 for lo, hi in zip(grid, grid[1:])]
+
+
+def ceiling_light_overlaps_column(center, dims):
+    """Return whether a ceiling panel intersects any perimeter support."""
+    x, y = center[:2]
+    half_w, half_d = dims[0] / 2.0, dims[1] / 2.0
+    x_grid, y_grid = col_grid(W), col_grid(D)
+    for i, column_x in enumerate(x_grid):
+        for j, column_y in enumerate(y_grid):
+            if i not in (0, len(x_grid) - 1) and j not in (0, len(y_grid) - 1):
+                continue
+            is_corner = i in (0, len(x_grid) - 1) and j in (0, len(y_grid) - 1)
+            column_size = CORNER_COL_SIZE if is_corner else COL_SIZE
+            half_column = column_size / 2.0
+            if (abs(x - column_x) < half_w + half_column
+                    and abs(y - column_y) < half_d + half_column):
+                return True
+    return False
+
+
+def add_ceiling_light(parts, name, center, dims, floor_index, facade_index,
+                      room_index, ring_index, mats):
+    """Install one panel unless a load-bearing perimeter column occupies it."""
+    if ceiling_light_overlaps_column(center, dims):
+        return
+    parts.append(box(
+        name, center, dims,
+        mats[ceiling_light_state(floor_index, facade_index, room_index,
+                                 ring_index)]))
 
 
 def ceiling_light_state(floor_index, facade_index, room_index, fixture_index):
@@ -797,7 +1031,7 @@ def ceiling_light_state(floor_index, facade_index, room_index, fixture_index):
 
 
 def ceiling_lights(name, z0, floor_index, mats):
-    """Three independent square-panel rings, with two panels per bay."""
+    """Seven panel-light rings, including one that follows the column line."""
     zc = z0 + CEILING_LIGHT_Z
     parts = []
     ring_setbacks = ceiling_light_ring_setbacks()
@@ -811,12 +1045,11 @@ def ceiling_lights(name, z0, floor_index, mats):
                 axes = sorted(axes)[CEILING_LIGHT_CORNER_AXIS_COUNT:
                                    -CEILING_LIGHT_CORNER_AXIS_COUNT]
             for axis_index, y in enumerate(axes):
-                parts.append(box(
-                    f"{name}_ew_{ring_index}_{sx}_{axis_index}",
+                add_ceiling_light(
+                    parts, f"{name}_ew_{ring_index}_{sx}_{axis_index}",
                     (x, y, zc),
                     (CEILING_LIGHT_D, CEILING_LIGHT_W, CEILING_LIGHT_H),
-                    mats[ceiling_light_state(
-                        floor_index, facade_index, axis_index, ring_index)]))
+                    floor_index, facade_index, axis_index, ring_index, mats)
     for facade_index, sy in enumerate((-1, 1), start=2):
         for ring_index, setback in enumerate(ring_setbacks):
             y = sy * (D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2)
@@ -825,12 +1058,11 @@ def ceiling_lights(name, z0, floor_index, mats):
                 axes = sorted(axes)[CEILING_LIGHT_CORNER_AXIS_COUNT:
                                    -CEILING_LIGHT_CORNER_AXIS_COUNT]
             for axis_index, x in enumerate(axes):
-                parts.append(box(
-                    f"{name}_ns_{ring_index}_{sy}_{axis_index}",
+                add_ceiling_light(
+                    parts, f"{name}_ns_{ring_index}_{sy}_{axis_index}",
                     (x, y, zc),
                     (CEILING_LIGHT_W, CEILING_LIGHT_D, CEILING_LIGHT_H),
-                    mats[ceiling_light_state(
-                        floor_index, facade_index, axis_index, ring_index)]))
+                    floor_index, facade_index, axis_index, ring_index, mats)
     # Inner rings continue around the four corners with one panel per corner.
     # The outer ring has no corner panel because the larger corner column occupies
     # that position on the facade side.
@@ -839,12 +1071,30 @@ def ceiling_lights(name, z0, floor_index, mats):
         corner_depth = D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2
         for corner_index, (sx, sy) in enumerate(
                 ((-1, -1), (-1, 1), (1, -1), (1, 1))):
-            parts.append(box(
-                f"{name}_corner_{ring_index}_{corner_index}",
+            add_ceiling_light(
+                parts, f"{name}_corner_{ring_index}_{corner_index}",
                 (sx * inset, sy * corner_depth, zc),
                 (CEILING_LIGHT_W, CEILING_LIGHT_D, CEILING_LIGHT_H),
-                mats[ceiling_light_state(
-                    floor_index, 4, corner_index, ring_index)]))
+                floor_index, 4, corner_index, ring_index, mats)
+
+    # The new ring follows the perimeter support line. Panels sit in the clear
+    # portion of every structural bay; the overlap test above makes the rule
+    # explicit, so a fixture is never generated where a column occupies it.
+    column_ring_index = CEILING_LIGHT_RING_COUNT - 1
+    for facade_index, sx in enumerate((-1, 1)):
+        x = sx * col_grid(W)[-1]
+        for axis_index, y in enumerate(ceiling_light_axis_positions(D)):
+            add_ceiling_light(
+                parts, f"{name}_ew_column_{sx}_{axis_index}", (x, y, zc),
+                (CEILING_LIGHT_D, CEILING_LIGHT_W, CEILING_LIGHT_H),
+                floor_index, facade_index, axis_index, column_ring_index, mats)
+    for facade_index, sy in enumerate((-1, 1), start=2):
+        y = sy * col_grid(D)[-1]
+        for axis_index, x in enumerate(ceiling_light_axis_positions(W)):
+            add_ceiling_light(
+                parts, f"{name}_ns_column_{sy}_{axis_index}", (x, y, zc),
+                (CEILING_LIGHT_W, CEILING_LIGHT_D, CEILING_LIGHT_H),
+                floor_index, facade_index, axis_index, column_ring_index, mats)
     return parts
 
 
@@ -997,7 +1247,8 @@ def grille(name, z0, height, mat, style=None, cell=None, full_corners=False):
     return parts
 
 
-def sky_garden(name, z0, slab_mat, plant_mat, trunk_mat, metal_mat):
+def sky_garden(name, z0, slab_mat, plant_mat, trunk_mat, metal_mat,
+               tall_trees=False):
     """Planted refuge level, open on all four sides.
 
     Laid out as a perimeter walk: planters set just inside the balustrade, trees
@@ -1025,21 +1276,19 @@ def sky_garden(name, z0, slab_mat, plant_mat, trunk_mat, metal_mat):
             (0.0, sy * (D / 2 - inset - PLANTER_W / 2), z0 + PLANTER_H + 0.35),
             (OPEN_W - 4.4, PLANTER_W - 0.3, 0.95), plant_mat))
 
-    # Trees along the long faces. Trunk plus a broad flat canopy — enough to read
-    # as a tree in silhouette at this distance without modelling a real one.
-    n_trees = 7
+    # Trees along the long faces use the shared curved waterdrop silhouette.
+    n_trees = TALL_ROOF_TREES_PER_FACE if tall_trees else 7
     span = OPEN_W - 8.0
     for i in range(n_trees):
         x = -span / 2 + i * span / (n_trees - 1)
         for sy in (-1, 1):
             y = sy * (D / 2 - inset - PLANTER_W / 2)
-            parts_trunk.append(box(
-                f"{name}_Trunk_{i}_{sy}", (x, y, z0 + PLANTER_H + TREE_H / 2.0),
-                (0.34, 0.34, TREE_H), trunk_mat))
-            parts_plant.append(box(
-                f"{name}_Canopy_{i}_{sy}",
-                (x, y, z0 + PLANTER_H + TREE_H + 0.45),
-                (CANOPY_D, min(CANOPY_D, PLANTER_W + 0.8), 1.5), plant_mat))
+            canopy, trunk = planted_tree(
+                f"{name}_Tree_{i}_{sy}", (x, y), z0 + PLANTER_H,
+                plant_mat, trunk_mat, scale=1.0 if tall_trees else 0.82,
+                tall=tall_trees)
+            parts_plant.append(canopy)
+            parts_trunk.append(trunk)
 
     # No separate posts here: the grille's verticals sit on the facade line at the
     # pane pitch and read as the structure carrying the floors above. Adding posts
@@ -1250,7 +1499,8 @@ def structural_trusses(name, mat):
 # Build
 # ---------------------------------------------------------------------------
 
-def build(reset=True, mats=None, add_trusses=False):
+def build(reset=True, mats=None, add_trusses=False,
+          truss_object_name="Structural_Trusses"):
     if reset:
         reset_scene()
 
@@ -1401,7 +1651,8 @@ def build(reset=True, mats=None, add_trusses=False):
         grilles += grille("RoofGarden_Grille", ROOF_GARDEN_Z0,
                           ROOF_GARDEN_GRILLE_H, spandrel, full_corners=True)
         g_struct, g_plant, g_trunk = sky_garden(
-            "RoofGarden", ROOF_GARDEN_Z0, concrete, foliage_mat, trunk_mat, metal)
+            "RoofGarden", ROOF_GARDEN_Z0, concrete, foliage_mat, trunk_mat, metal,
+            tall_trees=True)
         structure += g_struct
         plants += g_plant
         trunks += g_trunk
@@ -1450,7 +1701,7 @@ def build(reset=True, mats=None, add_trusses=False):
         "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
         "Floor_Plates": join(slabs, "Floor_Plates"),
         "Structure": join(structure, "Structure"),
-        "Structural_Trusses": join(trusses, "Structural_Trusses"),
+        truss_object_name: join(trusses, truss_object_name),
     }
     return merged
 
@@ -1543,6 +1794,7 @@ def build_podium(mats, base_rectangles):
     """Build one smooth, two-edge Bezier podium around the two tower bases."""
     glass, metal, concrete = mats["glass"], mats["metal"], mats["concrete"]
     glass_parts, rail_parts, slab_parts, column_parts = [], [], [], []
+    diamond_parts, ceiling_light_parts = [], []
     first, second = base_rectangles[:2]
 
     def sample_cubic(start, control_1, control_2, end, steps=12):
@@ -1679,6 +1931,101 @@ def build_podium(mats, base_rectangles):
                 (max(0.08, length - 0.03), GLASS_T, z1 - z0), glass,
                 rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
 
+    def signed_area(ring):
+        return sum(point.x * ring[(index + 1) % len(ring)].y
+                   - ring[(index + 1) % len(ring)].x * point.y
+                   for index, point in enumerate(ring)) / 2.0
+
+    def add_diamond_grid(ring, floor_index, z0, z1):
+        """Overlay two large rows of rhombi on every glazed facade panel."""
+        outward_sign = -1.0 if signed_area(ring) > 0.0 else 1.0
+        cell_h = (z1 - z0) / PODIUM_DIAMOND_ROWS
+        for edge_index, point in enumerate(ring):
+            nxt = ring[(edge_index + 1) % len(ring)]
+            axis = (nxt - point).normalized()
+            length = (nxt - point).length
+            if length < 0.05:
+                continue
+            # The right-hand normal of a counter-clockwise path is exterior.
+            outward = outward_sign * Vector((axis.y, -axis.x))
+            offset = outward * (GLASS_T / 2.0 + PODIUM_DIAMOND_STANDOFF)
+            left, right = point + offset, nxt + offset
+            middle = (left + right) / 2.0
+            for row in range(PODIUM_DIAMOND_ROWS):
+                bottom_z = z0 + row * cell_h
+                mid_z = bottom_z + cell_h / 2.0
+                top_z = bottom_z + cell_h
+                vertices = (
+                    Vector((left.x, left.y, mid_z)),
+                    Vector((middle.x, middle.y, top_z)),
+                    Vector((right.x, right.y, mid_z)),
+                    Vector((middle.x, middle.y, bottom_z)),
+                )
+                for member, (start, end) in enumerate(zip(
+                        vertices, vertices[1:] + vertices[:1])):
+                    diamond_parts.append(beam_between(
+                        f"Podium_DiamondGrid_{floor_index}_{edge_index}_{row}_{member}",
+                        start, end, PODIUM_DIAMOND_MEMBER, metal))
+
+    def point_inside_ring(point, ring):
+        """Even-odd containment for the concave continuous podium outline."""
+        inside = False
+        x, y = point
+        for index, first_point in enumerate(ring):
+            second_point = ring[(index + 1) % len(ring)]
+            if ((first_point.y > y) != (second_point.y > y)):
+                crossing = ((second_point.x - first_point.x)
+                            * (y - first_point.y)
+                            / (second_point.y - first_point.y) + first_point.x)
+                if x < crossing:
+                    inside = not inside
+        return inside
+
+    def edge_distance(point, start, end):
+        segment = end - start
+        length_sq = segment.length_squared
+        if length_sq <= 1e-9:
+            return (Vector(point) - start).length
+        fraction = min(1.0, max(0.0, (Vector(point) - start).dot(segment)
+                                / length_sq))
+        return (Vector(point) - (start + fraction * segment)).length
+
+    def add_ceiling_globes(ring, floor_index, ceiling_z):
+        """Fill each podium ceiling with small bright, star-like round lamps."""
+        min_x = min(point.x for point in ring)
+        max_x = max(point.x for point in ring)
+        min_y = min(point.y for point in ring)
+        max_y = max(point.y for point in ring)
+        cool, warm = [], []
+        row = 0
+        y = min_y + PODIUM_CEILING_LIGHT_PITCH / 2.0
+        while y < max_y:
+            x = (min_x + PODIUM_CEILING_LIGHT_PITCH / 2.0
+                 + (row % 2) * PODIUM_CEILING_LIGHT_PITCH / 2.0)
+            column = 0
+            while x < max_x:
+                point = (x, y)
+                clearance = min(edge_distance(point, start,
+                                               ring[(index + 1) % len(ring)])
+                                for index, start in enumerate(ring))
+                if (point_inside_ring(point, ring)
+                        and clearance >= PODIUM_CEILING_LIGHT_EDGE_CLEARANCE):
+                    centre = (x, y, ceiling_z - PODIUM_CEILING_LIGHT_RADIUS + 0.01)
+                    (warm if (row * 7 + column + floor_index) % 6 == 0
+                     else cool).append(centre)
+                x += PODIUM_CEILING_LIGHT_PITCH
+                column += 1
+            y += PODIUM_CEILING_LIGHT_PITCH
+            row += 1
+        ceiling_light_parts.extend((
+            spheres_mesh(f"Podium_CeilingLightCool_{floor_index}", cool,
+                         PODIUM_CEILING_LIGHT_RADIUS,
+                         mats["podium_ceiling_light_cool"]),
+            spheres_mesh(f"Podium_CeilingLightWarm_{floor_index}", warm,
+                         PODIUM_CEILING_LIGHT_RADIUS,
+                         mats["podium_ceiling_light_warm"]),
+        ))
+
     def add_guardrail(ring, floor_index, deck_z):
         for edge_index, point in enumerate(ring):
             nxt = ring[(edge_index + 1) % len(ring)]
@@ -1737,13 +2084,24 @@ def build_podium(mats, base_rectangles):
             f"Podium_ContinuousBezierFloor_{floor_index}", gallery_ring,
             z1 - SLAB_T, z1))
         add_perimeter_glass(facade_ring, floor_index, z0, z1 - SLAB_T)
+        add_diamond_grid(facade_ring, floor_index, z0, z1 - SLAB_T)
+        add_ceiling_globes(gallery_ring, floor_index, z1 - SLAB_T)
         add_guardrail(gallery_ring, floor_index, z1)
+
+    garden_planters, garden_foliage, garden_trunks = podium_roof_garden(
+        base_rectangles, PODIUM_TOTAL_FLOORS * H, mats)
 
     return {
         "Podium_Glass": join(glass_parts, "Podium_Glass"),
+        "Podium_Diamond_Grid": join(diamond_parts, "Podium_Diamond_Grid"),
+        "Podium_Ceiling_Lights": join(ceiling_light_parts,
+                                        "Podium_Ceiling_Lights"),
         "Podium_Mullions": join(rail_parts, "Podium_Mullions"),
         "Podium_Floor_Plates": join(slab_parts, "Podium_Floor_Plates"),
         "Podium_Structure": join(column_parts, "Podium_Structure"),
+        "Podium_Garden_Planters": join(garden_planters, "Podium_Garden_Planters"),
+        "Podium_Garden_Foliage": join(garden_foliage, "Podium_Garden_Foliage"),
+        "Podium_Garden_Trunks": join(garden_trunks, "Podium_Garden_Trunks"),
     }
 
 
@@ -1984,7 +2342,8 @@ def main():
     shared_mats = materials.build_all(engine=RENDER_ENGINE, wall_color=WALL_COLOR,
                                       glass_tint=GLASS_TINT)
     configure_tower(2, 18, core_column_bays=2)
-    first_objects = build(reset=False, mats=shared_mats)
+    first_objects = build(reset=False, mats=shared_mats, add_trusses=True,
+                          truss_object_name="Structural_Trusses_LowerTower")
     first_w, first_d, first_top = W, D, CORE_TOP_Z
     report(first_objects, "existing tower (2 groups x 17 floors, 18 rooms)")
 

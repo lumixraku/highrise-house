@@ -57,6 +57,12 @@ GLASS_CLEAR = (1.000, 1.000, 1.000)
 CEILING_LIGHT_DAYLIGHT = (0.600, 0.780, 1.000)
 CEILING_LIGHT_WARM = (1.000, 0.420, 0.150)
 CEILING_LIGHT_STRENGTH = 100.0
+# The podium is public-facing retail rather than private apartments. Its much
+# smaller fittings are deliberately brighter so they read through the clear
+# curtain wall as a dense, star-like ceiling field.
+PODIUM_CEILING_LIGHT_COOL = (0.720, 0.860, 1.000)
+PODIUM_CEILING_LIGHT_WARM = (1.000, 0.620, 0.260)
+PODIUM_CEILING_LIGHT_STRENGTH = 360.0
 MULLION_METAL = (0.155, 0.160, 0.165)   # dark anodised
 GROUND_GREY = (0.115, 0.120, 0.110)
 # Sky-garden planting. Foliage is much darker than it looks to the eye — a leaf
@@ -410,6 +416,12 @@ def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_CLEAR):
             "CeilingLight_Warm", CEILING_LIGHT_WARM),
         "ceiling_light_off": make_ceiling_light(
             "CeilingLight_Off", (0.055, 0.045, 0.035), 0.0),
+        "podium_ceiling_light_cool": make_ceiling_light(
+            "PodiumCeilingLight_Cool", PODIUM_CEILING_LIGHT_COOL,
+            PODIUM_CEILING_LIGHT_STRENGTH),
+        "podium_ceiling_light_warm": make_ceiling_light(
+            "PodiumCeilingLight_Warm", PODIUM_CEILING_LIGHT_WARM,
+            PODIUM_CEILING_LIGHT_STRENGTH),
         "foliage": make_foliage(),
         "trunk": make_trunk(),
         "metal": make_metal(),

@@ -1,5 +1,123 @@
 # Progress
 
+## 2026-08-29 — main — distribute the podium roof garden as individual green islands
+
+Replaced the crowded continuous planter rows with 20 independent circular green
+islands: five evenly spaced trees on each of the two outer garden bands per
+podium wing. Every retained 8 m waterdrop tree now rises from its own 8 m
+diameter circular lawn, framed by a low concrete planter and surrounded by
+clear roof circulation.
+
+Verification:
+- `python3 -m py_compile build_house.py update_trees.py` and `git diff --check`
+  pass.
+- `update_trees.py` opens the existing `.blend` and replaces only the three
+  podium-garden meshes in about 3 seconds; towers, facade, lights, and GLB are
+  untouched.
+- Read-only Blender audit confirms 20 planter disks, 20 waterdrop-tree trunks,
+  and 20 matching lawns/crowns in the saved model.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — make open-air trees eight metres tall
+
+Kept the enclosed refuge-floor trees short, while changing the open tower-roof
+and podium-roof trees to an 8.0 m foliage-led waterdrop profile. Added
+`update_trees.py`, which opens the existing `.blend` and replaces only planting
+and tree meshes; it does not regenerate towers, podium, lighting, or GLB.
+
+Verification:
+- `python3 -m py_compile build_house.py update_trees.py` and `git diff --check`
+  pass.
+- `update_trees.py` refreshed the saved `.blend` in 1.2 seconds without rebuilding
+  the towers, podium, lighting, or GLB.
+- Open-air tree foliage now occupies 6.4 m (80%) of each 8.0 m tree height. The
+  podium beds use 96 trees in two staggered rows, while refuge trees remain at
+  their short enclosed-garden height.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — add matching refuge truss to the lower tower
+
+Added the same refuge-level lateral truss system to the lower, left-hand tower:
+perimeter belt chords and alternating facade diagonals, core-to-perimeter
+outriggers, core-face X braces, and the hidden upper-slab plan X-bracing.  Its
+mesh is kept separate as `Structural_Trusses_LowerTower`, so the established
+`Structural_Trusses` mesh continues to identify the taller right-hand tower.
+
+Verification:
+- `python3 -m py_compile build_house.py materials.py verify_house.py` and
+  `git diff --check` pass.
+- Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`.
+- Geometry audit confirms the lower tower object has 82 members at z=104.56–111.99 m,
+  with the matching facade diagonals, plan-X diaphragm, outriggers and core X braces.
+
+Remaining issues: None for the new lower-tower truss.
+
+## 2026-08-29 — main — spread residential inner ceiling-light rings
+
+Re-spaced the five residential interior light rings across the entire clear
+zone between the perimeter columns and tower cores.  The former `count + 1`
+interpolation left only about 0.97 m between ring centres, causing 1.20 m
+fixtures to overlap; the updated layout uses the full interval (about 1.45 m
+between centres) while preserving the corner and column clearances.
+
+Verification:
+- `python3 -m py_compile build_house.py materials.py verify_house.py` and
+  `git diff --check` pass.
+- Blender regenerated the scene and the no-overlap ceiling-light check passes.
+
+## 2026-08-29 — main — add diamond podium facade lattice and starry ceiling lights
+
+Added a continuous exterior diamond lattice to the podium curtain wall.  The
+visible 6 m glazed storeys are divided into two large diamond cells per bay,
+using broad metal members and a small exterior stand-off so the pattern reads
+clearly across both curved elevations without becoming a fine mesh.
+
+Added a dense field of small round emissive globes beneath the podium ceiling,
+laid out on a 3 m grid with cool-white light as the dominant tone and sparse
+warm-white accents for a luminous, star-filled ceiling effect.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py materials.py verify_house.py` and
+  `git diff --check` pass.
+- Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`.
+- New `Podium_Diamond_Grid` and `Podium_Ceiling_Lights` objects satisfy the
+  count, placement, and material checks in `verify_house.py`.
+
+Remaining issues: legacy verifier assertions for the superseded podium/tower
+assumptions remain unrelated to these additions.
+
+## 2026-08-28 — main — create a dense podium roof garden and extend ceiling lighting
+
+Separated the planting geometry into focused helpers: tapered round trunks,
+smooth waterdrop canopies, continuous rounded planting strips, and a dedicated
+podium-roof garden layout. The old box-tree canopy in the sky gardens and roof
+garden now uses the same waterdrop-tree helper. The top (20 m) podium deck now
+has four continuous planted strips and 32 waterdrop trees, keeping clear paths
+beside the tower cores and the central Bézier connection.
+
+Extended the residential ceiling-light layout from three rings to seven: one
+outer ring, one ring along the perimeter-column line, and five interior rings.
+Every new fixture keeps the original deterministic 36% random on/off and
+warm/daylight selection; an explicit collision test omits any panel that would
+overlap a load-bearing perimeter column.
+
+Verification on branch `main`:
+- `python3 -m py_compile build_house.py verify_house.py` and `git diff --check`
+  passed.
+- Blender regenerated `out/highrise_house.blend` and `out/highrise_house.glb`.
+- Generated model contains `Podium_Garden_Planters`,
+  `Podium_Garden_Foliage`, and `Podium_Garden_Trunks`; their world z ranges
+  begin at 20.00 m, the top podium deck.
+- The generated seven-ring layouts contain 276 fixtures per glazed first-tower
+  floor and 304 per glazed companion-tower floor; column-line fixtures are
+  placed only in clear bays, never in a column footprint.
+
+Remaining issues: `verify_house.py` retains pre-existing checks for the
+superseded seven-level circular-arc podium, so its legacy podium section is not
+expected to pass against the current three-level Bézier podium.
+
 ## 2026-08-28 — main — add the missing third-level retail floor base
 
 Added a continuous 0.22 m floor plate at z=7.78–8.00 m beneath the third

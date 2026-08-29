@@ -56,7 +56,8 @@ GLASS_T = 0.03
 CEILING_LIGHT_W = 1.20
 CEILING_LIGHT_D = 1.20
 CEILING_LIGHT_H = 0.06
-CEILING_LIGHT_RING_COUNT = 3
+CEILING_LIGHT_INTERIOR_RING_COUNT = 5
+CEILING_LIGHT_RING_COUNT = CEILING_LIGHT_INTERIOR_RING_COUNT + 2
 CEILING_LIGHT_OUTER_TARGET = 0.45
 CEILING_LIGHT_COLUMN_CLEAR = 0.20
 CEILING_LIGHT_CORE_CLEAR = 0.20
@@ -129,7 +130,7 @@ def ceiling_light_axis_positions(span):
 
 
 def ceiling_light_ring_setbacks():
-    """Reproduce the generator's three structure-derived ring setbacks."""
+    """Reproduce the generator's exterior and interior ring setbacks."""
     def outer_limit(span):
         column = col_grid(span)[-1]
         return (span / 2 - GLASS_T - CEILING_LIGHT_D - column
@@ -150,17 +151,19 @@ def ceiling_light_ring_setbacks():
         - max(abs(cx) + CORE_W / 2 for cx in CORE_XS)
         - CEILING_LIGHT_CORE_CLEAR,
     )
-    inner_span = inner_end - inner_start
-    return (outer, inner_start + inner_span / 3.0,
-            inner_start + 2.0 * inner_span / 3.0)
+    interior_span = inner_end - inner_start
+    return (outer,) + tuple(
+        inner_start + interior_span * ring_index
+        / (CEILING_LIGHT_INTERIOR_RING_COUNT - 1)
+        for ring_index in range(CEILING_LIGHT_INTERIOR_RING_COUNT))
 
 
 CEILING_LIGHTS_PER_RING = 4 * (
     len(col_grid(W)) - 1 + len(col_grid(D)) - 1)
 CEILING_LIGHTS_PER_RING_COUNTS = (
-    CEILING_LIGHTS_PER_RING,
-    CEILING_LIGHTS_PER_RING - 12,
-    CEILING_LIGHTS_PER_RING - 12,
+    (CEILING_LIGHTS_PER_RING,)
+    + (CEILING_LIGHTS_PER_RING - 12,) * CEILING_LIGHT_INTERIOR_RING_COUNT
+    + (CEILING_LIGHTS_PER_RING,)
 )
 CEILING_LIGHTS_PER_FLOOR = sum(CEILING_LIGHTS_PER_RING_COUNTS)
 
@@ -500,13 +503,96 @@ def main():
     for name in ("Facade_Spandrels", "Windows_Glass", "Window_Mullions",
                  "Vent_Louvres", "Vent_Shadowboxes", "Floor_Plates",
                  "Ceiling_Lights", "Sky_Garden_Grille",
-                 "Structure", "Structural_Trusses", "Podium_Glass",
+                 "Structure", "Structural_Trusses_LowerTower",
+                 "Structural_Trusses", "Podium_Glass",
+                 "Podium_Diamond_Grid", "Podium_Ceiling_Lights",
                  "Podium_Mullions", "Podium_Floor_Plates",
                  "Podium_Structure"):
         check(f"object present: {name}", name in objs)
+    podium_diamond_grid = objs.get("Podium_Diamond_Grid")
+    podium_ceiling_lights = objs.get("Podium_Ceiling_Lights")
+    if podium_diamond_grid:
+        diamond_parts = piece_bounds(podium_diamond_grid)
+        check("podium glass has a two-row diamond lattice on every storey",
+              len(diamond_parts) >= 1000 and len(diamond_parts) % 8 == 0
+              # Members have a 0.14 m square section, so their lower edges
+              # extend 0.07 m below the first theoretical glass line.
+              and gb_low(podium_diamond_grid) >= PODIUM_PILOTIS_FLOORS * H - 0.08
+              and gb_high(podium_diamond_grid) <= PODIUM_TOTAL_FLOORS * H + EPS,
+              f"{len(diamond_parts)} diagonal members, z="
+              f"{gb_low(podium_diamond_grid):.2f}.."
+              f"{gb_high(podium_diamond_grid):.2f} m")
+    if podium_ceiling_lights:
+        globe_parts = piece_bounds(podium_ceiling_lights)
+        globe_materials = {material.name
+                           for material in podium_ceiling_lights.data.materials}
+        check("podium ceiling is filled with bright round galaxy lights",
+              len(globe_parts) >= 1000
+              and {"PodiumCeilingLight_Cool", "PodiumCeilingLight_Warm"}
+              <= globe_materials,
+              f"{len(globe_parts)} globes, materials={sorted(globe_materials)}")
     second_facade = objs.get("Facade_Spandrels.001")
     second_glass = objs.get("Windows_Glass.001")
     second_struct = objs.get("Structure.001")
+    lower_truss_obj = objs.get("Structural_Trusses_LowerTower")
+    if lower_truss_obj:
+        lower_truss_mat = (lower_truss_obj.data.materials[0]
+                           if lower_truss_obj.data.materials else None)
+        lower_facade = objs.get("Facade_Spandrels")
+        lower_facade_mat = (lower_facade.data.materials[0]
+                            if lower_facade and lower_facade.data.materials
+                            else None)
+        check("lower tower refuge truss uses the exterior wall finish",
+              lower_truss_mat is not None and lower_facade_mat is not None
+              and lower_truss_mat == lower_facade_mat,
+              f"truss={lower_truss_mat.name if lower_truss_mat else 'none'}, "
+              f"facade={lower_facade_mat.name if lower_facade_mat else 'none'}")
+        lower_truss_parts = piece_bounds(lower_truss_obj)
+        short_perimeter_bays = TRUSS_CLAW_GROUPS * TRUSS_TRIANGLES_PER_CLAW
+        long_claw_groups = max(TRUSS_CLAW_GROUPS,
+                               round((W - 2 * PIER_LONG)
+                                     / (D - 2 * PIER_SHORT)
+                                     * TRUSS_CLAW_GROUPS))
+        long_perimeter_bays = long_claw_groups * TRUSS_TRIANGLES_PER_CLAW
+        expected_lower_members = (
+            32 + 2 * long_perimeter_bays + 2 * short_perimeter_bays
+            + 2 * (long_claw_groups - 1)
+            + 2 * (TRUSS_CLAW_GROUPS - 1))
+        check("lower tower refuge has the complete matching truss layout",
+              len(lower_truss_parts) == expected_lower_members,
+              f"{len(lower_truss_parts)} members, expected {expected_lower_members}")
+        check("lower tower truss members stay inside its refuge double-height zone",
+              all(lo[2] >= REFUGE_Z0 - 0.05 and hi[2] <= REFUGE_Z1 + 0.05
+                  for lo, hi in lower_truss_parts),
+              f"z={min((lo[2] for lo, _ in lower_truss_parts), default=0):.2f}.."
+              f"{max((hi[2] for _, hi in lower_truss_parts), default=0):.2f} m")
+        lower_diagonals = [p for p in lower_truss_parts
+                           if p[1][2] - p[0][2] > 1.0
+                           and ((p[1][0] - p[0][0] > 5.0
+                                 and p[1][1] - p[0][1] < 1.0)
+                                or (p[1][1] - p[0][1] > 5.0
+                                    and p[1][0] - p[0][0] < 1.0))]
+        lower_plan_x = [p for p in lower_truss_parts
+                        if p[1][0] - p[0][0] > 5.0
+                        and p[1][1] - p[0][1] > 5.0
+                        and p[1][2] - p[0][2] < 0.8]
+        lower_outriggers = [p for p in lower_truss_parts
+                            if p[1][0] - p[0][0] < 1.0
+                            and 5.0 < p[1][1] - p[0][1] < 15.0
+                            and p[1][2] - p[0][2] < 1.0]
+        lower_core_x = [p for p in lower_truss_parts
+                        if p[1][0] - p[0][0] > CORE_W - 2.0
+                        and p[1][1] - p[0][1] < 1.0
+                        and p[1][2] - p[0][2] > 1.0]
+        check("lower tower truss includes facade diagonals, plan-X, outriggers and core X-braces",
+              len(lower_diagonals) == 2 * (long_perimeter_bays
+                                            + short_perimeter_bays) + len(lower_core_x)
+              and len(lower_plan_x) == 8
+              and len(lower_outriggers) == 8
+              and len(lower_core_x) == 8,
+              f"diagonals/plan-X/outriggers/core-X="
+              f"{len(lower_diagonals)}/{len(lower_plan_x)}/"
+              f"{len(lower_outriggers)}/{len(lower_core_x)}")
     check("second tower is generated as a separate mesh",
           second_facade is not None and second_glass is not None
           and second_struct is not None)
@@ -1291,7 +1377,7 @@ def main():
                   for (lo, hi), base in zip(light_bands, floor_bases)),
               f"z={min(light_z):.2f}..{max(light_z):.2f}")
         light_bounds = piece_bounds(lights)
-        check("every glazed floor has three complete light rings",
+        check("every glazed floor has seven complete light rings",
               len(light_bounds) == GLAZED_FLOORS * CEILING_LIGHTS_PER_FLOOR,
               f"{len(light_bounds)} panels = {CEILING_LIGHTS_PER_FLOOR} per "
               f"glazed floor (ring counts={CEILING_LIGHTS_PER_RING_COUNTS})")
@@ -1309,14 +1395,14 @@ def main():
             patterns.setdefault(z, set()).add(
                 (round((lo[0] + hi[0]) / 2, 2),
                  round((lo[1] + hi[1]) / 2, 2)))
-        check("every glazed floor installs its complete three-ring pattern",
+        check("every glazed floor installs its complete seven-ring pattern",
               len(patterns) == GLAZED_FLOORS
               and all(len(points) == CEILING_LIGHTS_PER_FLOOR
                       for points in patterns.values()),
               f"{len(patterns)} floors, counts="
               f"{sorted(set(map(len, patterns.values())))}")
         unique_patterns = {tuple(sorted(points)) for points in patterns.values()}
-        check("every glazed floor repeats the same even three-ring pattern",
+        check("every glazed floor repeats the same even seven-ring pattern",
               len(unique_patterns) == 1,
               f"{len(unique_patterns)} geometric patterns over "
               f"{GLAZED_FLOORS} glazed floors")
@@ -1361,6 +1447,7 @@ def main():
                       for setback in expected_setbacks]
         expected_y = [D / 2 - GLASS_T - setback - CEILING_LIGHT_D / 2
                       for setback in expected_setbacks]
+        column_x, column_y = col_grid(W)[-1], col_grid(D)[-1]
         ring_counts_by_floor = {}
         corner_counts_by_floor = {}
         axis_misses = 0
@@ -1371,6 +1458,19 @@ def main():
             for lo, hi in pieces:
                 cx = (lo[0] + hi[0]) / 2
                 cy = (lo[1] + hi[1]) / 2
+                on_column_x = abs(abs(cx) - column_x) < 0.02
+                on_column_y = abs(abs(cy) - column_y) < 0.02
+                if on_column_x ^ on_column_y:
+                    ring_index = CEILING_LIGHT_RING_COUNT - 1
+                    axis = cy if on_column_x else cx
+                    axis_positions = ceiling_light_axis_positions(
+                        D if on_column_x else W)
+                    counts[ring_index] += 1
+                    observed_ring_indices.add(ring_index)
+                    if not any(abs(axis - expected_axis) < 0.02
+                               for expected_axis in axis_positions):
+                        axis_misses += 1
+                    continue
                 x_matches = [index for index, expected in enumerate(expected_x)
                              if abs(abs(cx) - expected) < 0.02]
                 y_matches = [index for index, expected in enumerate(expected_y)
@@ -1403,15 +1503,16 @@ def main():
                     axis_misses += 1
             ring_counts_by_floor[z] = counts
             corner_counts_by_floor[z] = corner_counts
-        check("each floor has exactly three distinct depth rings",
+        check("each floor has the six depth rings plus the column ring",
               observed_ring_indices == set(range(CEILING_LIGHT_RING_COUNT)),
               f"rings={sorted(observed_ring_indices)}")
         check("each ring has the calculated bay and corner light count",
               all(counts == list(CEILING_LIGHTS_PER_RING_COUNTS)
                   for counts in ring_counts_by_floor.values()),
               f"counts={sorted(set(tuple(counts) for counts in ring_counts_by_floor.values()))}")
-        check("inner rings have one non-overlapping lamp at each corner",
-              all(counts == [0, 4, 4]
+        check("all interior rings have one non-overlapping lamp at each corner",
+              all(counts == ([0] + [4] * CEILING_LIGHT_INTERIOR_RING_COUNT
+                               + [0])
                   for counts in corner_counts_by_floor.values()),
               f"corner counts={sorted(set(tuple(counts) for counts in corner_counts_by_floor.values()))}")
         check("every light sits at a bay 1/3 or 2/3 axis",
@@ -1419,8 +1520,8 @@ def main():
               f"{axis_misses} fixtures are off the calculated bay axes")
         projected_blocked = 0
         column_half = (COL_SIZE + CEILING_LIGHT_W) / 2.0
-        ring_x = expected_x
-        ring_y = expected_y
+        ring_x = expected_x + [column_x]
+        ring_y = expected_y + [column_y]
         for lo, hi in light_bounds:
             cx = (lo[0] + hi[0]) / 2
             cy = (lo[1] + hi[1]) / 2
@@ -1438,7 +1539,7 @@ def main():
               projected_blocked == 0,
               f"{projected_blocked} of {len(light_bounds)} panels overlap a "
               "column's projected 1.60 m section")
-        check("House lights use the three calculated depth setbacks",
+        check("House lights use the seven calculated setbacks plus column ring",
               observed_ring_indices == set(range(CEILING_LIGHT_RING_COUNT)),
               f"setbacks={[round(value, 2) for value in expected_setbacks]} m")
         state_faces = {}
