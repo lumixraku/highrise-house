@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-08-29 — main — light the open podium ceiling
+
+Added the same dense cool-white and warm-accent round star lights beneath the
+8 m soffit over the two-storey open podium, keeping the undercroft bright for
+parking, play, or skating use after dark. Added `update_podium_pilotis_lights.py`
+to replace only this new light mesh in the existing `.blend`.
+
+Verification:
+- `python3 -m py_compile build_house.py update_podium_pilotis_lights.py` and
+  `git diff --check` pass.
+- The local update completed in about 1 second, without regenerating the site or
+  exporting GLB.
+- Read-only Blender audit confirms 1,996 round globes at z=7.51–7.79 m, directly
+  beneath the 8 m pilotis ceiling, using both podium star-light materials.
+
+Remaining issues: None.
+
 ## 2026-08-29 — main — distribute the podium roof garden as individual green islands
 
 Replaced the crowded continuous planter rows with 20 independent circular green

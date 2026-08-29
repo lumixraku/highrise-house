@@ -2057,6 +2057,24 @@ def build_podium(mats, base_rectangles):
             (PODIUM_PILOTIS_COLUMN_SIZE, PODIUM_PILOTIS_COLUMN_SIZE, 2.0 * H),
             concrete))
 
+    # The lowest occupied plate is the ceiling of the two-storey open podium.
+    # Give that whole soffit the same bright star-field as the glazed levels so
+    # the pilotis stays usable for parking, play, or skating after dark.
+    pilotis_fraction = (PODIUM_PILOTIS_FLOORS + 1) / PODIUM_TOTAL_FLOORS
+    pilotis_specs = []
+    for centre, top_width, top_depth, rotation in (first, second):
+        pilotis_specs.append((
+            centre,
+            top_width + 2.0 * PODIUM_BOTTOM_LENGTH_MARGIN * (1.0 - pilotis_fraction),
+            top_depth + (PODIUM_BOTTOM_DEPTH - top_depth) * (1.0 - pilotis_fraction),
+            rotation))
+    saved_first, saved_second = first, second
+    first, second = pilotis_specs
+    pilotis_ceiling_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
+    first, second = saved_first, saved_second
+    add_ceiling_globes(pilotis_ceiling_ring, PODIUM_PILOTIS_FLOORS,
+                       PODIUM_PILOTIS_FLOORS * H - SLAB_T)
+
     for floor_index in range(PODIUM_PILOTIS_FLOORS, PODIUM_TOTAL_FLOORS):
         fraction = (floor_index + 1) / PODIUM_TOTAL_FLOORS
         body_specs = []
