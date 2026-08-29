@@ -130,6 +130,16 @@ def make_metal(name="LouvreMetal", color=MULLION_METAL):
     return mat
 
 
+def make_podium_diamond(name="PodiumDiamondWhite"):
+    """Bright powder-coated finish for the podium's external diamond lattice."""
+    mat = _new(name)
+    b = _bsdf(mat)
+    _set(b, "Base Color", (0.955, 0.955, 0.955, 1.0))
+    _set(b, "Metallic", 0.18)
+    _set(b, "Roughness", 0.34)
+    return mat
+
+
 def make_dark(name="Shadowbox", color=(0.012, 0.013, 0.014)):
     mat = _new(name)
     b = _bsdf(mat)
@@ -425,6 +435,7 @@ def build_all(engine="CYCLES", wall_color=WARM_STONE, glass_tint=GLASS_CLEAR):
         "foliage": make_foliage(),
         "trunk": make_trunk(),
         "metal": make_metal(),
+        "podium_diamond": make_podium_diamond(),
         "dark": make_dark(),
         "ground": make_ground(),
     }

@@ -94,7 +94,7 @@ PODIUM_PILOTIS_COLUMN_PITCH = 12.0
 # visible glass height is divided into exactly two diamond cells per storey,
 # so the pattern reads as an elegant large-scale facade rather than a fine mesh.
 PODIUM_DIAMOND_ROWS = 2
-PODIUM_DIAMOND_MEMBER = 0.14
+PODIUM_DIAMOND_MEMBER = 0.32
 PODIUM_DIAMOND_STANDOFF = 0.08
 # The public podium ceilings use many small exposed globes.  Three-metre pitch
 # is dense enough to read as a galaxy from outside without becoming a luminous
@@ -284,6 +284,11 @@ CORNER_COL_SIZE = 2.00  # exactly fills each retained 2 m corner facade margin
 COL_SPACING = 9.0     # target column grid spacing
 COL_CLEAR_INSET = 2.0 # clear distance from facade plane to outer column face
 COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
+# The last open storey above the podium is recast as a facade-aligned arcade.
+# Its piers bridge the original inset column line to the exterior plane, while
+# each half-round arch spans precisely between the inner faces of its piers.
+PILOTIS_ARCADE_PIER_DEPTH = COL_CLEAR_INSET + COL_SIZE
+PILOTIS_ARCADE_SEGMENTS = 16
 
 # --- service cores ----------------------------------------------------------
 # TWO cores rather than one central slab, and the reason is capacity and egress,
@@ -1495,6 +1500,99 @@ def structural_trusses(name, mat):
     return [part for part in parts if part is not None]
 
 
+def semicircular_arch(name, start, end, outward, spring_z, top_z, mat):
+    """Fill the solid spandrel above one half-round arcade opening."""
+    axis = (end - start).normalized()
+    centre = (start + end) / 2.0
+    outer_radius = (end - start).length / 2.0
+    front_offset = outward * (PILOTIS_ARCADE_PIER_DEPTH / 2.0)
+    back_offset = -front_offset
+    vertices = []
+    for index in range(PILOTIS_ARCADE_SEGMENTS + 1):
+        theta = math.pi * index / PILOTIS_ARCADE_SEGMENTS
+        direction = axis * math.cos(theta)
+        outer = centre + direction * outer_radius
+        vertices.extend((
+            (outer.x + front_offset.x, outer.y + front_offset.y,
+             top_z),
+            (outer.x + back_offset.x, outer.y + back_offset.y,
+             top_z),
+            (outer.x + front_offset.x, outer.y + front_offset.y,
+             spring_z + outer_radius * math.sin(theta)),
+            (outer.x + back_offset.x, outer.y + back_offset.y,
+             spring_z + outer_radius * math.sin(theta)),
+        ))
+    faces = []
+    for index in range(PILOTIS_ARCADE_SEGMENTS):
+        base, nxt = 4 * index, 4 * (index + 1)
+        faces.extend((
+            (base, nxt, nxt + 2, base + 2),
+            (base + 1, base + 3, nxt + 3, nxt + 1),
+            (base, base + 1, nxt + 1, nxt),
+            (base + 2, nxt + 2, nxt + 3, base + 3),
+        ))
+    faces.extend(((0, 2, 3, 1),
+                  (4 * PILOTIS_ARCADE_SEGMENTS,
+                   4 * PILOTIS_ARCADE_SEGMENTS + 3,
+                   4 * PILOTIS_ARCADE_SEGMENTS + 2,
+                   4 * PILOTIS_ARCADE_SEGMENTS + 1)))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.validate()
+    obj = bpy.data.objects.new(name, mesh)
+    obj.data.materials.append(mat)
+    bpy.context.collection.objects.link(obj)
+    return obj
+
+
+def pilotis_arcades(mat):
+    """Wrap the open storey over the podium in triumphal-arch-like arcades."""
+    parts = []
+    arcade_z0 = PODIUM_TOTAL_FLOORS * H
+    arcade_z1 = BASE_Z + H
+
+    def side(name, positions, face_coordinate, along_x, side_sign):
+        outward = Vector((0.0, side_sign)) if along_x else Vector((side_sign, 0.0))
+        for index, (coordinate, pier_width) in enumerate(positions):
+            if along_x:
+                centre = (coordinate,
+                          face_coordinate - side_sign * PILOTIS_ARCADE_PIER_DEPTH / 2.0)
+                dimensions = (pier_width, PILOTIS_ARCADE_PIER_DEPTH,
+                              arcade_z1 - arcade_z0)
+            else:
+                centre = (face_coordinate - side_sign * PILOTIS_ARCADE_PIER_DEPTH / 2.0,
+                          coordinate)
+                dimensions = (PILOTIS_ARCADE_PIER_DEPTH, pier_width,
+                              arcade_z1 - arcade_z0)
+            parts.append(box(f"{name}_Pier_{index}",
+                             (centre[0], centre[1], (arcade_z0 + arcade_z1) / 2.0),
+                             dimensions, mat))
+        for index, ((first, _), (second, _)) in enumerate(zip(positions,
+                                                                 positions[1:])):
+            arch_plane = (face_coordinate
+                          - side_sign * PILOTIS_ARCADE_PIER_DEPTH / 2.0)
+            start_coordinate = first + COL_SIZE / 2.0
+            end_coordinate = second - COL_SIZE / 2.0
+            start = (Vector((start_coordinate, arch_plane)) if along_x
+                     else Vector((arch_plane, start_coordinate)))
+            end = (Vector((end_coordinate, arch_plane)) if along_x
+                   else Vector((arch_plane, end_coordinate)))
+            outer_radius = (end - start).length / 2.0
+            parts.append(semicircular_arch(f"{name}_Arch_{index}", start, end,
+                                            outward, arcade_z1 - outer_radius - 0.40,
+                                            arcade_z1, mat))
+
+    # These centres match the real corner and perimeter support locations. The
+    # thicker facade piers now extend each recessed support out to the tower skin.
+    long_positions = [(x, COL_SIZE) for x in col_grid(W)]
+    short_positions = [(y, COL_SIZE) for y in col_grid(D)]
+    side("PilotisArcade_S", long_positions, -D / 2.0, True, -1.0)
+    side("PilotisArcade_N", long_positions, D / 2.0, True, 1.0)
+    side("PilotisArcade_W", short_positions, -W / 2.0, False, -1.0)
+    side("PilotisArcade_E", short_positions, W / 2.0, False, 1.0)
+    return join(parts, "Pilotis_Arcades")
+
+
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
@@ -1553,6 +1651,8 @@ def build(reset=True, mats=None, add_trusses=False,
             (x, y, tower_column_z0 + tower_column_height / 2.0),
             (CORNER_COL_SIZE, CORNER_COL_SIZE, tower_column_height), spandrel))
 
+    pilotis_arcade = pilotis_arcades(spandrel)
+
     # Service cores rising through the open floors (stairs / lifts).
     structure += cores("Core", 0.0, BASE_Z, concrete)
 
@@ -1562,10 +1662,6 @@ def build(reset=True, mats=None, add_trusses=False,
             structure.append(box(
                 f"CoreLanding_{k}_{f}", (cx, 0.0, f * H),
                 (CORE_W - 2 * CORE_T, CORE_D - 2 * CORE_T, 0.18), concrete))
-
-    # Underside slab of the tower, slightly oversized as a drip edge.
-    structure.append(box("TowerSoffit", (0.0, 0.0, BASE_Z - SLAB_T / 2.0),
-                         (W + 0.5, D + 0.5, SLAB_T), concrete))
 
     # --- tower: the solid core of the building -------------------------
     # Windowless floors: the transition floor above the pilotis and the blank
@@ -1610,6 +1706,12 @@ def build(reset=True, mats=None, add_trusses=False,
             continue
 
         if f in blank_floors:
+            if f == 0:
+                # The elevated triumphal arcade occupies this band, so it
+                # supplies the facade rather than a continuous blank wall.
+                slabs.append(box(f"{tag}_Slab", (0.0, 0.0, z0 + H - SLAB_T / 2.0),
+                                 (W - 2 * WALL_T, D - 2 * WALL_T, SLAB_T), concrete))
+                continue
             # Blank floor: solid wall the whole storey height, no openings.
             walls += facade_ring(f"{tag}_Blank", z0, H, WALL_T, spandrel)
             if not (SKY_GARDEN and f + 1 in REFUGE_START_BY_FLOOR):
@@ -1701,6 +1803,7 @@ def build(reset=True, mats=None, add_trusses=False,
         "Vent_Shadowboxes": join(backs, "Vent_Shadowboxes"),
         "Floor_Plates": join(slabs, "Floor_Plates"),
         "Structure": join(structure, "Structure"),
+        "Pilotis_Arcades": pilotis_arcade,
         truss_object_name: join(trusses, truss_object_name),
     }
     return merged
@@ -1790,23 +1893,43 @@ def rounded_prism(name, center, width, depth, rotation_deg, radius, z0, z1, mat)
     return obj
 
 
-def build_podium(mats, base_rectangles):
+def build_podium(mats, base_rectangles, diamond_grid_only=False):
     """Build one smooth, two-edge Bezier podium around the two tower bases."""
-    glass, metal, concrete = mats["glass"], mats["metal"], mats["concrete"]
+    diamond_mat = mats["podium_diamond"]
+    if not diamond_grid_only:
+        glass, metal, concrete = (mats["glass"], mats["metal"],
+                                  mats["concrete"])
     glass_parts, rail_parts, slab_parts, column_parts = [], [], [], []
     diamond_parts, ceiling_light_parts = [], []
     first, second = base_rectangles[:2]
 
-    def sample_cubic(start, control_1, control_2, end, steps=12):
-        points = []
-        for index in range(steps + 1):
-            t = index / steps
+    def sample_cubic(start, control_1, control_2, end):
+        """Sample a cubic by approximately equal three-metre arc lengths."""
+        dense = []
+        for index in range(129):
+            t = index / 128
             u = 1.0 - t
-            points.append(u**3 * start + 3.0 * u*u*t * control_1
-                          + 3.0 * u*t*t * control_2 + t**3 * end)
+            dense.append(u**3 * start + 3.0 * u*u*t * control_1
+                         + 3.0 * u*t*t * control_2 + t**3 * end)
+        distances = [0.0]
+        for first_point, second_point in zip(dense, dense[1:]):
+            distances.append(distances[-1] + (second_point - first_point).length)
+        steps = max(1, round(distances[-1] / PODIUM_GRID_PITCH))
+        points = [dense[0]]
+        segment = 0
+        for index in range(1, steps):
+            target = distances[-1] * index / steps
+            while distances[segment + 1] < target:
+                segment += 1
+            fraction = ((target - distances[segment])
+                        / (distances[segment + 1] - distances[segment]))
+            points.append(dense[segment].lerp(dense[segment + 1], fraction))
+        points.append(dense[-1])
         return points
 
-    def append_arc(points, centre, radius, start_angle, end_angle, steps):
+    def append_arc(points, centre, radius, start_angle, end_angle):
+        steps = max(1, round(abs(end_angle - start_angle) * radius
+                             / PODIUM_GRID_PITCH))
         for index in range(steps + 1):
             angle = start_angle + (end_angle - start_angle) * index / steps
             point = centre + radius * Vector((math.cos(angle), math.sin(angle)))
@@ -1840,15 +1963,15 @@ def build_podium(mats, base_rectangles):
         angle = PODIUM_BEZIER_ATTACH_ANGLE
         local_points = []
         append_arc(local_points, Vector((half_width - radius, 0.0)), radius,
-                   -angle, -math.pi / 2.0, 6)
+                   -angle, -math.pi / 2.0)
         append_line(local_points, Vector((half_width - radius, -radius)),
                     Vector((-half_width + radius, -radius)))
         append_arc(local_points, Vector((-half_width + radius, 0.0)), radius,
-                   -math.pi / 2.0, -3.0 * math.pi / 2.0, 22)
+                   -math.pi / 2.0, -3.0 * math.pi / 2.0)
         append_line(local_points, Vector((-half_width + radius, radius)),
                     Vector((half_width - radius, radius)))
         append_arc(local_points, Vector((half_width - radius, 0.0)), radius,
-                   math.pi / 2.0, angle, 6)
+                   math.pi / 2.0, angle)
         route = [world(point) for point in local_points]
 
         lower = world(Vector((half_width - radius + radius * math.cos(-angle),
@@ -1965,7 +2088,7 @@ def build_podium(mats, base_rectangles):
                         vertices, vertices[1:] + vertices[:1])):
                     diamond_parts.append(beam_between(
                         f"Podium_DiamondGrid_{floor_index}_{edge_index}_{row}_{member}",
-                        start, end, PODIUM_DIAMOND_MEMBER, metal))
+                        start, end, PODIUM_DIAMOND_MEMBER, diamond_mat))
 
     def point_inside_ring(point, ring):
         """Even-odd containment for the concave continuous podium outline."""
@@ -2048,32 +2171,33 @@ def build_podium(mats, base_rectangles):
                     (0.12, 0.14, PODIUM_CORRIDOR_RAIL_H), metal,
                     rot=(0.0, 0.0, math.atan2(axis.y, axis.x))))
 
-    pilotis_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
-    stride = max(1, round(PODIUM_PILOTIS_COLUMN_PITCH / PODIUM_GRID_PITCH))
-    for index in range(0, len(pilotis_ring), stride):
-        point = pilotis_ring[index]
-        column_parts.append(box(
-            f"Podium_PilotisColumn_{index}", (point.x, point.y, H),
-            (PODIUM_PILOTIS_COLUMN_SIZE, PODIUM_PILOTIS_COLUMN_SIZE, 2.0 * H),
-            concrete))
+    if not diamond_grid_only:
+        pilotis_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
+        stride = max(1, round(PODIUM_PILOTIS_COLUMN_PITCH / PODIUM_GRID_PITCH))
+        for index in range(0, len(pilotis_ring), stride):
+            point = pilotis_ring[index]
+            column_parts.append(box(
+                f"Podium_PilotisColumn_{index}", (point.x, point.y, H),
+                (PODIUM_PILOTIS_COLUMN_SIZE, PODIUM_PILOTIS_COLUMN_SIZE, 2.0 * H),
+                concrete))
 
-    # The lowest occupied plate is the ceiling of the two-storey open podium.
-    # Give that whole soffit the same bright star-field as the glazed levels so
-    # the pilotis stays usable for parking, play, or skating after dark.
-    pilotis_fraction = (PODIUM_PILOTIS_FLOORS + 1) / PODIUM_TOTAL_FLOORS
-    pilotis_specs = []
-    for centre, top_width, top_depth, rotation in (first, second):
-        pilotis_specs.append((
-            centre,
-            top_width + 2.0 * PODIUM_BOTTOM_LENGTH_MARGIN * (1.0 - pilotis_fraction),
-            top_depth + (PODIUM_BOTTOM_DEPTH - top_depth) * (1.0 - pilotis_fraction),
-            rotation))
-    saved_first, saved_second = first, second
-    first, second = pilotis_specs
-    pilotis_ceiling_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
-    first, second = saved_first, saved_second
-    add_ceiling_globes(pilotis_ceiling_ring, PODIUM_PILOTIS_FLOORS,
-                       PODIUM_PILOTIS_FLOORS * H - SLAB_T)
+        # The lowest occupied plate is the ceiling of the two-storey open podium.
+        # Give that whole soffit the same bright star-field as the glazed levels so
+        # the pilotis stays usable for parking, play, or skating after dark.
+        pilotis_fraction = (PODIUM_PILOTIS_FLOORS + 1) / PODIUM_TOTAL_FLOORS
+        pilotis_specs = []
+        for centre, top_width, top_depth, rotation in (first, second):
+            pilotis_specs.append((
+                centre,
+                top_width + 2.0 * PODIUM_BOTTOM_LENGTH_MARGIN * (1.0 - pilotis_fraction),
+                top_depth + (PODIUM_BOTTOM_DEPTH - top_depth) * (1.0 - pilotis_fraction),
+                rotation))
+        saved_first, saved_second = first, second
+        first, second = pilotis_specs
+        pilotis_ceiling_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
+        first, second = saved_first, saved_second
+        add_ceiling_globes(pilotis_ceiling_ring, PODIUM_PILOTIS_FLOORS,
+                           PODIUM_PILOTIS_FLOORS * H - SLAB_T)
 
     for floor_index in range(PODIUM_PILOTIS_FLOORS, PODIUM_TOTAL_FLOORS):
         fraction = (floor_index + 1) / PODIUM_TOTAL_FLOORS
@@ -2088,23 +2212,30 @@ def build_podium(mats, base_rectangles):
         saved_first, saved_second = first, second
         first, second = body_specs
         facade_ring = continuous_outline(0.0)
-        gallery_ring = continuous_outline(PODIUM_CORRIDOR_DEPTH)
+        gallery_ring = (continuous_outline(PODIUM_CORRIDOR_DEPTH)
+                        if not diamond_grid_only else None)
         first, second = saved_first, saved_second
         z0, z1 = floor_index * H, (floor_index + 1) * H
-        # The third podium level starts directly above the two-storey pilotis.
-        # Give its glazed retail enclosure a real continuous floor at z=8 m;
-        # the later plates remain the ceiling/floor plates between upper levels.
-        if floor_index == PODIUM_PILOTIS_FLOORS:
+        if not diamond_grid_only:
+            # The third podium level starts directly above the two-storey pilotis.
+            # Give its glazed retail enclosure a real continuous floor at z=8 m;
+            # the later plates remain the ceiling/floor plates between upper levels.
+            if floor_index == PODIUM_PILOTIS_FLOORS:
+                slab_parts.append(ring_prism(
+                    f"Podium_ContinuousBezierFloor_{floor_index}_Base", gallery_ring,
+                    z0 - SLAB_T, z0))
             slab_parts.append(ring_prism(
-                f"Podium_ContinuousBezierFloor_{floor_index}_Base", gallery_ring,
-                z0 - SLAB_T, z0))
-        slab_parts.append(ring_prism(
-            f"Podium_ContinuousBezierFloor_{floor_index}", gallery_ring,
-            z1 - SLAB_T, z1))
-        add_perimeter_glass(facade_ring, floor_index, z0, z1 - SLAB_T)
+                f"Podium_ContinuousBezierFloor_{floor_index}", gallery_ring,
+                z1 - SLAB_T, z1))
+            add_perimeter_glass(facade_ring, floor_index, z0, z1 - SLAB_T)
         add_diamond_grid(facade_ring, floor_index, z0, z1 - SLAB_T)
-        add_ceiling_globes(gallery_ring, floor_index, z1 - SLAB_T)
-        add_guardrail(gallery_ring, floor_index, z1)
+        if not diamond_grid_only:
+            add_ceiling_globes(gallery_ring, floor_index, z1 - SLAB_T)
+            add_guardrail(gallery_ring, floor_index, z1)
+
+    if diamond_grid_only:
+        return {"Podium_Diamond_Grid": join(diamond_parts,
+                                               "Podium_Diamond_Grid")}
 
     garden_planters, garden_foliage, garden_trunks = podium_roof_garden(
         base_rectangles, PODIUM_TOTAL_FLOORS * H, mats)

@@ -1,5 +1,155 @@
 # Progress
 
+## 2026-08-29 — main — equalize the diamond-grid density through the Bezier links
+
+Changed the continuous podium outline sampling so every line, arc, and Bezier
+connection is divided by approximately equal 3 m arc lengths before the two-row
+diamond lattice is applied. Rebuilt only `Podium_Diamond_Grid` in the existing
+scene; the white 0.32 m members remain unchanged.
+
+Verification:
+- `python3 -m py_compile build_house.py materials.py
+  update_podium_diamond_grid.py` and `git diff --check` pass.
+- Local lattice-only rebuild completed in about 6 seconds, creating 4,568
+  members. Its diagonal member lengths range only from 1.736 m to 1.798 m,
+  including the former sparse Bezier links.
+- Saved Layout view remains unchanged at location `(62.8766, 29.0394,
+  134.9700)`, distance `290.9078`, and the same perspective rotation.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — brighten and thicken the podium diamond lattice
+
+Changed only the external podium diamond-grid members to a distinct bright
+white, powder-coated finish and increased their square face width from 0.14 m
+to 0.32 m. The two-row diamond layout and all other dark metal details remain
+unchanged. Added `update_podium_diamond_grid.py` so this exact local update is
+reproducible without rebuilding the scene or exporting GLB.
+
+Verification:
+- `python3 -m py_compile build_house.py materials.py
+  update_podium_diamond_grid.py` and `git diff --check` pass.
+- The local updater modified only `Podium_Diamond_Grid` in the saved `.blend`.
+  Audit confirms 3,424 members, all 0.32 m wide, with material
+  `PodiumDiamondWhite` at RGB `(0.955, 0.955, 0.955)`.
+- The saved Layout view remains at location `(62.8766, 29.0394, 134.9700)`,
+  distance `290.9078`, and the same perspective rotation.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — carry facade-aligned arcade piers to the podium roof
+
+Extended every visible, facade-aligned pier continuously from the 20 m podium
+roof to the 32 m top of the raised arcade. The lower 20–24 m level remains
+open between the piers, while the column faces now align and land directly on
+the podium rather than stopping in mid-air.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcades.py` and
+  `git diff --check` pass.
+- The local Blender update replaced only the two arcade meshes in about one
+  second, without rebuilding the model or exporting GLB.
+- Saved-mesh audit confirms both arcade objects now span z=20.00–32.00 m with
+  visible pier base vertices at z=20.00 m; the raised arch curves remain at
+  z=28.00–31.60 m.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — raise the complete triumphal arcade by one storey
+
+Kept only the 20–24 m lower open level, then raised the entire hollow
+triumphal arcade by 4 m: its vertical doorways now run 24–28 m, with full
+semicircles from 28–31.6 m and solid spandrels to 32 m. Removed the former
+28 m tower soffit and first blank facade band so no horizontal division cuts
+through the raised arches.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcades.py` and
+  `git diff --check` pass.
+- The existing `.blend` was updated in about one second by replacing only the
+  arcade meshes and deleting the obstructing transition-band faces; no full
+  model rebuild or GLB export was performed.
+- Saved-mesh audit confirms both arcade objects span z=24.00–32.00 m, their
+  curves run from z=28.00 to z=31.60 m, and neither facade mesh retains faces
+  in the removed 28–32 m transition band.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — restore the hollow triumphal-arch doorways
+
+Removed the incorrectly added 20–24 m infill. Each opening is again a hollow,
+full-height doorway: open vertically from the podium roof at 20 m to its
+spring line, then capped by a complete 180-degree semicircular arch between
+the inner faces of the two piers. Only the area above each arch curve to the
+28 m tower soffit is solid.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcades.py` and
+  `git diff --check` pass.
+- The local Blender update replaced only the two arcade meshes; no full model
+  rebuild or GLB export was performed.
+- Saved-mesh audit confirms both arcades span z=20.00–28.00 m, with their
+  semicircular arch curves running from the 24 m spring line to z=27.60 m.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — expose complete semicircular pilotis openings
+
+Raised the solid tower-base facade from 20 m to 24 m, leaving only the upper
+storey open for the arcade. Corrected the arch geometry so each curve starts
+and ends at the inner faces of its two piers, rather than at their hidden
+centre lines. Each exposed opening is consequently a complete 180-degree,
+7.2 m diameter semicircle from z=24.00 to z=27.60, capped by a 0.40 m solid
+spandrel below the 28 m tower soffit.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcades.py` and
+  `git diff --check` pass.
+- The local Blender update replaced only the two arcade meshes in about one
+  second, without rebuilding the model or exporting GLB.
+- Saved-mesh audit confirms the arcades span z=20.00–28.00 m; the first tower's
+  exposed curves run exactly z=24.00–27.60 m (the second is its transformed
+  counterpart), with the top 0.40 m remaining solid.
+
+Remaining issues: None.
+
+## 2026-08-29 — main — restore the two-storey pilotis arcade
+
+Reverted the mistaken single-storey, narrow-opening arcade change. The saved
+model again uses the original 20–28 m open arcade with the broad half-round
+door openings and solid spandrels reaching the tower soffit.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcades.py` and
+  `git diff --check` pass.
+- The existing `.blend` was updated in about one second by replacing only the
+  two arcade meshes, without a full rebuild or GLB export.
+- Saved-mesh audit confirms both restored arcade meshes span z=20.00–28.00 m.
+
+Remaining issues: The requested final arch proportion still needs a new
+direction after this rollback.
+
+## 2026-08-29 — main — form a facade-aligned church-like pilotis arcade
+
+Added `Pilotis_Arcades` to both tower bases: the final open storey above the
+podium roof now has deep piers extended to the facade plane, with half-round
+openings between each neighbouring support. The complete spandrel above every
+arch curve is solid and meets the tower soffit at 28 m, retaining the open
+20–28 m arches while giving its exterior a continuous traditional arcade
+profile. Added `update_pilotis_arcades.py` to replace only these two arcade
+meshes in the existing model.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcades.py` and
+  `git diff --check` pass.
+- Local Blender update finished in about 3 seconds, without rebuilding the
+  towers or podium and without exporting GLB.
+- Read-only mesh audit confirms every arch has a continuous solid spandrel
+  from its curved intrados to z=28.00 m, so no gap remains beneath the tower
+  soffit; the two arcade meshes use the facade finish and occupy z=20.00–28.00 m.
+
+Remaining issues: None.
+
 ## 2026-08-29 — main — light the open podium ceiling
 
 Added the same dense cool-white and warm-accent round star lights beneath the
