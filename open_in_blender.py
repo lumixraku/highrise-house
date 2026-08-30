@@ -29,6 +29,11 @@ def apply(mode=SHADING):
                 if space.type != "VIEW_3D":
                     continue
                 space.shading.type = mode
+                # Use the third world thumbnail (forest.exr) and retain the
+                # same preview controls every time the file is opened.
+                space.shading.studio_light = "forest.exr"
+                space.shading.studiolight_background_alpha = 0.3
+                space.shading.studiolight_background_blur = 0.3
                 # Use the scene's sky and sun, not the viewport's studio defaults.
                 space.shading.use_scene_world_render = True
                 space.shading.use_scene_lights_render = True

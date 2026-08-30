@@ -81,11 +81,20 @@ BOOK_FIRST_OUTWARD_DEG = 180.0
 PODIUM_TOTAL_FLOORS = 5
 PODIUM_PILOTIS_FLOORS = 2
 PODIUM_OCCUPIED_FLOORS = PODIUM_TOTAL_FLOORS - PODIUM_PILOTIS_FLOORS
+PODIUM_PILOTIS_H = H
+PODIUM_H = 6.0
+PODIUM_PILOTIS_CEILING_Z = PODIUM_PILOTIS_FLOORS * PODIUM_PILOTIS_H
+PODIUM_TOP_Z = (PODIUM_PILOTIS_CEILING_Z
+                + PODIUM_OCCUPIED_FLOORS * PODIUM_H)
+PODIUM_TO_TOWER_BASE = PILOTIS_FLOORS * H - PODIUM_TOTAL_FLOORS * H
 PODIUM_DEPTH = 66.0
 PODIUM_BOTTOM_DEPTH = 80.0
 PODIUM_LENGTH_MARGIN = 20.0
 PODIUM_BOTTOM_LENGTH_MARGIN = 12.0
 PODIUM_CORRIDOR_DEPTH = 3.0
+# The occupied podium levels carry a deep perimeter balcony.  Keep the
+# undercroft/canopy offset above unchanged; only these gallery decks double.
+PODIUM_BALCONY_DEPTH = 6.0
 PODIUM_GRID_PITCH = 3.00
 PODIUM_CORRIDOR_RAIL_H = 1.20
 PODIUM_PILOTIS_COLUMN_SIZE = 1.20
@@ -93,7 +102,7 @@ PODIUM_PILOTIS_COLUMN_PITCH = 12.0
 # A generous diamond lattice sits on the OUTSIDE of the curtain wall.  The
 # visible glass height is divided into exactly two diamond cells per storey,
 # so the pattern reads as an elegant large-scale facade rather than a fine mesh.
-PODIUM_DIAMOND_ROWS = 2
+PODIUM_DIAMOND_ROWS = 3
 PODIUM_DIAMOND_MEMBER = 0.32
 PODIUM_DIAMOND_STANDOFF = 0.08
 # The public podium ceilings use many small exposed globes.  Three-metre pitch
@@ -289,6 +298,11 @@ COL_MARGIN = COL_CLEAR_INSET + COL_SIZE / 2.0
 # each half-round arch spans precisely between the inner faces of its piers.
 PILOTIS_ARCADE_PIER_DEPTH = COL_CLEAR_INSET + COL_SIZE
 PILOTIS_ARCADE_SEGMENTS = 16
+# Small recessed fixtures in the arcade soffits. They are deliberately kept
+# separate from the arcade mesh so the fixtures can be replaced locally without
+# touching the arches themselves. These are emissive mesh globes only, matching
+# the existing podium ceiling lights; no extra Blender light objects are added.
+PILOTIS_ARCADE_LIGHT_RADIUS = 0.18
 
 # --- service cores ----------------------------------------------------------
 # TWO cores rather than one central slab, and the reason is capacity and egress,
@@ -355,7 +369,7 @@ CORE_OVERRUN = 4.6      # above the roof slab: lift overtravel + machine room
 CORE_ROOF_PARAPET = 0.9  # low upstand around each bulkhead roof
 # CORE_TOP_Z is derived once TOP_Z exists, just below.
 
-BASE_Z = PILOTIS_FLOORS * H          # underside of the tower
+BASE_Z = PODIUM_TOP_Z + PODIUM_TO_TOWER_BASE  # underside of the tower
 TOP_Z = BASE_Z + TOWER_FLOORS * H    # roof level
 # The roof repeats the planted refuge-level language, but remains entirely open
 # to the sky: its grille replaces the solid perimeter parapet and no canopy is
@@ -472,7 +486,7 @@ def configure_tower(block_groups, windows_long, core_column_bays=CORE_COLUMN_BAY
     if CORE_W <= COL_SIZE:
         raise ValueError("core length must leave room for the structural module")
 
-    BASE_Z = PILOTIS_FLOORS * H
+    BASE_Z = PODIUM_TOP_Z + PODIUM_TO_TOWER_BASE
     TOP_Z = BASE_Z + TOWER_FLOORS * H
     ROOF_GARDEN_Z0 = TOP_Z + 0.22
     CORE_TOP_Z = TOP_Z + 0.22 + CORE_OVERRUN + 0.22 + CORE_ROOF_PARAPET
@@ -1548,7 +1562,7 @@ def semicircular_arch(name, start, end, outward, spring_z, top_z, mat):
 def pilotis_arcades(mat):
     """Wrap the open storey over the podium in triumphal-arch-like arcades."""
     parts = []
-    arcade_z0 = PODIUM_TOTAL_FLOORS * H
+    arcade_z0 = PODIUM_TOP_Z
     arcade_z1 = BASE_Z + H
 
     def side(name, positions, face_coordinate, along_x, side_sign):
@@ -1591,6 +1605,69 @@ def pilotis_arcades(mat):
     side("PilotisArcade_W", short_positions, -W / 2.0, False, -1.0)
     side("PilotisArcade_E", short_positions, W / 2.0, False, 1.0)
     return join(parts, "Pilotis_Arcades")
+
+
+def pilotis_arcade_lights(mats):
+    """Add small recessed emissive globes beneath each arcade arch.
+
+    The fixtures are a separate mesh/object from ``Pilotis_Arcades`` so this
+    detail can be regenerated locally without rebuilding any facade geometry.
+    Three globes follow each half-round soffit, using the same emissive podium
+    materials as the other circular ceiling lights.
+    """
+    cool, warm = [], []
+    arcade_z0 = PODIUM_TOP_Z
+    arcade_z1 = BASE_Z + H
+    opening_index = 0
+
+    def side(positions, face_coordinate, along_x, side_sign):
+        nonlocal opening_index
+        outward = Vector((0.0, side_sign)) if along_x else Vector((side_sign, 0.0))
+        arch_plane = (face_coordinate
+                      - side_sign * PILOTIS_ARCADE_PIER_DEPTH / 2.0)
+        soffit_inset = outward * (PILOTIS_ARCADE_PIER_DEPTH * 0.28)
+        for (first, _), (second, _) in zip(positions, positions[1:]):
+            start_coordinate = first + COL_SIZE / 2.0
+            end_coordinate = second - COL_SIZE / 2.0
+            start = (Vector((start_coordinate, arch_plane)) if along_x
+                     else Vector((arch_plane, start_coordinate)))
+            end = (Vector((end_coordinate, arch_plane)) if along_x
+                   else Vector((arch_plane, end_coordinate)))
+            axis = (end - start).normalized()
+            radius = (end - start).length / 2.0
+            centre = (start + end) / 2.0
+            spring_z = arcade_z1 - radius - 0.40
+            # A globe is tucked into the curved underside, leaving only its
+            # lower half visible.  Alternating temperatures adds a restrained
+            # warm accent without changing the existing ceiling-light field.
+            for fixture_index, theta in enumerate(
+                    (math.pi * 0.25, math.pi * 0.50, math.pi * 0.75)):
+                along = axis * (radius * math.cos(theta))
+                soffit_z = spring_z + radius * math.sin(theta)
+                point = centre + along - soffit_inset
+                point3 = Vector((point.x, point.y,
+                                 soffit_z - PILOTIS_ARCADE_LIGHT_RADIUS * 0.55))
+                (warm if (opening_index + fixture_index) % 7 == 0 else cool).append(
+                    tuple(point3))
+            opening_index += 1
+
+    long_positions = [(x, COL_SIZE) for x in col_grid(W)]
+    short_positions = [(y, COL_SIZE) for y in col_grid(D)]
+    side(long_positions, -D / 2.0, True, -1.0)
+    side(long_positions, D / 2.0, True, 1.0)
+    side(short_positions, -W / 2.0, False, -1.0)
+    side(short_positions, W / 2.0, False, 1.0)
+
+    bulbs = [
+        spheres_mesh("Pilotis_Arcade_LightCool", cool,
+                     PILOTIS_ARCADE_LIGHT_RADIUS,
+                     mats["podium_ceiling_light_cool"]),
+        spheres_mesh("Pilotis_Arcade_LightWarm", warm,
+                     PILOTIS_ARCADE_LIGHT_RADIUS,
+                     mats["podium_ceiling_light_warm"]),
+    ]
+    bulbs_mesh = join(bulbs, "Pilotis_Arcade_Lights")
+    return bulbs_mesh
 
 
 # ---------------------------------------------------------------------------
@@ -1652,6 +1729,7 @@ def build(reset=True, mats=None, add_trusses=False,
             (CORNER_COL_SIZE, CORNER_COL_SIZE, tower_column_height), spandrel))
 
     pilotis_arcade = pilotis_arcades(spandrel)
+    pilotis_arcade_lamp = pilotis_arcade_lights(mats)
 
     # Service cores rising through the open floors (stairs / lifts).
     structure += cores("Core", 0.0, BASE_Z, concrete)
@@ -1804,6 +1882,7 @@ def build(reset=True, mats=None, add_trusses=False,
         "Floor_Plates": join(slabs, "Floor_Plates"),
         "Structure": join(structure, "Structure"),
         "Pilotis_Arcades": pilotis_arcade,
+        "Pilotis_Arcade_Lights": pilotis_arcade_lamp,
         truss_object_name: join(trusses, truss_object_name),
     }
     return merged
@@ -2212,10 +2291,12 @@ def build_podium(mats, base_rectangles, diamond_grid_only=False):
         saved_first, saved_second = first, second
         first, second = body_specs
         facade_ring = continuous_outline(0.0)
-        gallery_ring = (continuous_outline(PODIUM_CORRIDOR_DEPTH)
+        gallery_ring = (continuous_outline(PODIUM_BALCONY_DEPTH)
                         if not diamond_grid_only else None)
         first, second = saved_first, saved_second
-        z0, z1 = floor_index * H, (floor_index + 1) * H
+        z0 = (PODIUM_PILOTIS_CEILING_Z
+              + (floor_index - PODIUM_PILOTIS_FLOORS) * PODIUM_H)
+        z1 = z0 + PODIUM_H
         if not diamond_grid_only:
             # The third podium level starts directly above the two-storey pilotis.
             # Give its glazed retail enclosure a real continuous floor at z=8 m;
@@ -2230,6 +2311,8 @@ def build_podium(mats, base_rectangles, diamond_grid_only=False):
             add_perimeter_glass(facade_ring, floor_index, z0, z1 - SLAB_T)
         add_diamond_grid(facade_ring, floor_index, z0, z1 - SLAB_T)
         if not diamond_grid_only:
+            if floor_index == PODIUM_PILOTIS_FLOORS:
+                add_guardrail(gallery_ring, floor_index, z0)
             add_ceiling_globes(gallery_ring, floor_index, z1 - SLAB_T)
             add_guardrail(gallery_ring, floor_index, z1)
 
@@ -2238,7 +2321,7 @@ def build_podium(mats, base_rectangles, diamond_grid_only=False):
                                                "Podium_Diamond_Grid")}
 
     garden_planters, garden_foliage, garden_trunks = podium_roof_garden(
-        base_rectangles, PODIUM_TOTAL_FLOORS * H, mats)
+        base_rectangles, PODIUM_TOP_Z, mats)
 
     return {
         "Podium_Glass": join(glass_parts, "Podium_Glass"),
@@ -2431,6 +2514,15 @@ def frame_viewport():
                     (math.radians(72.0), 0.0, math.radians(38.0)), "XYZ"
                 ).to_quaternion()
                 r3d.view_perspective = "PERSP"
+                # Keep Material Preview consistent when the saved file is
+                # reopened: the third world thumbnail is forest.exr, with the
+                # requested 30% background opacity and blur.
+                space.shading.type = "MATERIAL"
+                space.shading.studio_light = "forest.exr"
+                space.shading.studiolight_background_alpha = 0.3
+                space.shading.studiolight_background_blur = 0.3
+                space.shading.use_scene_world_render = True
+                space.shading.use_scene_lights_render = True
                 # Far clip has to clear the pull-back or the model is culled and
                 # you open onto an empty grey viewport — worse than being inside.
                 space.clip_end = max(space.clip_end, diag * 6.0)
@@ -2527,7 +2619,7 @@ def main():
     SITE_CENTER_X = (min_x + max_x) / 2.0
     SITE_DEPTH = max_y - min_y
     SITE_CENTER_Y = (min_y + max_y) / 2.0
-    SITE_TOP_Z = max(first_top, second_top, PODIUM_TOTAL_FLOORS * H)
+    SITE_TOP_Z = max(first_top, second_top, PODIUM_TOP_Z)
 
     report(second_objects, "new adjacent tower (3 groups x 17 floors, 20 rooms)")
     print("=== two-tower site ===")
@@ -2543,19 +2635,21 @@ def main():
     print(f"occupied floors      : {PODIUM_OCCUPIED_FLOORS}")
     print("connection edges     : 2 cubic Bezier curves")
     print(f"base widths          : {podium_first_w:.1f} / {podium_second_w:.1f} m")
-    print(f"top / tower soffit   : {PODIUM_TOTAL_FLOORS * H:.1f} m")
+    print(f"top / tower soffit   : {PODIUM_TOP_Z:.1f} m")
     print("=====================\n")
     setup_render()
     frame_viewport()
 
     os.makedirs(OUT_DIR, exist_ok=True)
     blend_path = os.path.join(OUT_DIR, "highrise_house.blend")
+    bpy.context.scene["podium_top_z"] = PODIUM_TOP_Z
     bpy.ops.wm.save_as_mainfile(filepath=blend_path)
 
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.export_scene.gltf(
-        filepath=os.path.join(OUT_DIR, "highrise_house.glb"),
-        export_format="GLB", use_selection=False)
+    if "--no-glb" not in sys.argv:
+        bpy.ops.object.select_all(action="SELECT")
+        bpy.ops.export_scene.gltf(
+            filepath=os.path.join(OUT_DIR, "highrise_house.glb"),
+            export_format="GLB", use_selection=False)
 
     if "--no-render" not in sys.argv:
         bpy.context.scene.render.filepath = os.path.join(OUT_DIR, "preview.png")

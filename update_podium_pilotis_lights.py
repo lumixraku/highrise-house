@@ -26,7 +26,7 @@ def main():
     bounds = [slab.matrix_world @ vertex.co for vertex in slab.data.vertices]
     min_x, max_x = min(point.x for point in bounds), max(point.x for point in bounds)
     min_y, max_y = min(point.y for point in bounds), max(point.y for point in bounds)
-    soffit_z = house.PODIUM_PILOTIS_FLOORS * house.H - house.SLAB_T
+    soffit_z = house.PODIUM_PILOTIS_CEILING_Z - house.SLAB_T
     radius = house.PODIUM_CEILING_LIGHT_RADIUS
     pitch = house.PODIUM_CEILING_LIGHT_PITCH
     clearance = house.PODIUM_CEILING_LIGHT_EDGE_CLEARANCE

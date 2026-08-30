@@ -1,5 +1,101 @@
 # Progress
 
+## 2026-08-30 — main — remove extra arcade point lights
+
+Removed the separate Blender Point light objects from the arcade update. The
+arches now use only the same emissive circular mesh fixtures as the other
+podium ceiling lights, so no light-direction lines or viewport light markers
+appear and there is no extra per-opening lighting cost. The local updater still
+rebuilds only `Pilotis_Arcade_Lights`.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcade_lights.py` and
+  `git diff --check` pass.
+- Blender local update saved `out/highrise_house.blend`; the scene contains no
+  `Pilotis_Arcade_Point_*` objects and retains the existing tower lights,
+  glazing, and arcade geometry.
+
+Remaining issues: None.
+
+## 2026-08-30 — main — add recessed lighting inside the pilotis arches
+
+Added a separate `Pilotis_Arcade_Lights` mesh with small cool/warm circular
+fixtures tucked into the inner soffit of every half-round arcade opening. Each
+opening also receives a soft point light so the recessed arch volume is visibly
+illuminated. Added `update_pilotis_arcade_lights.py` to replace only these lamps
+in the saved scene; the arcade geometry, podium, glazing, tower structure and
+existing ceiling-light meshes are untouched.
+
+Verification:
+- `python3 -m py_compile build_house.py update_pilotis_arcade_lights.py` and
+  `git diff --check` pass.
+- Local Blender update completed successfully and saved
+  `out/highrise_house.blend` without GLB export or rendering.
+- Audit confirms two arcade lamp meshes (3,024 / 3,276 vertices) and 50 point
+  lights, while tower ceiling lights remain 75,072 / 124,032 vertices and the
+  two tower glass meshes remain unchanged.
+
+Remaining issues: None.
+
+## 2026-08-30 — main — add the missing lowest podium balcony guardrail and save preview defaults
+
+Added a guardrail around the lowest occupied podium slab at z=8 m, alongside
+the existing upper balcony rails. The undercroft and tower remain untouched.
+Saved Material Preview defaults in the `.blend` and opening helper: the third
+world thumbnail (`forest.exr`), World Opacity 0.3, and Blur 0.3.
+
+Verification:
+- Local Blender update completed successfully and preserved tower meshes and
+  materials.
+- `Podium_Mullions` now spans z=8.00–27.27 m; saved viewport reports
+  `MATERIAL / forest.exr / opacity 0.3 / blur 0.3`.
+- `python3 -m py_compile` and `git diff --check` pass.
+
+Remaining issues: None.
+
+## 2026-08-30 — main — double the occupied-podium balcony depth
+
+Changed only the occupied podium gallery offset from 3 m to 6 m, doubling the
+balcony width. The 0–8 m undercroft, its soffit lights, tower geometry, tower
+lights, and materials remain unchanged. Rebuilt only the podium meshes in the
+existing `.blend`; no GLB export or render.
+
+Verification:
+- `python3 -m py_compile` and `git diff --check` pass.
+- Local Blender update completed successfully. Podium slabs remain at
+  7.78–26.00 m, glass at 8.00–25.78 m, and the lower podium structure at
+  0.00–8.00 m. Tower ceiling lights remain the original 75,072-vertex mesh
+  with the three original materials; tower glass remains `Glass`.
+
+Remaining issues: None.
+
+## 2026-08-30 — main — rebuild a clean model with only the three glazed podium levels enlarged
+
+Regenerated `out/highrise_house.blend` from the committed procedural scene,
+without reading the previously modified model. The lower 0–8 m pilotis remains
+unchanged; the three glazed podium storeys are now 8–14 m, 14–20 m, and 20–26 m.
+The podium roof, gardens, and the hollow triumphal arcades follow the new 26 m
+roof datum, while the clean high-rise tower geometry begins at 34 m. The exterior
+diamond grid uses three cells per 6 m glazed storey. No GLB export or render was
+performed.
+
+Verification:
+- `python3 -m py_compile build_house.py` and `git diff --check` pass.
+- A fresh Blender scene build completed successfully and saved
+  `out/highrise_house.blend`.
+- Mesh audit confirms podium glass at 8.00–25.78 m, podium slabs at 7.78–26.00 m,
+  star lights at 7.51–25.79 m, arcades at 26.00–38.00 m, and the high-rise glass
+  at 42.75–184.25 m with its original `Glass` material. High-rise ceiling lights
+  are a clean 75,072-vertex mesh using `CeilingLight_Off`, `CeilingLight_Warm`,
+  and `CeilingLight_Daylight`.
+- Restored the saved Layout view to location `(62.8766, 29.0394, 134.9700)`,
+  distance `290.9078`, and its previous perspective rotation.
+- Updated the reproducible local tree and pilotis-light helpers to derive their
+  heights from the new podium datums; the height updater never rebuilds or
+  reassigns tower lights, windows, or materials.
+
+Remaining issues: None.
+
 ## 2026-08-29 — main — equalize the diamond-grid density through the Bezier links
 
 Changed the continuous podium outline sampling so every line, arc, and Bezier

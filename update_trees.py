@@ -45,7 +45,7 @@ def main():
          house.PODIUM_DEPTH, second_rotation),
     )
     planters, foliage, trunks = house.podium_roof_garden(
-        podium_specs, house.PODIUM_TOTAL_FLOORS * house.H,
+        podium_specs, house.PODIUM_TOP_Z,
         {"concrete": concrete_mat, "foliage": foliage_mat, "trunk": trunk_mat})
     house.join(planters, "Podium_Garden_Planters")
     house.join(foliage, "Podium_Garden_Foliage")
