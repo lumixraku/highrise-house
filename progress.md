@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-09-05 — main — refresh README and project imagery
+
+Rewrote `README.md` as a concise Chinese introduction to the high-rise apartment
+project, covering the twin residential towers, curved glass podium, pilotis,
+sky gardens, facade system, parameterized workflow, and Blender commands. Captured
+the currently open Blender viewport and added refreshed renders for the front,
+corner, podium, sky-garden, and facade-detail views under `docs/images/` so the
+README no longer depends on external release assets.
+
+Verification:
+- `blender --background --factory-startup --python render_views.py -- out/highrise_house.blend`
+  completed and regenerated all six requested render outputs.
+- `python3 -m py_compile build_house.py render_views.py verify_house.py materials.py`
+  and `git diff --check` pass.
+- Confirmed all six README image files exist and are non-empty.
+- `verify_house.py` runs against the saved scene; existing podium/truss assertion
+  failures remain and are unrelated to the README/image refresh.
+
+Remaining issues: Existing verifier failures in the saved scene, documented as a
+verification limitation rather than changed by this task.
+
 ## 2026-08-30 — main — remove extra arcade point lights
 
 Removed the separate Blender Point light objects from the arcade update. The
