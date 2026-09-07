@@ -26,6 +26,10 @@ SITE_CENTER_Y = 20.0
 
 VIEWS = [
     # name,          camera position,               look-at,             lens
+    ("ground_up",    (SITE_CENTER_X + 112.0, -118.0, 3.0),
+                      (SITE_CENTER_X, SITE_CENTER_Y, 132.0), 24.0),
+    ("ground_up_wide", (SITE_CENTER_X - 116.0, -104.0, 2.4),
+                        (SITE_CENTER_X, SITE_CENTER_Y, 118.0), 22.0),
     ("front",        (SITE_CENTER_X, -560.0, 150.0), (SITE_CENTER_X, SITE_CENTER_Y, 125.0), 42.0),
     ("base_pilotis", (SITE_CENTER_X + 110.0, -92.0, 8.0),
                       (SITE_CENTER_X, SITE_CENTER_Y, 18.0), 32.0),
