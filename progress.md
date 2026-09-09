@@ -3698,3 +3698,350 @@ Remaining issues:
 - Image files could not be viewed inside this session, so the renders were
   confirmed by geometry assertions and file-size checks rather than by eye.
   Worth a visual look at `out/preview.png` and `out/view_base_pilotis.png`.
+
+## 2026-09-08 — main — taper Abeno Harukas tower plans
+
+Updated the Abeno Harukas generator so the three main tower tiers use lightly
+trapezoidal footprints: the south edge remains 71 m while the east/west edges
+slope inward toward each tier's north edge. North and south truss spans now use
+their corresponding footprint widths, and the scene metadata and verification
+checks describe and enforce the tapered plan instead of a rectangular massing.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 build with `-- --views preview plan --samples 16` pass; both
+  renders and the editable `.blend` were saved under `out/`.
+- `verify_abeno_harukas.py` pass; all 16 checks passed, including the new
+  tapered-plan check.
+
+Remaining issues: Render files are generated successfully but were not visually
+opened in this session because `out/` is ignored by the workspace file reader.
+
+## 2026-09-08 — main — rebuild Abeno Harukas body-first
+
+Replaced the previous Abeno Harukas generator with a clean body-first model.
+The new generator has only the three primary stacked tower bodies, each built
+from one four-corner trapezoidal prism. The south edges stay aligned at Y=-40,
+the east/west edges slope inward northward, and the tier depths are 80 m, 59 m,
+and 29 m with level breaks at 80 m and 195 m. Schematic facade mullions are
+included; complex core, trusses, and interior systems are intentionally deferred.
+The verification script was rewritten around these massing constraints.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2 body build with `-- --no-render` pass; 343 objects generated.
+- `verify_abeno_harukas.py` pass; all 16 checks passed.
+- Blender rendered `preview`, `plan`, and `north` views successfully.
+
+Remaining issues: None for the body-first scope. Core, truss, and detailed facade
+systems remain intentionally out of scope for this pass.
+
+## 2026-09-08 — main — skew the middle tower body
+
+Adjusted only the Middle body footprint. Its north edge now shifts 3 m east
+while the south edge stays aligned with the other tower bodies, making the two
+long side edges visibly asymmetric: the west/left edge carries the stronger
+slope and the east/right edge stays closer to the upper body's side. This is
+implemented in the footprint vertices and not as a camera or object rotation.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender rebuild with `-- --no-render` pass.
+- `verify_abeno_harukas.py` pass; all 18 checks passed, including asymmetric
+  middle-edge slope checks.
+- Blender rendered `preview`, `plan`, and `north` successfully.
+
+Remaining issues: None for the requested middle-body plan correction.
+
+## 2026-09-08 — main — reconnect the three Harukas masses horizontally
+
+Replaced the vertically stacked tier massing with the user's sketch layout:
+three volumes of different heights (Low 80 m, Middle 195 m, High 300 m) all
+stand on the same ground plane and connect horizontally south to north,
+sharing their full connecting edges. Each volume is a different quadrilateral
+plan defined in MASSES; the long side edges tilt inward toward the high
+volume. The middle volume's east side extends outward — its SE corner
+(36, -11) is the composition's outermost point — while its west edge stays
+collinear with the high volume's west edge. The ground prism is the exact
+octagonal union of the three plans. Added a sun light and node-based world
+background so EEVEE review renders are visible (previous renders were
+effectively black), and re-aimed the preview camera from the southeast with
+full framing. verify_abeno_harukas.py now hard-checks every plan corner,
+the shared connecting edges, the ground union, and the middle-volume
+asymmetry.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 564 objects; preview/plan/north renders
+  saved and visually inspected: plan matches the sketch (three connected
+  quadrilaterals, east bulge at the middle volume, near-straight west side),
+  preview shows the 80/195/300 m steps rising south to north, and the north
+  elevation shows the east bulge with the west side flush.
+- `verify_abeno_harukas.py` pass; all 20 checks passed.
+
+Remaining issues: None for the massing scope. Facade grids remain schematic;
+core and truss systems are still out of scope for this pass.
+
+## 2026-09-08 — main — slope the Harukas roofs in Z
+
+Follow-up to the horizontal reconnection: the long top edges now tilt in Z.
+Each volume's roof is a single plane with constant dz/dx (west/east top
+heights: Low 90/70, Middle 215/175, High 300/284), so all three masses have
+sloped roofs with different gradients. The middle volume's west side rises
+toward the high volume's top while its east side drops away, matching the
+requested "one side near, one side far" relationship; the plan geometry
+(east bulge, collinear west edges, shared connecting edges) is unchanged.
+Facade mullions follow the sloped tops, transoms stop below the lowest top
+edge, and each sloped top edge gets a cap beam. The verifier now checks
+every roof corner height, the three distinct slopes, and the middle/high
+top-height relationship.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 540 objects; preview and north renders
+  visually inspected: all three roofs visibly slope along X, with the middle
+  roof falling from 215 m (west) to 175 m (east).
+- `verify_abeno_harukas.py` pass; all 23 checks passed.
+
+Remaining issues: None for the massing scope. Facade grids remain schematic;
+core and truss systems are still out of scope for this pass.
+
+## 2026-09-08 — main — slant the Harukas connecting edges in plan
+
+Corrected the tilt axis after user feedback: the tilt belongs to the plan
+(the long connecting edges lean along the north-south direction, as drawn in
+the user's sketch), not to the roof heights. Reverted the sloped roofs; all
+three masses again have flat roofs at 80/195/300 m. The footprints are now
+three irregular quadrilaterals exactly like the sketch: the low/middle
+dividing edge drops toward the east while the middle/high dividing edge
+climbs toward the east (opposite slants), the low south edge and high north
+edge stay straight east-west, and the middle volume's SE corner (36, -15)
+remains the composition's outermost point to the east with its west side
+approaching the high volume. Ground octagon, cameras, and lighting
+unchanged. The verifier now hard-checks the slanted connecting edges, the
+opposite slant directions, the straight outer short edges, and flat roofs.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 564 objects; plan and preview renders
+  visually inspected: the plan matches the sketch (two slanted dividing
+  lines with opposite slants, east bulge at the middle volume, kinked west
+  silhouette), and the preview shows the three flat-roofed masses stepping
+  80/195/300 m south to north.
+- `verify_abeno_harukas.py` pass; all 22 checks passed.
+
+Remaining issues: None for the massing scope. Facade grids remain schematic;
+core and truss systems are still out of scope for this pass.
+
+## 2026-09-08 — main — open the Harukas scene outside the building
+
+The saved .blend's initial 3D viewport now starts on an exterior orbit that
+reconstructs the preview camera's eye position (140, -285, 130) looking at
+the massing centre, instead of Blender's factory default view near the
+origin — which sat inside the 300 m high volume every time the file was
+opened. Render cameras were already outside; the verifier now checks both
+the render cameras and the saved initial viewport eye stay clear of the
+building envelope.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender rebuild with `-- --no-render` pass; build log shows no missing
+  viewport warning.
+- `verify_abeno_harukas.py` pass; all 24 checks passed, including the two
+  new exterior-viewpoint checks.
+
+Remaining issues: None.
+
+## 2026-09-08 — main — reduce Harukas plan tilts to under 3 degrees
+
+Reduced every plan tilt to match the user's sketch, where edges lean about
+3 degrees or less. The previous middle-volume east edge leaned ~22 degrees;
+now all twelve mass edges stay within ~2.7 degrees of their dominant axis:
+connecting edges tilt 2.5/2.6 degrees, the middle east edge 2.7 degrees
+(its SE corner at (34, -14) remains the composition's subtle outermost
+point), and the remaining side edges 1.0-2.2 degrees. Footprints widened
+slightly (south edge 66 m) so the geometry stays close to the sketch's
+proportions. The verifier now checks every plan edge tilt against the
+3-degree limit, along with the existing shared-edge, bulge, and flat-roof
+checks. Cameras, ground, and viewport unchanged.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 564 objects; plan render visually inspected:
+  both dividing lines show the gentle opposite slants from the sketch.
+- `verify_abeno_harukas.py` pass; all 27 checks passed, including per-mass
+  "plan tilts within 3 degrees".
+
+Remaining issues: None.
+
+## 2026-09-08 — main — widen the Harukas masses by 10 m
+
+Widened all three masses by 10 m along X (the wide faces): east and west
+sides each move 5 m outward, so the straight south/north edges go from 66 m
+to 76 m wide. All side-edge leans keep their previous metre offsets, and the
+longer connecting edges now tilt slightly less (2.2-2.7 degrees, still under
+the 3-degree limit). The middle volume's SE corner (39, -14) remains the
+composition's outermost eastern point and its west side still approaches the
+high volume's west edge. Cameras and framing unchanged.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 564 objects; plan and preview renders
+  visually inspected with the wider proportions.
+- `verify_abeno_harukas.py` pass; all 27 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-08 — main — widen the Harukas masses to 86 m
+
+Widened the composition from 78 m to 86 m overall so the width matches the
+86 m depth, per the user's request. Both sides move 4 m outward about the
+central axis; every short side edge keeps its exact previous lean (1.0-1.5 m
+offsets, 1.0-2.7 degrees), and the longer connecting edges now tilt about
+2.0 degrees — everything stays under the 3-degree limit. The middle volume's
+SE corner (43, -14) remains the outermost eastern point. The verifier now
+also hard-checks that overall width and depth are both 86 m.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 564 objects; plan render visually inspected:
+  square 86 x 86 m composition with the subtle slanted dividing lines intact.
+- `verify_abeno_harukas.py` pass; all 28 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-08 — main — add recessed open truss bands
+
+Added Abeno Harukas-style belt trusses at the visible base of each of the
+three sections: z 0-15 m (Low), 80-95 m (Middle, above the low roof), and
+195-210 m (High, above the middle roof). Per the user's correction, the
+truss zone carries no glazing — the glass body splits below/above the band —
+and the truss is recessed inside the glass outline with a dark backing wall
+further inboard so the zone does not read as hollow. Each face has seven
+complete upward chevrons (14 diagonals with both feet on the lower chord,
+eight boundary posts) plus top/bottom chords, per the trident reference.
+Facade grids skip the band zone.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 885 objects; preview render visually
+  inspected: three dark recessed truss bands with visible chevron zigzag at
+  the three step levels.
+- `verify_abeno_harukas.py` pass; all 45 checks passed, including per-mass
+  chevron counts, band spans, no-glazing-in-band, and recessed-truss checks.
+
+Remaining issues: None for this scope.
+
+## 2026-09-08 — main — base truss band on all three volumes
+
+Reworked the truss layout per user feedback: removed the floating elevated
+bands at 80-95/195-210 m and instead every volume carries the same open
+truss band at the ground level (z 0-15 m), so the truss runs continuously
+through the one-storey base of all three connected masses. Chevron density
+now follows face width at a ~12 m spacing (`TRUSS_SPACING`): the long
+south/north faces keep seven groups while the short east/west faces get 2-3
+groups, matching the front-face density instead of forcing seven everywhere.
+The band keeps the recessed no-glazing treatment (inset truss + dark
+backing). Preview camera target lowered to keep the base band in frame.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 735 objects; preview and base close-up
+  renders visually inspected: continuous ground-level truss band with the
+  chevron rhythm on the front faces and sparser side faces.
+- `verify_abeno_harukas.py` pass; all 43 checks passed, including
+  per-face density counts and "truss band sits at the ground level" for all
+  three masses.
+
+Remaining issues: None for this scope.
+
+## 2026-09-08 — main — two two-storey step truss bands only
+
+Per user feedback: removed the ground-level truss band entirely (glass now
+stands on the ground for all three masses) and slimmed the bands from 15 m
+(three storeys) to 10 m (two storeys). The remaining bands sit just below
+the low/middle rooflines at z 70-80 and z 185-195 m, each running through
+the two adjoining volumes (Low+Middle, Middle+High). Recessed no-glazing
+band treatment and ~12 m chevron density unchanged.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 970 objects; preview render visually
+  inspected: exactly two two-storey truss bands at the step levels.
+- `verify_abeno_harukas.py` pass; all 58 checks passed, including
+  "no truss band at the ground level" and "truss bands span two storeys".
+
+Remaining issues: None for this scope.
+
+## 2026-09-08 — main — steepen the Harukas dividing edges slightly
+
+Increased the slant of the two long connecting edges as requested: the
+low/middle edge now tilts about 3.0 degrees (dy 3.0 -> 4.5 m over 86 m) and
+the middle/high edge about 2.75 degrees (dy 3.0 -> 4.0 m). Dividing-edge
+centres stayed fixed so the overall 86 x 86 m envelope is unchanged, and
+every short side edge keeps its previous 1.0-1.5 m lean. All plan tilts
+remain within the 3-degree cap.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 970 objects; plan render visually
+  inspected: both dividing lines now read as clearly slanted but gentle.
+- `verify_abeno_harukas.py` pass; all 58 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-08 — main — widen the middle Harukas volume northward
+
+Per user feedback, the middle volume's short side edges now lean outward
+going north (about 3.5 degrees, exceeding the general 3-degree plan-tilt
+cap): its north face reaches 89.5 m, the composition's widest line, while
+its south face stays at 86 m shared with the low volume. The middle NE
+corner (45, 18.5) is now the outermost eastern point; the high volume eases
+back to 88.5 m at its north face so its own side edges stay within 3
+degrees. Overall depth remains 86 m. The verifier's tilt check keeps the
+3-degree cap everywhere except the middle volume's two side edges (5-degree
+cap), and now checks the middle volume's outward widening directly.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 970 objects; plan render visually
+  inspected: middle volume visibly widens toward the high volume.
+- `verify_abeno_harukas.py` pass; all 59 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-08 — main — widen the middle volume at its low-side face
+
+Corrected the extension direction: the widening belongs at the face where
+the middle volume joins the lowest volume, not at its north side. The
+low/middle connecting edge (now 88 m, spanning -44..+44) is the
+composition's widest line, and both the low and middle volumes flare outward
+toward it; the middle volume narrows past it toward the high volume. All
+plan tilts stay within 3 degrees (no more 5-degree exemption). Total depth
+86 m. The verifier now checks that the middle volume is widest at its
+low-side face and that the width peaks at the low/middle junction.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py` pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 970 objects; plan render visually
+  inspected: the low/middle junction is the widest line, with the middle
+  volume flaring toward it.
+- `verify_abeno_harukas.py` pass; all 58 checks passed.
+
+Remaining issues: None.
