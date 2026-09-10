@@ -4045,3 +4045,447 @@ Verification:
 - `verify_abeno_harukas.py` pass; all 58 checks passed.
 
 Remaining issues: None.
+
+## 2026-09-09 — main — add the Harukas linked-void service core
+
+Added the service core to the body-first model, following the published
+linked-void scheme recorded in AGENTS.md (user confirmed scope: core
+structure only, floor slabs with shaft/atrium openings deferred). Per
+volume, in its own `Harukas_Core` collection: four 8x8 m lower corner
+service zones (z 0-80 m, every volume, placed on the 5 m inset plan
+corners via `quad_inset`); for the middle and high volumes a braced steel
+spine (20x12 m, z 80-195 m) with surface X-bracing on both faces (4 tiers
+x 2 bays), a west eco-void strip outlined by four slim columns plus
+base/top ring beams, and three east lift shafts; for the high volume an
+upper atrium frame (26x15 m columns plus ring beams at z 195/300 m).
+Horizontal transfer ties connect the corner zones to the spine base at
+z 80 m and the spine top corners to the atrium columns at z 195 m. Added
+a `core` render view (new `Harukas_Core_Camera`) that hides the facade
+collections only during its render, leaving the saved model fully visible;
+`core` is now in the default `--views` list and skipped under
+`--blockout`. Fixed one layout bug found by the verifier: the eco-void
+frame's east columns overlapped the spine west face, so the void now
+stands 0.6 m clear of the spine.
+
+Verification:
+- Standalone layout math check: every core piece clears its plan edges by
+  at least 0.8 m; z 195 transfer-tie lengths sane.
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  pass.
+- `git diff --check` pass.
+- Blender 5.2.0 full build pass; 1103 objects; core render visually
+  inspected: corner zones, braced spine with west void frame and east
+  lift banks, transfer ties, and the atrium frame all read correctly;
+  preview render inspected for no facade regression.
+- `verify_abeno_harukas.py` pass; all 94 checks passed (35 new core
+  checks: facade clearance, zone z-ranges, inset-corner placement, spine
+  bracing count, void/lift bank sides, transfer-tie endpoints, saved
+  collection visibility).
+
+Remaining issues: None for this scope. Floor slabs with core/atrium
+openings (`core_floor`/`core_openings`) remain deferred by user choice.
+
+## 2026-09-09 — main — add floor slabs with core/atrium openings
+
+Added floor plates to the Harukas model. One 0.3 m slab per 5 m storey,
+top flush with the storey level, outline inset 0.3 m from the plan quad
+(`quad_inset`). Slabs skip levels whose thickness would touch a
+solid-backed truss band (5 cm clearance), so counts are Low 13, Middle 33,
+High 54. Each slab is a holed 2D curve extruded to thickness
+(`core_floor`): `core_openings` cuts actual holes where the core passes —
+four corner service zones in the lower zone (every volume), spine +
+eco-void + three lift shafts in the middle zone (middle/high), and the
+atrium void in the upper zone (high). Openings grow 5 cm so slab edges
+never touch core walls (no coplanar faces). Slabs live in the
+`Harukas_Floors` collection; the `core` render view now hides both facade
+and floor collections, restoring them right after. The verifier's
+`world_points` now evaluates curve objects to meshes.
+
+Verification:
+- Empirical Blender check: 2D curve `extrude` spans +/-half symmetric
+  around the curve plane; nested poly splines tessellate as real holes.
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  pass.
+- Blender 5.2.0 full build pass; 1203 objects; preview render visually
+  inspected: storey lines read through the glass, core faintly visible,
+  truss bands unchanged; core render unchanged (floors hidden).
+- `verify_abeno_harukas.py` pass; all 110 checks passed (16 new floor
+  checks: counts follow storeys and skip bands, tops flush with storey
+  levels, slabs inside the plan, outline/opening corners cut, openings
+  kept clear, floor collection visible in the saved model).
+
+Remaining issues: None.
+
+## 2026-09-09 — main — continue the Harukas service core to the roof
+
+The user noted the top volume's core read as hollow. The upper atrium
+frame is intentional (the linked-void hotel section), but the building
+still needed vertical circulation to the observatory level. Added a slim
+8x12 m concrete upper service core (z 195-300 m, high volume only),
+standing just east of the atrium (`UPPER_CORE_DX = ATRIUM_W/2 + 1 + W/2`)
+and stacking over the middle-zone lift banks, so the lifts continue to
+the roof. Upper-zone floor slabs now cut a matching opening beside the
+atrium hole.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  pass.
+- Blender 5.2.0 full build pass; 1204 objects; core render visually
+  inspected: the white upper core rises beside the atrium frame and tops
+  out flush at the 300 m roofline.
+- `verify_abeno_harukas.py` pass; all 113 checks passed (3 new: upper
+  core z-range, east of the atrium, stacking over the lift banks; middle
+  zone slabs already covered by the opening checks).
+
+Remaining issues: None.
+
+## 2026-09-10 — main — Harukas truss layout per the published void-structure figure
+
+The user provided the published structural figures (saved as
+`docs/images/harukas_truss_void_structure_fig4.png` with floor labels
+15F / 25,26F / 31,32F / 37F, and `docs/images/harukas_truss_floors_fig7.png`
+with the floor axis showing the 56-57F top band). Positions were measured
+from the figures by pixel analysis and iterated against renders with the
+user. Final truss scheme, all bands two 5 m storeys tall:
+
+- Belt bands just below the low/middle roofs (z 70-80, 185-195 m) and one
+  near the tower top (z 275-285 m, floors 56-57, below the 58-60F
+  observatory), each wrapping every volume tall enough to carry it
+  (`TRUSS_BAND_TOPS`).
+- Two staggered mid-office trusses each wrapping a single volume only —
+  z 120-130 (floors 25-26) on the middle volume, z 150-160 (floors
+  31-32) on the high volume (`TRUSS_BAND_TOPS_PARTIAL`); unlike the belt
+  bands they do not run through the adjoining volume. `mass_bands` and
+  `floor_levels` now take the mass name.
+- Bands are open 3D lattices, not solid boxes: the dark backing prism was
+  removed and each band now gets a uniform interior web grid in both plan
+  directions at the facade chevron spacing, clipped to the inset plan
+  (`truss_interior`/`truss_line`/`quad_clip`), so the bands read as hollow
+  frameworks as in the figure.
+
+Verify script mirrors the layout, gains staggered-partial/top-band checks
+and per-band open-lattice checks (no solid backing, interior webs span
+the zone and stay inside the plan); the roofline check now reads the
+truss top chords (half chord width tolerance) since the backing no longer
+caps the low/middle roofs. AGENTS.md truss bullets and the `truss_zones`
+scene custom property updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 full build pass; 2285 objects; preview/north renders
+  visually inspected with the user: five truss zones at z 70-80 /
+  120-130 / 150-160 / 185-195 / 275-285 m, the mid-office pair staggered
+  on separate volumes, all bands hollow lattices.
+- `verify_abeno_harukas.py` pass; all 143 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — vertical truss walls and chunkier truss posts
+
+The user pointed at the published section figure and a building photo:
+trusses also run in the vertical direction (the hanging-truss masts
+between the belt bands), and the truss posts were too thin. Changes:
+
+- Truss boundary posts thickened 0.45 -> 0.9 m (`TRUSS_POST_W`, ~2.5x
+  the diagonals, matching the figures' chunky columns); truss recess
+  deepened (`TRUSS_INSET` 0.025 -> 0.04) so the thicker posts and the
+  interior web members stay inside the glass line on the narrowest faces.
+- Added the missing vertical trusses: the upper atrium frame's east/west
+  flank walls are now X-braced in two-storey cells from the middle-roof
+  band up to the top band (z 195-285 m, `ATRIUM_BRACE_TIERS` = 9, high
+  volume only); the crown floors above the top band stay unbraced, per
+  the figure. The braced middle spine (z 80-195 m) already covered the
+  middle-zone vertical truss.
+- Verify script: new check that the atrium flank braces span z 195-285 m
+  (36 members); `ATRIUM_BRACE_TOP`/`ATRIUM_BRACE_TIERS` mirrored.
+- AGENTS.md core bullet and the build header/SOURCES text updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 full build pass; preview/north/core renders visually
+  inspected: bands read as chunky hollow frameworks, and the core view
+  shows the vertical X-braced walls flanking the atrium up to the top
+  band.
+- `verify_abeno_harukas.py` pass; all 144 checks passed (1 new: atrium
+  flank bracing count and z-range).
+
+Remaining issues: the figure also shows vertical braced walls flanking
+the department-store void in the lowest zone (z 0-80 m); our model keeps
+the published four corner service zones there instead — left as-is
+pending user direction.
+
+## 2026-09-10 — main — facade hanging-truss masts between the belt bands
+
+The user asked for the vertical trusses from the published section figure
+to be drawn: vertical hanging-truss masts connecting the horizontal belt
+truss bands. The figure (and the building photo) show them running on the
+facade between band levels, so they are modelled as facade strips rather
+than hidden interior walls. Measured positions from the section figure:
+
+- Low zone: two masts flanking the department-store void, z 0-70 m
+  (up to the 15F belt band), at y ≈ -29.5 and -18.
+- Middle zone: two masts near the middle/high junction, z 80-185 m
+  (from the 15F band to the 37F band), at y ≈ +5.2 and +15.2.
+- Tower zone: the interior X-braced atrium flank walls (added in the
+  previous round) already cover z 195-285 m.
+
+Each mast is a planar truss standing just proud of the glass line
+(`MAST_PROUD` = 0.3 m, so it reads on the facade): two chunky 0.9 m posts
+(matching the thickened band posts) with X diagonals and rungs in
+two-storey cells (`facade_mast`/`facade_masts`, driven by the
+`FACADE_MASTS` list, placed on both the east and west faces of the
+volume). AGENTS.md documents the scheme.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 full build pass; preview render visually inspected: the
+  vertical X-braced strips now connect the belt bands on the side
+  facades, matching the section figure.
+- `verify_abeno_harukas.py` pass; all 160 checks passed (16 new: per-mast
+  member counts, z-ranges, and standing proud of the glass line).
+
+Remaining issues: None.
+
+## 2026-09-10 — main — correct facade mast: one strip, middle volume, zigzag
+
+The user corrected the facade hanging trusses against a clearer building
+photo and the section figure: the vertical truss is a single strip on the
+middle volume only (not two per zone, nothing on the low volume), and its
+diagonals form zigzag (Warren) triangles, not stacked X braces. Changes:
+
+- `FACADE_MASTS` reduced to one entry: middle volume, y ≈ +11 (near the
+  middle/high junction), z 80-185 m, one strip on each of the east and
+  west faces; `MAST_WIDTH` 6 -> 9 m per the section's measured width.
+- `facade_mast` diagonals changed from stacked X braces to zigzag
+  triangles (one diagonal per two-storey cell, alternating direction),
+  matching the section figure.
+- Verify script mirrors the list and the member count (2 x cells + 3 per
+  mast). AGENTS.md mast bullet updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; preview render inspected: one zigzag vertical
+  strip on each side face of the middle volume, connecting the 15F and
+  37F belt bands; low block facade clean.
+- `verify_abeno_harukas.py` pass; all 148 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — facade mast cells are stacked pyramids
+
+The user corrected the facade mast pattern against the zoomed section
+figure: the vertical truss is built from upward-pointing pyramid (A-frame)
+cells stacked vertically — each cell's two diagonals run from the bottom
+corners to an apex at the top centre, with a rung at every joint — not
+zigzag Warren triangles and not stacked X braces. `facade_mast` rewritten
+accordingly (members per mast: 2 posts + cells+1 rungs + 2 x cells
+diagonals); verify count mirrored (3 x cells + 3); AGENTS.md updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  pass.
+- Blender 5.2.0 build pass; preview render inspected: the mast shows
+  stacked upward triangles between the 15F and 37F belt bands.
+- `verify_abeno_harukas.py` pass; all 148 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — truss bands recessed behind a continuous curtain wall
+
+The user pointed out from the building photo: only the asymmetric facade
+mast is exposed; all the horizontal truss bands sit inside the outer
+curtain-wall glass. The glass body no longer splits around the bands:
+each volume is one continuous full-height glass prism with the facade
+grid running through, and the open truss lattices sit recessed behind the
+glass (`TRUSS_INSET`), reading through it. The facade mast stays proud of
+the glass line, so it alone reads as exposed structure. `glass_spans`
+removed (orphaned). Verify: the "glass clears every truss band" check
+became "curtain wall runs continuous past the truss bands" (single prism,
+z 0 to roof); the recessed-inside-the-glass-line check now guards the
+band placement behind the glass. AGENTS.md updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; preview render inspected: continuous glass
+  with the truss bands visible through it, and only the vertical mast
+  exposed on the facade.
+- `verify_abeno_harukas.py` pass; all 148 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — staggered trusses exposed and one storey tall
+
+The user corrected the truss glazing from the floor-axis figure: the two
+staggered mid-office trusses are exposed (no curtain-wall wrapping), the
+belt bands stay wrapped by the continuous glass; and the truss heights
+differ — belt bands two storeys, the staggered trusses smaller. Changes:
+
+- `mass_bands` now returns (z0, z1, exposed) triples; the staggered
+  mid-office trusses are one storey (`TRUSS_BAND_H_PARTIAL` = 5 m:
+  z 125-130 on the middle volume, z 155-160 on the high volume) and
+  exposed, while the belt bands stay two storeys behind the glass.
+- `glass_spans` reintroduced: the curtain wall splits only around the
+  exposed staggered trusses (each volume's glass is one or two prisms;
+  the belt bands keep their glazing).
+- Verify mirrors: wrap/expose check per volume (glass spans cover the
+  belt bands, clear the exposed ones), band-height check (belt 10 m,
+  staggered 5 m), staggered band positions updated. AGENTS.md updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; preview render inspected: belt bands read
+  through the continuous glass, the one-storey staggered trusses and the
+  facade mast stand exposed.
+- `verify_abeno_harukas.py` pass; all 148 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — facade masts recessed within the envelope
+
+The user corrected that no truss may protrude beyond the building's
+outer surface: the facade masts stood proud of the glass line
+(`MAST_PROUD` = +0.3 m). They are now recessed at `TRUSS_INSET` like the
+truss bands (the photo shows a flush curtain wall over the mast zone);
+`MAST_PROUD` removed. Mast ends are clamped to the face extent so the
+west-face mast stays clear of the shorter tilted edge's corner. Verify:
+"stands proud" check became "stays inside the glass line" (all mast
+points inside the plan). AGENTS.md updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; preview render inspected: flat curtain wall,
+  nothing protrudes; the mast reads faintly through the glass and the
+  exposed staggered trusses stay in their unglazed bands.
+- `verify_abeno_harukas.py` pass; all 148 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — hollow truss rings: interior web grid removed
+
+The user compared a close-up of our bands with the reference band photo:
+the reference is a clean hollow ring of perimeter chevron trusses
+(see-through to the far face), while our bands had a dense interior web
+grid reading as a forest of columns. Removed `truss_interior` (and its
+now-orphaned `truss_line`/`quad_clip` helpers); each band is again just
+the four perimeter chevron faces around an open interior. Verify dropped
+the web checks and keeps a guard that no `TrussWeb` objects or solid
+backing reappear. AGENTS.md updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; preview render inspected: bands read as
+  clean hollow chevron rings, no interior forest.
+- `verify_abeno_harukas.py` pass; all 132 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — declutter the band short faces
+
+The user found the band short faces still messy: extra columns. Two
+causes fixed:
+
+- The facade mast (z 80-185 m) crossed the exposed 25-26F band on the
+  side faces, doubling members there. Masts now split around the exposed
+  bands they meet — segments end at the band chords (`facade_masts` takes
+  the band list and cuts the z-range).
+- Adjacent truss faces each built a post at the shared corner, giving
+  doubled corner posts; `truss_face` now skips the k=0 post — the
+  previous face's last post stands at the shared corner.
+
+Also added the floor plate at each band's bottom level (`floor_levels`
+keeps slabs at z0 of a band), so truss rings stand on a plate as in the
+reference band photo. Verify mirrors: post count is now sum(groups) per
+band, mast member counts account for the split segments. AGENTS.md
+updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; band close-up renders (oblique and straight
+  short-face views) inspected: no mast members inside the band, single
+  shared corner posts, band stands on its floor plate.
+- `verify_abeno_harukas.py` pass; all 132 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — truss posts doubled in width
+
+The user asked for the truss posts to be at least twice as thick.
+`TRUSS_POST_W` 0.9 -> 1.8 m (band boundary posts and the facade mast
+posts). `TRUSS_INSET` 0.04 -> 0.07 so the chunkier posts still stay
+inside the facade line on the narrowest faces. Diagonals and chords
+unchanged.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; band close-up renders inspected: posts read
+  as chunky columns, recessed within the envelope.
+- `verify_abeno_harukas.py` pass; all 132 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — thicker diagonals, white truss steel
+
+The user asked for the diagonals to be thickened too and all truss
+members to be white: `TRUSS_DIAG_W` 0.35 -> 0.70 m (posts had just gone
+0.9 -> 1.8 m); new `Harukas_Truss_White` material (white-painted steel,
+per the reference photos) applied to the band trusses and facade masts —
+the facade mullions/transoms keep their own material. Verify unchanged
+(no width/material checks); member counts unaffected.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; preview and band close-up renders inspected:
+  white chunky trusses reading through the glass.
+- `verify_abeno_harukas.py` pass; all 132 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — mast snapped to the belt truss grid
+
+The user noted the vertical mast should read as a vertical extension of
+the main (belt) trusses, but its posts sat off-grid. The mast is now
+exactly one chevron bay wide and snapped to the face's chevron grid
+(`facade_masts` computes the bay from the target y), so its posts
+continue the belt bands' posts above and below. `MAST_WIDTH` removed
+(width follows the bay). Verify unchanged (member counts and inside-the
+-glass-line checks still pass).
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 build pass; mast close-up render inspected: the mast
+  posts continue the band posts at the chevron boundaries.
+- `verify_abeno_harukas.py` pass; all 132 checks passed.
+
+Remaining issues: None.
+
+## 2026-09-10 — main — belt bands resized to 1.5x the staggered trusses
+
+The user noted the figure's proportions: the belt bands and the staggered
+mid-office trusses differ by 1.5x in height, not 2x. `TRUSS_BAND_H`
+10.0 -> 7.5 m (band tops unchanged: 80/195/285 m, so the bands are now
+z 72.5-80 / 187.5-195 / 277.5-285). The facade mast and the atrium flank
+bracing still run band-to-band: mast z 80-187.5, atrium bracing
+`ATRIUM_BRACE_TOP` 285 -> 277.5 (stops at the top band's lower edge).
+Verify mirrors constants and the explicit band z-range checks; slab
+levels follow automatically. AGENTS.md and the module docstrings updated.
+
+Verification:
+- `python3 -m py_compile build_abeno_harukas.py verify_abeno_harukas.py`
+  and `git diff --check` pass.
+- Blender 5.2.0 full build pass; preview/north renders inspected: belt
+  bands read at 1.5x the staggered trusses' height.
+- `verify_abeno_harukas.py` pass; all 132 checks passed.
+
+Remaining issues: None.
