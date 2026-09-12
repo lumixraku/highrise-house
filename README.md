@@ -47,6 +47,30 @@ The image above captures the current Blender working view. The images below are 
 | ![Facade detail](docs/images/highrise-facade-detail.png) |
 | Clear glazing, ventilation strips, horizontal spandrels, mullions, and the varied interior-light modules seen at close range. |
 
+## The Stack
+
+A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 301.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin, louvre and masonry bands — pierced by one large apartment void with a three-storey bridge, held by two service cores braced by giant X-braces, and crowned by a planted roof inside an open glazed edge.
+
+| Whole building | Apartment curtain wall |
+| --- | --- |
+| ![The Stack, whole building](docs/images/stack-preview.png) | ![The Stack, apartment curtain wall](docs/images/stack-facade.png) |
+
+| Apartment void | Refuge sky garden |
+| --- | --- |
+| ![The Stack, apartment void](docs/images/stack-void.png) | ![The Stack, refuge sky garden](docs/images/stack-refuge-garden.png) |
+
+| Retail base |
+| --- |
+| ![The Stack, retail base](docs/images/stack-base.png) |
+
+Build, render the review views and validate it with:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python build_the_stack.py
+blender --background --factory-startup --python-exit-code 1 --python build_the_stack.py -- --views preview facade garden void base
+blender --background --factory-startup --python-exit-code 1 --python verify_the_stack.py -- out/the_stack.blend
+```
+
 ## Repository Structure
 
 ```text

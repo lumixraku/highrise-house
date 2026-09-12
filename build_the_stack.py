@@ -189,7 +189,7 @@ BANDS = (
 )
 
 FACES = ("N", "S", "E", "W")
-VIEW_NAMES = ("preview",)
+VIEW_NAMES = ("preview", "facade", "garden", "void", "base")
 
 
 # ---------------------------------------------------------------------------
@@ -1116,15 +1116,19 @@ def setup_scene(args, mats):
                           math.radians(-32))
 
     camera_data = []
-    for name, loc, target in (
-            ("preview", (340, -560, 200), (0, 0, 165)),):
+    for name, loc, target, lens in (
+            ("preview", (340, -560, 200), (0, 0, 165), 55),
+            ("facade", (150, -230, 240), (0, 0, 240), 90),
+            ("garden", (70, -120, 173), (0, 0, 167), 45),
+            ("void", (20, -250, 250), (0, 0, 238), 60),
+            ("base", (190, -250, 80), (0, 0, 30), 55)):
         bpy.ops.object.camera_add(location=loc)
         cam = bpy.context.object
         cam.name = f"Stack_Camera_{name}"
         # A generous near plane keeps depth precision high across the 600 m
         # view distance, so thin facade offsets do not z-fight.
         cam.data.clip_start, cam.data.clip_end = 5.0, 3000.0
-        cam.data.lens = 55
+        cam.data.lens = lens
         cam.rotation_euler = (Vector(target) - cam.location).to_track_quat(
             "-Z", "Y").to_euler()
         camera_data.append((name, cam))
