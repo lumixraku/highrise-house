@@ -64,18 +64,51 @@ def main():
         return all(any(level - 0.5 < z < level for z in zs)
                    for level in levels)
 
-    mall_floors = scene.get("mall_floors", 14)
+    def footprint(obj):
+        pts = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+        return (min(p.x for p in pts), max(p.x for p in pts),
+                min(p.y for p in pts), max(p.y for p in pts))
+
+    def hits_core(obj):
+        x0, x1, y0, y1 = footprint(obj)
+        for core in (bpy.data.objects.get("Stack_Core_West"),
+                     bpy.data.objects.get("Stack_Core_East")):
+            if core is None:
+                continue
+            cx0, cx1, cy0, cy1 = footprint(core)
+            if (x0 < cx1 - 0.01 and x1 > cx0 + 0.01
+                    and y0 < cy1 - 0.01 and y1 > cy0 + 0.01):
+                return True
+        return False
+
+    mall_floors = scene.get("mall_floors", 10)
+    office_floors = scene.get("office_floors", 25)
+    apartment_floors = scene.get("apartment_floors", 29)
+    refuge_open_h = scene.get("refuge_open_height_m", 5.0)
     storeys, sz = [], 0.0
-    for floors, height in ((mall_floors, 5.0),
-                           (scene.get("office_floors", 25), 5.0),
-                           (scene.get("apartment_floors", 31), 4.0)):
+    for floors, height in ((mall_floors, 5.0), (office_floors, 5.0),
+                           (apartment_floors, 4.0)):
         for _ in range(floors):
             sz += height
             storeys.append(round(sz, 3))
+    # Zone boundaries follow from the floor counts alone; nothing here is a
+    # hard-coded elevation.
+    level_base = mall_floors * 5.0
+    level_apartment = level_base + office_floors * 5.0
+    level_roof = level_apartment + apartment_floors * 4.0
+    model_height = level_roof + scene.get("crown_height_m", 0.0)
+    refuge_spans = ((level_base, level_base + 5.0),
+                    (level_apartment - 5.0, level_apartment))
     mall_levels, upper_levels = storeys[:mall_floors], storeys[mall_floors:]
+    # The ground hall is double height: the first retail plate is lifted two
+    # storeys, so the levels below it carry neither a plate nor a ceiling ring.
+    mall_ground_height = scene.get("mall_ground_height_m", 5.0)
+    # The top mall plate is the refuge floor, dropped so the refuge opens
+    # downward, so it carries no plate and no ceiling ring.
+    mall_plate_levels = [z for z in mall_levels
+                         if mall_ground_height - 0.01 <= z < level_base - 0.01]
     refuge_levels = [z for z in upper_levels
-                     if any(z0 < z <= z1 for z0, z1 in ((70.0, 75.0),
-                                                        (190.0, 195.0)))]
+                     if any(z0 < z <= z1 for z0, z1 in refuge_spans)]
     frost_alpha = None
     frost = bpy.data.materials.get("Stack_Glass_Frost")
     if frost and frost.use_nodes:
@@ -93,10 +126,23 @@ def main():
         and scene.get("elevation_height_pixels") == 992,
         "band sequence recorded": scene.get("facade_bands") ==
         "base,refuge,garden,diagrid,fins,louver,refuge,brick",
-        "storey program recorded": scene.get("floor_count") == 68
-        and scene.get("mall_floors") == 14
+        "storey program recorded": scene.get("floor_count") == 64
+        and scene.get("mall_floors") == 10
         and scene.get("office_floors") == 25
         and scene.get("apartment_floors") == 29,
+        # The plate at the top of each refuge is dropped, so the open floor
+        # reads as a double-height (10 m) garden, not a narrow 5 m slot.
+        "refuge storeys are double height": refuge_open_h == 2 * 5.0
+        and not any(abs(center_z(obj) - z0) < 0.2
+                    for obj in bpy.data.objects
+                    if obj.name.startswith("Stack_Floor_Slab")
+                    for z0, _ in refuge_spans),
+        # The mall refuge floor is a mall plate, dropped too so that refuge also
+        # opens downward into the storey below.
+        "mall refuge opens downward": not any(
+            abs(obj.location.z - level_base) < 0.2
+            for obj in bpy.data.objects
+            if obj.name.startswith("Stack_Mall_Slab")),
         "storey heights recorded": scene.get("storey_heights_m") ==
         "mall 5.0, office 5.0, apartment 4.0",
         # Office and apartment plates run to the roof; six are split around the
@@ -104,9 +150,23 @@ def main():
         "floor plates to roof": 55 <= count("Stack_Floor_Slab") <= 100,
         # The mall carries one ring of retail plates per storey, all below the
         # office zone.
-        "mall storey plates": count("Stack_Mall_Slab") >= 40
-        and all(obj.location.z <= 70.0 for obj in bpy.data.objects
+        "mall storey plates": count("Stack_Mall_Slab") >= 4 * len(mall_plate_levels)
+        and all(obj.location.z <= level_base for obj in bpy.data.objects
                 if obj.name.startswith("Stack_Mall_Slab")),
+        # The ground hall has no plate: the lowest retail plate is suspended two
+        # storeys up, so the base reads as a 10 m open volume.
+        "suspended first floor": mall_ground_height == 2 * 5.0
+        and not any(obj.location.z < mall_ground_height - 0.1
+                    for obj in bpy.data.objects
+                    if obj.name.startswith("Stack_Mall_Slab")),
+        # The hall is served by several escalator runs up to the suspended first
+        # plate, spread around the atrium, not only by the long hall escalator.
+        "ground hall escalators": scene.get("base_escalators", 0) >= 4
+        and count("Stack_Base_Escalator_Up_") >= 4,
+        # Those runs must stay in the floor ring, not pass through the cores.
+        "ground escalators clear the cores": not any(
+            hits_core(obj) for obj in bpy.data.objects
+            if obj.name.startswith("Stack_Base_Escalator_Up_")),
         "long escalator in base": count("Stack_Base_Escalator") >= 2
         and count("Stack_Base_Tread") > 10,
         # The base is a frosted glass wall with a frame heavy enough to read at
@@ -116,16 +176,18 @@ def main():
         and count("Base_Glass") >= 4 and count("Base_Mullion") >= 8
         and max((max(o.dimensions.x, o.dimensions.y) for o in bpy.data.objects
                  if "Base_Mullion" in o.name), default=0.0) >= 0.25,
-        # The base glass is grouped three storeys high on the floor plates: four
+        # The base glass is grouped two storeys high on the floor plates: four
         # groups at the top of the mall, the lowest storeys left as openwork.
-        "base glass grouped three storeys": (
+        "base glass grouped two storeys": (
             len(base_glass) == 4 * len(("N", "S", "E", "W"))
-            and all(abs(o.dimensions.z - 3 * 5.0) < 0.01 for o in base_glass)
+            and all(abs(o.dimensions.z - 2 * 5.0) < 0.01 for o in base_glass)
             and min(o.location.z - o.dimensions.z / 2 for o in base_glass)
-            >= 10.0 - 0.01),
+            >= level_base - 4 * 2 * 5.0 - 0.01),
         "dual cores": all(f"Stack_Core_{side}" in names
                           for side in ("West", "East")),
-        "core transfer links": count("Stack_Core_Transfer_") == 6,
+        # Five ties, not six: the apartment base stays open across the void, so
+        # the cores are tied at the band boundaries except LEVEL_APARTMENT.
+        "core transfer links": count("Stack_Core_Transfer_") == 5,
         "core X-bracing": scene.get("core_bracing") == 5
         and len(braces) == 20
         and count("Stack_Core_Brace_Chord_") == 0
@@ -145,21 +207,43 @@ def main():
         # The mall ceilings are continuous bright rings on every storey.
         "mall ceiling lights": len(mall_lights) == 1
         and len(mall_lights[0].data.vertices) > 0
-        and covers(mall_levels, light_z(mall_lights)),
+        and covers(mall_plate_levels, light_z(mall_lights)),
         # Offices and apartments use the house panel lights on every storey,
         # with lit and switched-off fixtures and both colour temperatures. The
         # open refuge storeys take no panel grid, only a perimeter cove.
         "apartment ceiling lights": len(room_objs) == 3
         and all(len(obj.data.vertices) > 0 for obj in room_objs)
-        and covers([z for z in upper_levels if z not in refuge_levels],
+        and covers([z for z in upper_levels
+                    if z not in refuge_levels
+                    and z not in (level_base, level_apartment - 5.0)],
                    light_z(room_objs)),
+        # Lights hang from a plate: no panel may sit under a dropped refuge
+        # plate with nothing above it to fix to.
+        "no floating lights": not any(
+            abs(z - (level_apartment - 5.0 - 0.19)) < 0.1
+            for z in light_z(room_objs)),
         "refuge ceilings are a continuous cove": len(refuge_glow) == 1
         and max((max(obj.dimensions.x, obj.dimensions.y)
                  for obj in refuge_glow), default=0.0) >= 100.0
         and covers(refuge_levels, light_z(refuge_glow)),
         "no panels on the refuge storeys": not any(
             z0 + 0.1 < z < z1 - 0.1 for z in light_z(room_objs)
-            for z0, z1 in ((70.0, 75.0), (190.0, 195.0))),
+            for z0, z1 in refuge_spans),
+        # The void is open air, not a room, so its ceilings take no panel
+        # lights: none may sit in the opening except on the occupied bridge.
+        "no ceiling lights in the open void": not any(
+            abs(p.x) < (scene.get("void_width_m") or 0.0) / 2 - 0.01
+            and level_apartment <= p.z <= level_roof - 3 * 4.0
+            and not (level_apartment + 11 * 4.0) < p.z
+            < (level_apartment + 14 * 4.0)
+            for obj in room_objs for p in
+            (obj.matrix_world @ v.co for v in obj.data.vertices)),
+        # The open refuge plates and the top roof are all planted decks with a
+        # perimeter running track, not bare plates.
+        "planted decks": all(
+            count(f"{name}_Lawn") > 0 and count(f"{name}_Track_") >= 4
+            for name in ("Stack_Refuge_Mall_Garden",
+                         "Stack_Refuge_Apartment_Garden", "Stack_Roof")),
         "camera assigned": scene.camera is not None,
         "viewport framed on building": any(
             area.spaces.active.region_3d is not None
@@ -170,7 +254,7 @@ def main():
     for label, marker in BAND_MARKERS.items():
         checks[label] = count(marker) > 0
     height = scene.get("model_height_m")
-    checks["model height recorded"] = height == 321.8
+    checks["model height recorded"] = height == model_height
     # The top of the building is the open glass edge, not a ceiling: the glass
     # runs on well above the highest floor plate.
     glass_top = top_of("N_Brick") or 0.0
@@ -183,10 +267,11 @@ def main():
     # straight through them.
     checks["open refuge storeys"] = (
         scene.get("refuge_floors") == 2
-        and scene.get("refuge_levels_m") == "70.0-75.0, 190.0-195.0"
+        and scene.get("refuge_levels_m") ==
+        f"{level_base}-{level_base + 5.0}, "
+        f"{level_apartment - 5.0}-{level_apartment}"
         and not any(o.name[:2] in ("N_", "S_", "E_", "W_")
-                    and (70.0 < o.location.z < 75.0
-                         or 190.0 < o.location.z < 195.0)
+                    and any(z0 < o.location.z < z1 for z0, z1 in refuge_spans)
                     for o in bpy.data.objects))
     # The four faces must each carry the wrapping bands.
     checks["bands wrap four faces"] = all(
@@ -221,6 +306,33 @@ def main():
     checks["bridge across the void is glazed"] = (
         count("Bridge_Glass") == 2 * 3 and count("Bridge_Spandrel") == 2 * 3
         and count("Bridge_Mullion") >= 8 and count("Bridge_Transom") >= 8)
+    # The void's bottom is open too: the two halves are not joined there, so no
+    # plate may span the opening at the apartment's lowest level.
+    def spans_void(obj):
+        pts = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+        half = (scene.get("void_width_m") or 0.0) / 2
+        return (half and min(p.x for p in pts) < -half + 1e-6
+                and max(p.x for p in pts) > half - 1e-6)
+
+    bottom_slabs = [obj for obj in bpy.data.objects
+                    if obj.type == "MESH"
+                    and (obj.name.startswith("Stack_Floor_Slab")
+                         or obj.name.startswith("Stack_Core_Transfer_")
+                         or obj.name.endswith("_Brick_Transom"))
+                    and abs(center_z(obj) - level_apartment) < 0.2]
+    checks["void bottom is open"] = (
+        bool(bottom_slabs) and not any(spans_void(o) for o in bottom_slabs))
+    # The apartment refuge cove is split by the void too: each tower half closes
+    # its own ring, so no cove geometry may sit inside the opening.
+    cove_x = [abs((obj.matrix_world @ v.co).x)
+              for obj in bpy.data.objects
+              if obj.name.startswith("Stack_Refuge_Ceiling_Lights")
+              for v in obj.data.vertices
+              if level_apartment - 0.5 < (obj.matrix_world @ v.co).z
+              < level_apartment + 0.1]
+    checks["refuge cove is split at the void"] = (
+        bool(cove_x)
+        and min(cove_x) >= (scene.get("void_width_m") or 0.0) / 2 - 0.1)
     # The upper band must read as narrow vertical strips (the Abeno Harukas
     # curtain-wall proportion): fine vertical mullions on a ~1.25 m module.
     mullion_x = sorted({round(obj.location.x, 3)
