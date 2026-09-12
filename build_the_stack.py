@@ -816,13 +816,14 @@ def void_face_spans(z0, z1):
 
 def brace_crossings():
     """(y, z) points where the X-braces cross a void's inward face."""
-    half = CORE_SPAN / 2
-    f = (half - VOIDS[0][2] / 2) / CORE_SPAN
+    end = CORE_SPAN / 2 + CORE_BRACE_W
+    y_end = CORE_DEPTH / 2 - CORE_BRACE_W
+    f = (end - VOIDS[0][2] / 2) / (2 * end)
     out = []
     for z0, z1 in CORE_BRACE_BAYS:
         d = z1 - z0
         for t in (f, 1 - f):
-            y = -CORE_DEPTH / 2 + t * CORE_DEPTH
+            y = y_end * (1 - 2 * t)
             out.append((y, z0 + t * d))
             out.append((-y, z0 + t * d))
     return out
@@ -984,8 +985,11 @@ def core_bracing(mats):
     """Giant spatial X-braces between the two service cores: four diagonals per
     bay, each running from a corner of one core's face to the diagonally
     opposite corner of the other, so the bracing uses the cores' full depth and
-    reads as an X in plan, in elevation and from the side alike."""
-    x, y = CORE_SPAN / 2, CORE_DEPTH / 2
+    reads as an X in plan, in elevation and from the side alike. The ends run
+    CORE_BRACE_W into each core, so the members meet the concrete in a solid
+    connection rather than only touching the inner corner."""
+    x = CORE_SPAN / 2 + CORE_BRACE_W
+    y = CORE_DEPTH / 2 - CORE_BRACE_W
     pairs = (
         ("A", (-x, -y), (x, y)),
         ("B", (-x, y), (x, -y)),

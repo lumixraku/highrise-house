@@ -192,6 +192,15 @@ def main():
         and len(braces) == 20
         and count("Stack_Core_Brace_Chord_") == 0
         and all(world_size(o)[1] > 10.0 for o in braces),
+        # The diagonals run into the concrete and stay within its depth, so the
+        # connection is buried in the core rather than poking out of it.
+        "core braces meet the cores": (
+            bpy.data.objects.get("Stack_Core_East") is not None
+            and all(footprint(o)[1]
+                    > footprint(bpy.data.objects["Stack_Core_East"])[0] + 1.0
+                    and footprint(o)[3]
+                    < footprint(bpy.data.objects["Stack_Core_East"])[3] + 0.01
+                    for o in braces)),
         # Every X must have the same proportions, so all braces share one
         # bounding-box height and the diagonals keep a constant angle.
         "uniform X-braces": len({round(world_size(o)[2], 1)
