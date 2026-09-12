@@ -53,6 +53,8 @@ def main():
                   if "Base_Glass" in obj.name]
     room_objs = [obj for obj in bpy.data.objects
                  if obj.name.startswith("Stack_Room_Lights_")]
+    refuge_glow = [obj for obj in bpy.data.objects
+                   if obj.name.startswith("Stack_Refuge_Ceiling_Lights")]
 
     def light_z(objs):
         return [(obj.matrix_world @ v.co).z for obj in objs
@@ -71,6 +73,9 @@ def main():
             sz += height
             storeys.append(round(sz, 3))
     mall_levels, upper_levels = storeys[:mall_floors], storeys[mall_floors:]
+    refuge_levels = [z for z in upper_levels
+                     if any(z0 < z <= z1 for z0, z1 in ((70.0, 75.0),
+                                                        (190.0, 195.0)))]
     frost_alpha = None
     frost = bpy.data.materials.get("Stack_Glass_Frost")
     if frost and frost.use_nodes:
@@ -142,10 +147,19 @@ def main():
         and len(mall_lights[0].data.vertices) > 0
         and covers(mall_levels, light_z(mall_lights)),
         # Offices and apartments use the house panel lights on every storey,
-        # with lit and switched-off fixtures and both colour temperatures.
+        # with lit and switched-off fixtures and both colour temperatures. The
+        # open refuge storeys take no panel grid, only a perimeter cove.
         "apartment ceiling lights": len(room_objs) == 3
         and all(len(obj.data.vertices) > 0 for obj in room_objs)
-        and covers(upper_levels, light_z(room_objs)),
+        and covers([z for z in upper_levels if z not in refuge_levels],
+                   light_z(room_objs)),
+        "refuge ceilings are a continuous cove": len(refuge_glow) == 1
+        and max((max(obj.dimensions.x, obj.dimensions.y)
+                 for obj in refuge_glow), default=0.0) >= 100.0
+        and covers(refuge_levels, light_z(refuge_glow)),
+        "no panels on the refuge storeys": not any(
+            z0 + 0.1 < z < z1 - 0.1 for z in light_z(room_objs)
+            for z0, z1 in ((70.0, 75.0), (190.0, 195.0))),
         "camera assigned": scene.camera is not None,
         "viewport framed on building": any(
             area.spaces.active.region_3d is not None
@@ -192,13 +206,21 @@ def main():
         and count("N_Brick_Glass") > 1 and count("S_Brick_Glass") > 1)
     wall = bpy.data.objects.get("Stack_Void_0_Wall_W")
     checks["apartment void is a tall slot"] = (
-        wall is not None
-        and wall.dimensions.z > wall.dimensions.y * 1.5)
+        wall is not None and wall.dimensions.z > 30.0)
+    # The void's two inward faces are glazed, not plain concrete.
+    checks["void inward faces are glazed"] = (
+        wall is not None and wall.data.materials
+        and wall.data.materials[0].name == "Stack_Glass_Dark")
     # The void's head and sill are the floor plates, so each level keeps a
     # single slab instead of a slab plus a separate lining.
     checks["void edges reuse the floor slabs"] = not any(
         n.startswith("Stack_Void_") and n.rsplit("_", 1)[-1] in ("Lintel", "Sill")
         for n in names)
+    # The three-storey bridge across the void is occupied, so the opening is
+    # glazed across it in the same curtain-wall language as the apartment band.
+    checks["bridge across the void is glazed"] = (
+        count("Bridge_Glass") == 2 * 3 and count("Bridge_Spandrel") == 2 * 3
+        and count("Bridge_Mullion") >= 8 and count("Bridge_Transom") >= 8)
     # The upper band must read as narrow vertical strips (the Abeno Harukas
     # curtain-wall proportion): fine vertical mullions on a ~1.25 m module.
     mullion_x = sorted({round(obj.location.x, 3)
@@ -208,6 +230,12 @@ def main():
     checks["apartment band is vertical strips"] = (
         len(mullion_x) > 80 and bool(gaps)
         and 1.0 < gaps[len(gaps) // 2] < 1.5)
+    # The void edges land on mullion centres, so the windows on the two tower
+    # halves beside the opening are whole rather than cut in half.
+    checks["void edges land on the mullion grid"] = (
+        bool(scene.get("void_width_m"))
+        and round(scene.get("void_width_m") / 2, 3)
+        in {round(x, 3) for x in mullion_x})
     # The upper band is glass and frame; no solid masonry backing may show.
     checks["apartment band is glazed"] = (
         count("Brick_Glass") > 0 and count("Brick_Back") == 0)
