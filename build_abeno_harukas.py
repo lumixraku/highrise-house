@@ -7,7 +7,7 @@ in plan: the long connecting edges are slanted — they tilt along the
 north-south axis instead of running straight east-west. The middle volume's
 east side extends outward while its west side approaches the high volume.
 Open truss bands sit just below the low/middle rooflines and near the
-tower top (tops z 80/195/285 m, 7.5 m tall = 1.5 storeys), hollow
+tower top (tops z 80/195/270 m, 7.5 m tall = 1.5 storeys), hollow
 chevron rings recessed behind the continuous curtain wall; one-storey
 staggered mid-office trusses stand exposed between them, and a vertical
 hanging-truss mast runs on each side facade of the middle volume.
@@ -25,45 +25,46 @@ grids, core and slabs are schematic.
 import argparse
 import math
 import os
+import random
 import sys
 
 import bpy
 from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from materials import (make_concrete, make_glass, make_ground, make_metal,
-                       make_wall)
+from materials import (CEILING_LIGHT_DAYLIGHT, CEILING_LIGHT_WARM,
+                       make_ceiling_light, make_concrete,
+                       make_frosted_glass_film, make_glass, make_ground,
+                       make_metal, make_wall)
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 # Three ground-standing volumes connected along Y. Plan corners are ordered
 # SW, SE, NE, NW; adjacent volumes share their full connecting edge. The long
 # connecting edges are slanted in plan — they tilt along the north-south axis
 # instead of running straight east-west, so all three footprints are irregular
-# quadrilaterals. The low/middle connecting edge (88 m) is the composition's
-# widest line: both neighbouring volumes flare outward toward it, keeping
-# every plan tilt within about 3 degrees. Flat roofs at 80/195/300 m.
+# quadrilaterals. The middle volume flares outward toward its low-side face,
+# with its side edges tilted about 5 degrees. Flat roofs at 80/195/300 m.
 MASSES = (
     ("Low", 80.0, ((-42.5, -40.0), (42.7, -40.0),
-                   (44.0, -14.75), (-44.0, -10.25))),
-    ("Middle", 195.0, ((-44.0, -10.25), (44.0, -14.75),
+                   (45.21, -14.75), (-44.87, -10.25))),
+    ("Middle", 195.0, ((-44.87, -10.25), (45.21, -14.75),
                        (42.3, 18.5), (-42.7, 14.5))),
     ("High", 300.0, ((-42.7, 14.5), (42.3, 18.5),
                      (41.8, 46.0), (-43.5, 46.0))),
 )
-# Union of the three plans. The low/middle connecting edge spans -44..+44
-# (88 m), the widest line of the composition, shared by the low and middle
-# volumes; the middle volume widens toward that low-side face. Depth 86 m.
-OUTLINE = ((-42.5, -40.0), (42.7, -40.0), (44.0, -14.75), (42.3, 18.5),
-           (41.8, 46.0), (-43.5, 46.0), (-42.7, 14.5), (-44.0, -10.25))
+# Union of the three plans. The widened low/middle connecting edge is shared by
+# both volumes; the middle volume flares toward that low-side face. Depth 86 m.
+OUTLINE = ((-42.5, -40.0), (42.7, -40.0), (45.21, -14.75), (42.3, 18.5),
+           (41.8, 46.0), (-43.5, 46.0), (-42.7, 14.5), (-44.87, -10.25))
 TRUSS_BAND_H = 7.5      # belt truss bands: 1.5x the one-storey staggered
                         # trusses, per the figure's proportions
 TRUSS_BAND_H_PARTIAL = 5.0  # the staggered mid-office trusses: one storey
-# Belt band tops: just below the low/middle roofs (80/195 m) plus one
-# near the top of the tower (285 m, floors 56-57, leaving the observatory
-# floors 58-60 above it), each wrapping every volume tall enough to carry
+# Belt band tops: just below the low/middle roofs (65/180 m) plus one
+# near the top of the tower (270 m, with the six crown floors above it),
+# each wrapping every volume tall enough to carry
 # it. The belt bands stay behind the continuous curtain wall. No band at
 # the ground level or at the 300 m roof.
-TRUSS_BAND_TOPS = (80.0, 195.0, 285.0)
+TRUSS_BAND_TOPS = (80.0, 195.0, 270.0)
 # Mid-office trusses each wrap a single volume, staggered between the two
 # big roof bands (floors 25-26 on the middle volume, floors 31-32 on the
 # high volume), per the published void-structure figure; unlike the roof
@@ -77,20 +78,48 @@ TRUSS_POST_W = 1.80     # chunky boundary posts
 TRUSS_DIAG_W = 0.70     # diagonals thickened to match
 TRUSS_CHORD_W = 0.40
 MAST_CELL_H = 10.0      # two-storey pyramid cells
-# Vertical hanging-truss mast on the east and west facades of the middle
-# volume only, one strip per face near the middle/high junction, running
-# from the 15F belt band up to the 37F belt band, per the published
-# section. Like every truss it stays within the envelope — recessed at
-# TRUSS_INSET behind the curtain wall glass. The tower zone masts are
-# interior — the braced atrium flank walls. (volume, y centre, z0, z1)
+MULLION_SPACING = 1.25  # curtain wall pane module, per the facade photo
+SHORT_GLASS_FRACTION = 0.25  # lower white spandrel quarter of each storey
+# Interior roller blinds, one per curtain-wall module behind each storey's
+# vision glass, matching the Office reference: a thin frosted panel hung
+# 10 cm inside the glass line, with three discrete states — rolled up (no
+# panel), half down, fully down — distributed in exactly balanced counts.
+CURTAIN_GAP = 0.10          # curtain face distance inside the glass line
+CURTAIN_T = 0.01            # panel thickness
+CURTAIN_EDGE_INSET = 0.078  # half the 0.12 m mullion + 0.018 m side gap
+CURTAIN_BOTTOM_INSET = 0.03
+CURTAIN_COVERAGES = (0.0, 0.5, 1.0)
+CURTAIN_SEED = 20260911
+# Ceiling strip lights, per the house reference: long thin fixtures laid in
+# an even row grid across the whole ceiling of every floor, so no area is
+# left dark. Each row runs along the plan's long axis and is clipped around
+# the core, so the lights wrap the core while still covering the far plate.
+# A stable seeded mix of lit (daylight/warm) and switched-off units keeps
+# the floors reading as inhabited.
+LIGHT_ROW_PITCH = 3.0   # even row spacing across the floor depth
+LIGHT_STRIP_W = 0.30
+LIGHT_STRIP_H = 0.10
+LIGHT_EDGE_CLEAR = 0.6  # keep a strip clear of the facade and the core
+LIGHT_MIN_LEN = 1.5
+LIGHT_SEED = 20260911
+LIGHT_ON_RATIO = 0.5
+# Vertical hanging-truss masts run on the wider side face at each side of
+# the composition — the side with three chevron groups: the middle
+# volume's EAST face on the east side, and the high volume's WEST face on
+# the west side — each near the middle/high junction, running from the
+# 15F belt band up to the 37F belt band, per the published section. Like
+# every truss they stay within the envelope — recessed at TRUSS_INSET
+# behind the curtain wall glass. The tower zone masts are interior — the
+# braced atrium flank walls. (volume, face, y centre, z0, z1)
 FACADE_MASTS = (
-    ("Middle", 11.0, 80.0, 187.5),
+    ("Middle", "E", 11.0, 80.0, 187.5),
+    ("High", "W", 20.0, 80.0, 187.5),
 )
 # Service core, published linked-void scheme: four lower corner service
 # zones (z 0-80 m, every volume), a braced steel middle core with west
 # eco-voids and east lift banks (z 80-195 m, middle and high volumes), and
 # an upper atrium frame with X-braced flank walls up to the top truss band
-# (z 195-277.5 m) plus unbraced crown floors above the top band.
+# (z 195-262.5 m) plus unbraced crown floors above the top band.
 # Transfer ties link the corner zones to the spine at z 80 m and the spine
 # to the atrium columns at z 195 m. Schematic, not as-built.
 CORE_ZONE_LOW = (0.0, 80.0)
@@ -114,9 +143,9 @@ ATRIUM_W = 26.0
 ATRIUM_D = 15.0
 ATRIUM_COL = 1.0
 # Vertical truss walls flanking the atrium void, X-braced in two-storey
-# cells from the middle-roof band up to the top band (z 195-277.5), per the
+# cells from the middle-roof band up to the top band (z 195-262.5), per the
 # hanging-truss figure; the crown floors above the top band stay unbraced.
-ATRIUM_BRACE_TOP = 277.5
+ATRIUM_BRACE_TOP = 262.5
 ATRIUM_BRACE_TIERS = 9
 # Slim upper service core (lifts + stairs) continuing to the roof, standing
 # just east of the atrium and stacking over the lift banks below.
@@ -135,10 +164,12 @@ SOURCES = {
     "source_floor_count": 60,
     "mass_layout": "Three volumes on one ground plane, connected south to north: low, middle, high.",
     "mass_heights_m": "80 / 195 / 300, flat roofs.",
-    "plan_shape": "Three different quadrilaterals; long connecting edges tilt along the north-south axis, all within 3 degrees.",
-    "truss_zones": "Hollow truss rings (chevron faces on all four sides, open interior, no solid backing): belt bands 7.5 m tall (1.5x the one-storey staggered trusses) just below the low/middle roofs plus one near the tower top (tops z 80/195/285 m), wrapping every volume tall enough and recessed behind the continuous curtain wall, plus one-storey staggered mid-office trusses each wrapping a single volume (floors 25-26 on the middle volume, floors 31-32 on the high volume), exposed — the glass splits around them; ~12 m chevron spacing (7 groups on the long faces).",
-    "core_scheme": "Linked-void scheme: four lower corner service zones (z 0-80 m, every volume), braced steel middle core with west eco-voids and east lift banks (z 80-195 m, middle/high), upper atrium frame with X-braced flank walls up to the top truss band (z 195-277.5 m) plus slim service core continuing to the roof (z 195-300 m, high); transfer ties at z 80/195 m. Schematic, not as-built.",
+    "plan_shape": "Three different quadrilaterals; the middle volume flares toward widened low-side face with side edges at about 5 degrees.",
+    "truss_zones": "Hollow truss rings (chevron faces on all four sides, open interior, no solid backing): belt bands 7.5 m tall (1.5x the one-storey staggered trusses) just below the low/middle roofs plus one near the tower top (tops z 80/195/270 m), wrapping every volume tall enough and recessed behind the continuous curtain wall, plus one-storey staggered mid-office trusses each wrapping a single volume (floors 25-26 on the middle volume, floors 31-32 on the high volume), exposed — the glass splits around them; chevron counts derive from each face width at ~12 m spacing.",
+    "core_scheme": "Linked-void scheme: four lower corner service zones (z 0-80 m, every volume), braced steel middle core with west eco-voids and east lift banks (z 80-195 m, middle/high), upper atrium frame with X-braced flank walls up to the top truss band (z 195-262.5 m) plus slim service core continuing to the roof (z 195-300 m, high); transfer ties at z 80/195 m. Schematic, not as-built.",
     "floor_slabs": "5 m storeys, 0.3 m slabs inset 0.3 m from the plan, with actual core/atrium openings; clear of the truss bands.",
+    "curtains": "One frosted roller blind per curtain-wall module behind each storey's vision glass, 10 cm inside the glass line, in three balanced states (rolled up / half down / fully down).",
+    "ceiling_lights": "Three concentric rings of long thin ceiling strip lights around the core on every floor, following the plan shape, in a seeded mix of lit (daylight/warm) and switched-off states.",
     "model_scope": "Body-first massing pass; facade grids schematic; linked-void core and floor slabs modelled; interior systems deferred.",
 }
 COLLECTION = None
@@ -185,6 +216,24 @@ def beam(name, start, end, width, material):
     obj.rotation_mode = "QUATERNION"
     obj.rotation_quaternion = (end - start).to_track_quat("Z", "Y")
     return obj
+
+
+def beams_mesh(name, members, width, material):
+    """Many beam members merged into a single mesh object."""
+    verts, faces = [], []
+    for start, end in members:
+        s, e = Vector(start), Vector(end)
+        quat = (e - s).to_track_quat("Z", "Y")
+        mid = (s + e) / 2
+        base = len(verts)
+        for sx, sy, sz in ((-1, -1, -1), (1, -1, -1), (1, 1, -1),
+                           (-1, 1, -1), (-1, -1, 1), (1, -1, 1),
+                           (1, 1, 1), (-1, 1, 1)):
+            local = Vector((sx * width / 2, sy * width / 2,
+                            sz * (e - s).length / 2))
+            verts.append(tuple(mid + quat @ local))
+        faces.extend(tuple(base + i for i in face) for face in BOX_FACES)
+    return mesh_object(name, verts, faces, material)
 
 
 def prism(name, points, z0, z1, material):
@@ -250,8 +299,9 @@ def quad_inset(points, margin):
 def truss_face(name, points, edge, z0, z1, metal):
     """Complete upward chevrons with both ends on the lower chord, plus
     boundary posts and top/bottom chords. Group count follows the face width
-    so the density matches the seven-group front faces. The post at k=0 is
-    skipped: the previous face's last post stands at the shared corner."""
+    at the fixed ~12 m TRUSS_SPACING, so it may change as a face widens. The
+    post at k=0 is skipped: the previous face's last post stands at the shared
+    corner."""
     a, b = points[edge], points[(edge + 1) % 4]
     width = math.hypot(b[0] - a[0], b[1] - a[1])
     groups = max(1, round(width / TRUSS_SPACING))
@@ -306,50 +356,86 @@ def facade_masts(name, points, metal, bands):
     published section's positions, recessed at TRUSS_INSET within the
     envelope like the truss bands. Each mast is a vertical extension of
     the main trusses: exactly one chevron bay wide, snapped to the face's
-    chevron grid so its posts continue the belt bands' posts. The masts
-    stop at the exposed truss bands they meet (the band chords carry them
-    across), so no mast members clutter the bands."""
-    quad = inset_points(points, TRUSS_INSET)
+    chevron grid with the same group count and edge_point inset the band
+    trusses use, so its posts continue the belt bands' posts exactly. The
+    masts stop at the exposed truss bands they meet (the band chords carry
+    them across), so no mast members clutter the bands."""
     gaps = [(z0, z1) for z0, z1, exposed in bands if exposed]
-    for side, edge in (("E", 1), ("W", 3)):
-        a = Vector(quad[edge])
-        b = Vector(quad[(edge + 1) % 4])
-        groups = max(1, round((b - a).length / TRUSS_SPACING))
-        for index, (_, y, z0, z1) in enumerate(
-                m for m in FACADE_MASTS if m[0] == name):
-            t = min(max((y - a.y) / (b.y - a.y), 0.0), 1.0)
-            bay = min(int(t * groups), groups - 1)
-            pa = a.lerp(b, bay / groups)
-            pb = a.lerp(b, (bay + 1) / groups)
-            segments = [(z0, z1)]
-            for gap_z0, gap_z1 in gaps:
-                segments = [part for s0, s1 in segments for part in
-                            ((s0, min(s1, gap_z0)), (max(s0, gap_z1), s1))
-                            if part[1] - part[0] > 0.05]
-            for segment, (s0, s1) in enumerate(segments):
-                facade_mast(f"{name}_Mast_{side}_{index}_{segment}",
-                            pa, pb, s0, s1, metal)
+    for index, (_, side, y, z0, z1) in enumerate(
+            m for m in FACADE_MASTS if m[0] == name):
+        edge = 1 if side == "E" else 3
+        a, b = points[edge], points[(edge + 1) % 4]
+        groups = max(1, round(math.hypot(b[0] - a[0], b[1] - a[1])
+                              / TRUSS_SPACING))
+        t = min(max((y - a[1]) / (b[1] - a[1]), 0.0), 1.0)
+        bay = min(int(t * groups), groups - 1)
+        pa = edge_point(points, edge, bay / groups, 0.0, TRUSS_INSET)
+        pb = edge_point(points, edge, (bay + 1) / groups, 0.0,
+                        TRUSS_INSET)
+        segments = [(z0, z1)]
+        for gap_z0, gap_z1 in gaps:
+            segments = [part for s0, s1 in segments for part in
+                        ((s0, min(s1, gap_z0)), (max(s0, gap_z1), s1))
+                        if part[1] - part[0] > 0.05]
+        for segment, (s0, s1) in enumerate(segments):
+            facade_mast(f"{name}_Mast_{side}_{index}_{segment}",
+                        (pa.x, pa.y), (pb.x, pb.y), s0, s1, metal)
 
 
-def facade_grid(name, points, z0, z1, metal):
-    levels = [z0]
-    step = 5.0
-    level = math.ceil((z0 + 0.01) / step) * step
-    while level < z1 - 0.01:
-        levels.append(level)
-        level += step
-    levels.append(z1)
+def curtain_wall(name, points, z0, z1, glass, spandrel):
+    """Per-storey curtain wall: an upper clear vision pane and a lower
+    white spandrel panel at the slab edge (the lower quarter of each
+    storey), per the facade reference photo. Returns the vision mesh."""
+    short = STOREY_H * SHORT_GLASS_FRACTION
+    vision_v, vision_f, spandrel_v, spandrel_f = [], [], [], []
 
+    def band(verts, faces, za, zb):
+        base = len(verts)
+        verts.extend((x, y, z) for z in (za, zb) for x, y in points)
+        n = len(points)
+        faces.extend((base + i, base + (i + 1) % n,
+                      base + (i + 1) % n + n, base + i + n)
+                     for i in range(n))
+    z = z0
+    while z < z1 - 0.01:
+        top = min(z + STOREY_H, z1)
+        band(spandrel_v, spandrel_f, z, z + short)
+        band(vision_v, vision_f, z + short, top)
+        z = top
+    mesh_object(f"{name}_Spandrel", spandrel_v, spandrel_f, spandrel)
+    return mesh_object(name, vision_v, vision_f, glass)
+
+
+def facade_grid(name, points, z0, z1, frame):
+    """Curtain wall frame: fine vertical mullions at the pane module, a
+    transom at every storey line and at the vision/spandrel split. Runs the
+    full volume height on every face so the frame is continuous top to
+    bottom — it does not break where the glass splits around the exposed
+    staggered trusses."""
+    short = STOREY_H * SHORT_GLASS_FRACTION
+    levels = set()
+    z = z0
+    while z < z1 - 0.01:
+        top = min(z + STOREY_H, z1)
+        levels.add(z + short)
+        levels.add(top)
+        z = top
+    levels.discard(z0)
+    levels.discard(z1)
+    mullions, transoms = [], []
     for edge in range(4):
-        for index in range(1, 10):
-            fraction = index / 10
-            start = edge_point(points, edge, fraction, z0, 0.002)
-            end = edge_point(points, edge, fraction, z1, 0.002)
-            beam(f"{name}_Mullion_{edge}_{index:02}", start, end, 0.12, metal)
-        for level in levels[1:-1]:
-            start = edge_point(points, edge, 0.0, level, 0.002)
-            end = edge_point(points, edge, 1.0, level, 0.002)
-            beam(f"{name}_Transom_{edge}_{int(level):03}", start, end, 0.10, metal)
+        a, b = points[edge], points[(edge + 1) % 4]
+        count = max(1, round(math.hypot(b[0] - a[0], b[1] - a[1])
+                             / MULLION_SPACING))
+        for k in range(1, count):
+            fraction = k / count
+            mullions.append((edge_point(points, edge, fraction, z0, 0.002),
+                             edge_point(points, edge, fraction, z1, 0.002)))
+        for level in sorted(levels):
+            transoms.append((edge_point(points, edge, 0.0, level, 0.002),
+                             edge_point(points, edge, 1.0, level, 0.002)))
+    beams_mesh(f"{name}_Mullions", mullions, 0.12, frame)
+    beams_mesh(f"{name}_Transoms", transoms, 0.10, frame)
 
 
 def mass_bands(name, height):
@@ -380,8 +466,8 @@ def glass_spans(height, openings):
     return spans
 
 
-def build_mass(name, height, points, glass, metal, truss, stone,
-               blockout):
+def build_mass(name, height, points, glass, frame, truss, spandrel,
+               stone, blockout):
     if blockout:
         body = prism(f"{name}_Body", points, 0.0, height, stone)
         body["tier"] = name
@@ -395,8 +481,12 @@ def build_mass(name, height, points, glass, metal, truss, stone,
     exposed = [(z0, z1) for z0, z1, exp in bands if exp]
     body = None
     for index, (z0, z1) in enumerate(glass_spans(height, exposed)):
-        body = prism(f"{name}_Glass_{index}", points, z0, z1, glass)
-        facade_grid(f"{name}_{index}", points, z0, z1, metal)
+        body = curtain_wall(f"{name}_Glass_{index}", points, z0, z1,
+                            glass, spandrel)
+    # The frame runs the full height on all four faces, so the long and
+    # short faces read identically and the frame stays continuous where
+    # the glass splits.
+    facade_grid(name, points, 0.0, height, frame)
     for index, (z0, z1, _) in enumerate(bands):
         for edge in range(4):
             truss_face(f"{name}_{index}", points, edge, z0, z1, truss)
@@ -654,6 +744,188 @@ def setup_scene(args, ground_mat):
     return cameras
 
 
+def append_curtain(vertices, faces, p0, p1, normal, z0, z1):
+    """Append one thin frosted roller-blind panel just inside a glass pane,
+    as a closed box spanning the pane's width between z0 and z1."""
+    base = len(vertices)
+    nx, ny = normal
+    outer0 = (p0[0] + nx * CURTAIN_GAP, p0[1] + ny * CURTAIN_GAP)
+    outer1 = (p1[0] + nx * CURTAIN_GAP, p1[1] + ny * CURTAIN_GAP)
+    inner0 = (outer0[0] + nx * CURTAIN_T, outer0[1] + ny * CURTAIN_T)
+    inner1 = (outer1[0] + nx * CURTAIN_T, outer1[1] + ny * CURTAIN_T)
+    for z in (z0, z1):
+        vertices.extend(((outer0[0], outer0[1], z),
+                         (outer1[0], outer1[1], z),
+                         (inner1[0], inner1[1], z),
+                         (inner0[0], inner0[1], z)))
+    faces.extend([(base, base + 1, base + 5, base + 4),
+                  (base + 3, base + 7, base + 6, base + 2),
+                  (base, base + 4, base + 7, base + 3),
+                  (base + 1, base + 2, base + 6, base + 5),
+                  (base + 4, base + 5, base + 6, base + 7),
+                  (base + 3, base + 2, base + 1, base)])
+
+
+def curtain_panes(name, height, points):
+    """One blind pane per curtain-wall module (the MULLION_SPACING grid)
+    on every storey that has a floor slab, on all four faces. Returns
+    (p0, p1, inward_normal, vision_bottom_z, vision_top_z) for each pane;
+    the blind covers the storey's vision glass (upper three quarters)."""
+    short = STOREY_H * SHORT_GLASS_FRACTION
+    centre = plan_centre(points)
+    levels = floor_levels(name, height)
+    panes = []
+    for edge in range(4):
+        a, b = points[edge], points[(edge + 1) % 4]
+        width = math.hypot(b[0] - a[0], b[1] - a[1])
+        ux, uy = (b[0] - a[0]) / width, (b[1] - a[1]) / width
+        nx, ny = -uy, ux
+        if nx * (centre[0] - a[0]) + ny * (centre[1] - a[1]) < 0:
+            nx, ny = -nx, -ny
+        modules = max(1, round(width / MULLION_SPACING))
+        pitch = width / modules
+        for module in range(modules):
+            t0 = module * pitch + CURTAIN_EDGE_INSET
+            t1 = (module + 1) * pitch - CURTAIN_EDGE_INSET
+            p0 = (a[0] + ux * t0, a[1] + uy * t0)
+            p1 = (a[0] + ux * t1, a[1] + uy * t1)
+            for top in levels:
+                panes.append((p0, p1, (nx, ny),
+                              top - (STOREY_H - short), top))
+    return panes
+
+
+def build_curtains(material):
+    """Assemble every blind into one mesh with exactly balanced states:
+    rolled up (no panel), half down, fully down, in a shuffled pattern."""
+    layout = []
+    for name, height, points in MASSES:
+        layout.extend(curtain_panes(name, height, points))
+    total = len(layout)
+    rng = random.Random(CURTAIN_SEED)
+    counts = [total // len(CURTAIN_COVERAGES)
+              + (1 if index < total % len(CURTAIN_COVERAGES) else 0)
+              for index in range(len(CURTAIN_COVERAGES))]
+    states = [CURTAIN_COVERAGES[index]
+              for index in range(len(CURTAIN_COVERAGES))
+              for _ in range(counts[index])]
+    rng.shuffle(states)
+    vertices, faces = [], []
+    visible = 0
+    for (p0, p1, normal, z_lo, z_hi), coverage in zip(layout, states):
+        if coverage <= 0.0:
+            continue
+        z1 = z_hi
+        z0 = z1 - (z1 - z_lo) * coverage
+        append_curtain(vertices, faces, p0, p1, normal, z0, z1)
+        visible += 1
+    obj = mesh_object("Harukas_Curtains", vertices, faces, material)
+    obj["total_panes"] = total
+    obj["rolled_up"] = counts[0]
+    obj["half_down"] = counts[1]
+    obj["fully_down"] = counts[2]
+    obj["visible_panels"] = visible
+    return obj
+
+
+def append_strip(vertices, faces, start, end, width, height, z):
+    """Append one flat strip fixture, centred at z, aligned with start->end."""
+    base = len(vertices)
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.hypot(dx, dy)
+    ux, uy = dx / length, dy / length
+    px, py = -uy, ux
+    cx, cy = (start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0
+    half_w, half_l, half_h = width / 2.0, length / 2.0, height / 2.0
+    for zc in (z - half_h, z + half_h):
+        for sw, sl in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            vertices.append((cx + px * sw * half_w + ux * sl * half_l,
+                             cy + py * sw * half_w + uy * sl * half_l,
+                             zc))
+    faces.extend(tuple(base + i for i in face) for face in BOX_FACES)
+
+
+def line_span_in_quad(points, y):
+    """The (min_x, max_x) span of a horizontal line at y inside the quad."""
+    xs = []
+    for i in range(4):
+        a, b = points[i], points[(i + 1) % 4]
+        if (a[1] - y) * (b[1] - y) <= 0 and abs(a[1] - b[1]) > 1e-9:
+            t = (y - a[1]) / (b[1] - a[1])
+            xs.append(a[0] + t * (b[0] - a[0]))
+    return (min(xs), max(xs)) if len(xs) >= 2 else None
+
+
+def subtract_intervals(span, blocks):
+    """Remove the blocked x-intervals from one span."""
+    segments = [span]
+    for b0, b1 in blocks:
+        updated = []
+        for s0, s1 in segments:
+            if b1 <= s0 or b0 >= s1:
+                updated.append((s0, s1))
+                continue
+            if b0 > s0:
+                updated.append((s0, b0))
+            if b1 < s1:
+                updated.append((b1, s1))
+        segments = updated
+    return segments
+
+
+def light_state(rng):
+    """Stable per-fixture state: off, or lit daylight/warm."""
+    if rng.random() >= LIGHT_ON_RATIO:
+        return "off"
+    return "warm" if rng.random() < 0.5 else "daylight"
+
+
+def build_ceiling_lights(materials_by_state):
+    """Even rows of long strip lights covering every floor ceiling, clipped
+    around the core, in a seeded mix of lit (daylight/warm) and off states."""
+    rng = random.Random(LIGHT_SEED)
+    buffers = {state: ([], []) for state in materials_by_state}
+    counts = {state: 0 for state in materials_by_state}
+    for name, height, points in MASSES:
+        ys = [point[1] for point in points]
+        rows = []
+        y = min(ys) + LIGHT_EDGE_CLEAR
+        while y <= max(ys) - LIGHT_EDGE_CLEAR:
+            rows.append(y)
+            y += LIGHT_ROW_PITCH
+        for top in floor_levels(name, height):
+            z = top - SLAB_T - LIGHT_STRIP_H / 2.0
+            openings = core_openings(points, height, z)
+            for y in rows:
+                span = line_span_in_quad(points, y)
+                if span is None:
+                    continue
+                x0, x1 = span[0] + LIGHT_EDGE_CLEAR, span[1] - LIGHT_EDGE_CLEAR
+                blocks = []
+                for rect in openings:
+                    ry = [point[1] for point in rect]
+                    if min(ry) - LIGHT_STRIP_W / 2 <= y \
+                            <= max(ry) + LIGHT_STRIP_W / 2:
+                        rx = [point[0] for point in rect]
+                        blocks.append((min(rx) - LIGHT_EDGE_CLEAR,
+                                       max(rx) + LIGHT_EDGE_CLEAR))
+                for s0, s1 in subtract_intervals((x0, x1), blocks):
+                    if s1 - s0 < LIGHT_MIN_LEN:
+                        continue
+                    state = light_state(rng)
+                    vertices, faces = buffers[state]
+                    append_strip(vertices, faces, (s0, y), (s1, y),
+                                 LIGHT_STRIP_W, LIGHT_STRIP_H, z)
+                    counts[state] += 1
+    objects = {}
+    for state, (vertices, faces) in buffers.items():
+        obj = mesh_object(f"Harukas_Ceiling_Lights_{state.capitalize()}",
+                          vertices, faces, materials_by_state[state])
+        obj["strip_count"] = counts[state]
+        objects[state] = obj
+    return objects
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--blockout", action="store_true")
@@ -664,20 +936,42 @@ def main():
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    glass = make_glass(name="Harukas_Body_Glass", engine="BLENDER_EEVEE", tint=(0.78, 0.92, 0.98))
-    metal = make_metal(name="Harukas_Schematic_Mullions")
+    glass = make_glass(name="Harukas_Body_Glass", engine="BLENDER_EEVEE",
+                       tint=(0.55, 0.73, 0.87))
+    # The curtain-wall frame is white-painted aluminium, per the facade
+    # reference photo: a continuous light frame on every face.
+    frame = make_wall(name="Harukas_Facade_Frame",
+                      color=(0.92, 0.92, 0.90))
     # The trusses are white-painted steel, per the reference photos.
     truss = make_wall(name="Harukas_Truss_White",
                       color=(0.92, 0.92, 0.90))
+    # The white back-painted spandrel panel at the lower quarter of each
+    # storey, per the facade reference photo.
+    spandrel = make_wall(name="Harukas_Spandrel_Blue",
+                         color=(0.70, 0.79, 0.86))
     stone = make_wall(name="Harukas_Blockout_Stone", color=(0.31, 0.37, 0.40))
     ground_mat = make_ground(name="Harukas_Ground")
     for name, height, points in MASSES:
         collection(name)
-        build_mass(name, height, points, glass, metal, truss, stone,
-                   args.blockout)
+        build_mass(name, height, points, glass, frame, truss, spandrel,
+                   stone, args.blockout)
     if not args.blockout:
         concrete = make_concrete(name="Harukas_Core_Concrete")
         steel = make_metal(name="Harukas_Core_Steel", color=(0.30, 0.34, 0.38))
+        curtain_mat = make_frosted_glass_film(name="Harukas_Frosted_Curtain")
+        collection("Curtains")
+        build_curtains(curtain_mat)
+        light_mats = {
+            "daylight": make_ceiling_light(name="Harukas_Light_Daylight",
+                                           color=CEILING_LIGHT_DAYLIGHT),
+            "warm": make_ceiling_light(name="Harukas_Light_Warm",
+                                       color=CEILING_LIGHT_WARM),
+            "off": make_ceiling_light(name="Harukas_Light_Off",
+                                      color=(0.055, 0.045, 0.035),
+                                      strength=0.0),
+        }
+        collection("Lights")
+        build_ceiling_lights(light_mats)
         collection("Core")
         for name, height, points in MASSES:
             build_core(name, height, points, concrete, steel)
@@ -707,6 +1001,8 @@ def main():
                 facades = [bpy.data.collections[f"Harukas_{name}"]
                            for name, _, _ in MASSES]
                 facades.append(bpy.data.collections["Harukas_Floors"])
+                facades.append(bpy.data.collections["Harukas_Curtains"])
+                facades.append(bpy.data.collections["Harukas_Lights"])
                 for item in facades:
                     item.hide_render = True
                 bpy.ops.render.render(write_still=True)

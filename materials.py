@@ -306,6 +306,35 @@ def make_ceiling_light(name="CeilingLight", color=CEILING_LIGHT_WARM,
     return mat
 
 
+def make_frosted_glass(name="FrostedGlass", tint=(0.82, 0.86, 0.88),
+                       alpha=0.6, roughness=0.26):
+    """Semi-transparent frosted glazing for a public podium.
+
+    Unlike the clear curtain wall this pane is NOT meant to be looked through.
+    The specular lobe stays smooth enough to keep a sky reflection on the
+    outside, while the diffuse body plus alpha blending turns the interior into
+    a soft milky glow, so the volume reads as glass without exposing the plan
+    behind it.
+    """
+    mat = _new(name)
+    b = _bsdf(mat)
+    _set(b, "Base Color", (*tint, 1.0))
+    _set(b, "Metallic", 0.0)
+    _set(b, "Roughness", roughness)
+    _set(b, "Specular IOR Level", 0.5)
+    _set(b, "IOR", 1.52)
+    _set(b, "Transmission Weight", 0.0)
+    _set(b, "Alpha", alpha)
+    mat.diffuse_color = (*tint, 1.0)
+    mat.blend_method = "BLEND"
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = "BLENDED"
+    mat.use_backface_culling = False
+    if hasattr(mat, "use_transparency_overlap"):
+        mat.use_transparency_overlap = False
+    return mat
+
+
 def make_glass_variant(name, engine, tint, roughness=None):
     """A glass with a different tint — for trying alternatives side by side."""
     mat = make_glass(name=name, engine=engine, tint=tint)
