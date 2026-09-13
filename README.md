@@ -49,7 +49,7 @@ The image above captures the current Blender working view. The images below are 
 
 ## The Stack
 
-A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 301.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin and masonry bands — pierced by one large apartment void with a three-storey bridge, held by two service cores braced by giant X-braces, and crowned by a planted roof inside an open glazed edge. Every refuge is the same three-storey component: a chevron truss storey, a glazed running-track deck with no ceiling, and a fully open storey above.
+A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 301.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin and masonry bands. Its identity is the public route up the middle: two service cores run the long axis and, between them, one continuous chain of escalators climbs from the ground hall to the planted roof, stopping at four sky-garden plazas. In the retail hall the chain is a rectangular helix — a run on each face of the ring at a real escalator pitch, so from above it reads as a 回 that spirals up — kept on the ring floor beside the atrium opening, never across the draughty void. Each plaza is the same three-storey volume — a planted garden deck at the bottom, the chevron belt truss in the storey above it, and a fully open storey carrying the ceiling — with the garden and truss storeys wrapped by the same curtain-wall style as the band below them (the base glazing, the diagrid, the fins or the masonry band), so the garden stands under two stacked tiers of glazing with the ceiling three storeys up and its trees grown tall toward it: a vertical mall wrapped in a vertical forest. The fourth plaza sits in the middle of the apartment band, in the three storeys between its two offset voids. Those two voids are ventilation openings either side of the centreline, each opening down onto the empty storey of a refuge below it; the public escalator runs up the middle along the building's depth, so it never passes through them. The apartment band is pierced by the two offset voids, each against a core, rather than by a bridge.
 
 Generated and iterated procedurally with **DeepSeek 4.1**.
 
@@ -71,6 +71,7 @@ Build, render the review views and validate it with:
 blender --background --factory-startup --python-exit-code 1 --python build_the_stack.py
 blender --background --factory-startup --python-exit-code 1 --python build_the_stack.py -- --views preview facade garden void base
 blender --background --factory-startup --python-exit-code 1 --python verify_the_stack.py -- out/the_stack.blend
+blender --background --factory-startup --python-exit-code 1 --python check_stack_zfight.py -- out/the_stack.blend
 ```
 
 ## Repository Structure
