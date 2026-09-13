@@ -49,7 +49,9 @@ The image above captures the current Blender working view. The images below are 
 
 ## The Stack
 
-A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 301.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin, louvre and masonry bands — pierced by one large apartment void with a three-storey bridge, held by two service cores braced by giant X-braces, and crowned by a planted roof inside an open glazed edge.
+A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 301.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin and masonry bands — pierced by one large apartment void with a three-storey bridge, held by two service cores braced by giant X-braces, and crowned by a planted roof inside an open glazed edge. Every refuge is the same three-storey component: a chevron truss storey, a glazed running-track deck with no ceiling, and a fully open storey above.
+
+Generated and iterated procedurally with **DeepSeek 4.1**.
 
 | Whole building | Apartment curtain wall |
 | --- | --- |

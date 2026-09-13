@@ -85,14 +85,21 @@ VOIDS = (
 BRIDGE_FIRST_FLOOR = 11
 BRIDGE_LEVELS = tuple(VOID_BOTTOM + (BRIDGE_FIRST_FLOOR + i) * APARTMENT_H
                       for i in range(4))
-# One whole apartment storey is given over to a structural truss: an Abeno
-# Harukas-style chevron truss across the full floor plate, wrapping all four
-# facades at the full building width and depth, not only the bridge span across
-# the void. Like every other truss it stays recessed behind the curtain wall,
-# which runs on over the storey, so it is covered by glass rather than exposed.
-# The bridge deck and the floor above it stay as floor plates.
-BRIDGE_TRUSS_Z0 = BRIDGE_LEVELS[1]
-BRIDGE_TRUSS_Z1 = BRIDGE_LEVELS[2]
+# The three-storey bridge reads as three stacked parts, like the refuges: the
+# lowest storey is a full-floor Abeno Harukas-style chevron truss, recessed behind
+# the apartment curtain wall so it is covered by glass rather than exposed; the
+# middle storey is a planted playground deck glazed across the void on the long
+# faces; and the top storey is left completely open, with no skin, for natural
+# air. The connection itself is carried by the truss storey and the deck storey.
+BRIDGE_TRUSS_Z0 = BRIDGE_LEVELS[0]
+BRIDGE_TRUSS_Z1 = BRIDGE_LEVELS[1]
+BRIDGE_GARDEN_Z = BRIDGE_LEVELS[1]
+BRIDGE_OPEN_Z0 = BRIDGE_LEVELS[2]
+BRIDGE_OPEN_Z1 = BRIDGE_LEVELS[3]
+# The planted deck has no ceiling, exactly like the garden decks of the refuges:
+# the plate above it is dropped, so the deck opens straight into the storey over
+# it, which is then left with no exterior wall.
+BRIDGE_DROP_LEVEL = BRIDGE_LEVELS[2]
 
 # Abeno Harukas-style perimeter chevron trusses, reused for the bridge storey
 # and for a belt band below each refuge: complete upward chevrons with both feet
@@ -180,34 +187,36 @@ LEVEL_OFFICE_HIGH = LEVEL_BASE + 13 * OFFICE_H
 LEVEL_HOTEL_HIGH = LEVEL_BASE + 21 * OFFICE_H
 
 # Open refuge storeys: one directly above the mall, one in the middle of the
-# office block, and one directly below the apartment block. Each is a
-# double-height (10 m) volume whose bottom plate is dropped, so it opens
-# downward onto its garden/running-track deck. The deck is enclosed by the
-# curtain wall of the band it belongs to, so nobody can fall off, while the
-# storey above the glazing is left completely open for natural air; the chevron
-# belt truss sits in the storey below the deck, also inside that curtain wall.
-# None of the refuges carries a facade of its own, so the block above each one
-# reads as lifted clear of the block below.
+# office block, and one directly below the apartment block. Each is a volume
+# whose bottom plates are dropped, so it opens downward onto its garden /
+# running-track deck. The deck is enclosed by the curtain wall of the band it
+# belongs to, so nobody can fall off, while the storey above the glazing is left
+# completely open for natural air; the chevron belt truss sits in the storey
+# below the deck, also inside that curtain wall. Every refuge is the same three
+# single-storey component — truss storey, running-track storey, open storey — so
+# no rentable floor is given away to the refuge. None of them carries a facade
+# of its own, so the block above each one reads as lifted clear of the block
+# below.
 REFUGE_MALL = (LEVEL_BASE, LEVEL_BASE + OFFICE_H)
 REFUGE_OFFICE = (LEVEL_OFFICE_HIGH + OFFICE_H, LEVEL_OFFICE_HIGH + 2 * OFFICE_H)
 REFUGE_APARTMENT = (LEVEL_APARTMENT - OFFICE_H, LEVEL_APARTMENT)
 REFUGES = (REFUGE_MALL, REFUGE_OFFICE, REFUGE_APARTMENT)
 REFUGE_OPEN_H = 2 * OFFICE_H
+# The plate at the top of the track storey is dropped at every refuge, so the
+# open storey above reads as one with it: neither has a ceiling.
 REFUGE_DROP_LEVELS = (REFUGE_MALL[0], REFUGE_OFFICE[0], REFUGE_APARTMENT[0])
 REFUGE_FLOOR_LEVELS = (REFUGE_MALL[0] - MALL_H,
                        REFUGE_OFFICE[0] - OFFICE_H,
                        REFUGE_APARTMENT[0] - OFFICE_H)
 
 # (z0, z1, band style) from the ground up, in the order read off the physical
-# facade model: base, refuge, trees, the diagrid (which also glazes the
-# mid-office refuge's running-track storey so the band stays one form), the open
-# storey above that refuge, the vertical-fin office block running up to the
-# apartment refuge (the former louvre band and its eye are gone, replaced by the
-# same fine vertical grid), refuge, then the masonry band that runs to the flat
-# top. Every belt truss sits behind the facade of the band it belongs to, so the
-# glazing runs on unbroken.
+# facade model. Every refuge is the same three-storey component: a truss storey,
+# a running-track storey above it and a fully open storey on top. The volume's
+# own facade runs on unbroken over the truss and track storeys and stops at the
+# open storey, exactly as the mall's base does — the truss and the deck read
+# through that same glass, never inside a band of their own.
 BANDS = (
-    (0.0, LEVEL_BASE, "base"),
+    (0.0, REFUGE_MALL[0], "base"),
     (REFUGE_MALL[0], REFUGE_MALL[1], "refuge"),
     (LEVEL_RETAIL, LEVEL_OFFICE_LOW, "garden"),
     (LEVEL_OFFICE_LOW, REFUGE_OFFICE[0], "diagrid"),
@@ -574,9 +583,9 @@ def room_ceiling_lights(mats):
         # the open refuge, so it takes no panel grid (no floating fixtures).
         if zc in REFUGE_DROP_LEVELS:
             continue
-        # The truss storey is structure, not rooms: it takes no ceiling fixtures
-        # anywhere on the plate.
-        if zc == BRIDGE_TRUSS_Z1:
+        # The bridge's truss, planted-deck and open storeys take no rooms, so
+        # they take no ceiling fixtures anywhere on the plate.
+        if zc in BRIDGE_LEVELS[1:]:
             continue
         z = zc - 0.14 - ROOM_LIGHT_H / 2
         for i, px in enumerate(xs):
@@ -634,13 +643,15 @@ def refuge_ceiling_lights(mats):
     no rooms and so take no panel grid. At the apartment refuge the void splits
     the plate into two towers, so each half closes its own ring: the long bars
     stop at the opening and a bar runs back along each void edge, rather than
-    one strip being shared straight across the slot."""
+    one strip being shared straight across the slot. The bridge's open storey
+    takes the same cove on its ceiling, so the block above it reads with the
+    same lit underside as every other block."""
     outer = WIDTH / 2 + FACADE - GLASS_BACK - GLASS_T - MALL_GLOW_CLEAR
     outer_y = DEPTH / 2 + FACADE - GLASS_BACK - GLASS_T - MALL_GLOW_CLEAR
     w = REFUGE_GLOW_W
     items = []
     for zc in storey_levels():
-        if not is_refuge(zc):
+        if not (is_refuge(zc) or zc == BRIDGE_LEVELS[-1]):
             continue
         z = zc - 0.14 - ROOM_LIGHT_H / 2
         holes = ([(vx - vw / 2, vx + vw / 2) for vx, vz, vw, vh in VOIDS]
@@ -919,17 +930,18 @@ def chevron_face(face, u0, u1, z0, z1, mats, prefix, outer, corner_start=False):
 
 def bridge_glazing(mats):
     """The bridge is glazed across the void with the same curtain-wall component
-    as the apartment band, on the same mullion module and phase, over all three
-    storeys: the lower and upper ones are occupied floor space, and the middle
-    one wraps the chevron truss so it is covered by glass rather than exposed."""
+    as the apartment band, on the same mullion module and phase, over its two
+    occupied storeys: the truss storey (so the truss is covered by glass rather
+    than exposed) and the planted deck storey above it. The top storey is left
+    unglazed, an open slot for natural air."""
     w = BAND_BAY
     for face in ("N", "S"):
-        window_wall(face, -w, w, BRIDGE_LEVELS[0], BRIDGE_LEVELS[-1], mats,
+        window_wall(face, -w, w, BRIDGE_LEVELS[0], BRIDGE_OPEN_Z0, mats,
                     "Bridge")
 
 
 def bridge_truss(mats):
-    """One whole apartment storey is an Abeno Harukas-style chevron truss, not an
+    """The bridge's lowest storey is an Abeno Harukas-style chevron truss, not an
     occupied floor: complete upward chevrons with boundary posts and chords wrap
     all four facades at the full storey width and depth, so the truss reads
     across the entire floor plate rather than only over the void. It stays
@@ -944,6 +956,39 @@ def bridge_truss(mats):
         span = WIDTH if face in ("N", "S") else DEPTH
         chevron_face(face, -span / 2, span / 2, z0, z1, mats, "BridgeTruss",
                      outer)
+
+
+def bridge_garden(mats):
+    """The bridge's middle storey is a planted playground deck spanning the void,
+    so the connection reads as a green bridge rather than a bare floor: a lawn
+    with a running track and a scatter of trees, inside the curtain wall carried
+    across the void."""
+    z = BRIDGE_GARDEN_Z
+    hx = BAND_BAY - GARDEN_MARGIN
+    hy = DEPTH / 2 - GARDEN_MARGIN
+    cube("Stack_Bridge_Garden_Lawn", (0, 0, z + 0.14), (2 * hx, 2 * hy, 0.10),
+         mats["lawn"])
+    tx, ty = hx - TRACK_INSET, hy - TRACK_INSET
+    for side, (px, py, dx, dy) in {
+            "N": (0, ty - TRACK_W / 2, 2 * tx, TRACK_W),
+            "S": (0, -(ty - TRACK_W / 2), 2 * tx, TRACK_W),
+            "E": (tx - TRACK_W / 2, 0, TRACK_W, 2 * (ty - TRACK_W)),
+            "W": (-(tx - TRACK_W / 2), 0, TRACK_W, 2 * (ty - TRACK_W)),
+    }.items():
+        cube(f"Stack_Bridge_Garden_Track_{side}", (px, py, z + 0.20),
+             (dx, dy, 0.10), mats["track"])
+    rng = random.Random(7300)
+    placed = 0
+    for _ in range(48):
+        if placed >= 6:
+            break
+        px = rng.uniform(-hx + 2, hx - 2)
+        py = rng.uniform(-hy + 2, hy - 2)
+        beam("Stack_Bridge_Garden_Trunk", (px, py, z + 0.16),
+             (px, py, z + 2.5), 0.16, mats["trunk"])
+        sphere("Stack_Bridge_Garden_Canopy", (px, py, z + 2.9),
+               rng.uniform(1.0, 1.5), mats["foliage"])
+        placed += 1
 
 
 def refuge_belt_trusses(mats):
@@ -1188,11 +1233,16 @@ def add_interior(mats):
         if zc <= LEVEL_BASE:
             continue
         # The plate at the top of each open refuge is dropped, so the refuge
-        # below it opens into a double-height garden.
-        if zc in REFUGE_DROP_LEVELS:
+        # below it opens into a double-height garden. The bridge's planted deck
+        # gets the same treatment.
+        if zc in REFUGE_DROP_LEVELS or zc == BRIDGE_DROP_LEVEL:
             continue
+        # The void runs on above the bridge, so the plate at the top of the
+        # bridge is cut around it too: the bridge's planted deck stays open to
+        # the slot, with no ceiling over it, exactly like the apartment refuge.
         cut = [(x - w / 2, x + w / 2) for x, z, w, h in VOIDS
-               if z - h / 2 <= zc < z + h / 2 and not on_bridge(zc)]
+               if z - h / 2 <= zc < z + h / 2
+               and (not on_bridge(zc) or zc >= BRIDGE_LEVELS[-1])]
         for a, b in u_intervals(-slab_half, slab_half, cut):
             cube("Stack_Floor_Slab", ((a + b) / 2, 0, zc),
                  (b - a, slab_depth, 0.28), mats["slab"])
@@ -1370,14 +1420,24 @@ def build(args):
         for face in FACES:
             builder = BAND_BUILDERS[band]
             if builder is band_brick:
-                # The apartment curtain wall runs on over the bridge truss
-                # storey, so the truss stays behind glass.
-                builder(face, z0, z1, mats, holes=void_holes(face))
+                # The apartment curtain wall rings the bridge truss and sports
+                # storeys, but stops at the bridge's open storey: that one has no
+                # exterior wall at all, like every refuge.
+                for a, b in ((z0, BRIDGE_OPEN_Z0), (BRIDGE_OPEN_Z1, z1)):
+                    if b - a > 0.01:
+                        # Clip each void hole to its own segment, so the
+                        # curtain wall can never run into the bridge's open
+                        # storey (which has no wall at all).
+                        holes = [(u0, u1, max(a, c), min(b, d))
+                                 for u0, u1, c, d in void_holes(face)
+                                 if max(a, c) < min(b, d)]
+                        builder(face, a, b, mats, holes=holes)
             else:
                 builder(face, z0, z1, mats)
     void_linings(mats)
     bridge_glazing(mats)
     bridge_truss(mats)
+    bridge_garden(mats)
     refuge_belt_trusses(mats)
     refuge_gardens(mats)
     band_roof(mats)

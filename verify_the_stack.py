@@ -234,8 +234,11 @@ def main():
         and covers([z for z in upper_levels
                     if z not in refuge_levels
                     and z not in (level_base, level_office_high + 5.0,
+                                  level_apartment - 10.0,
                                   level_apartment - 5.0,
-                                  level_apartment + 13 * 4.0)],
+                                  level_apartment + 12 * 4.0,
+                                  level_apartment + 13 * 4.0,
+                                  level_apartment + 14 * 4.0)],
                    light_z(room_objs)),
         # Lights hang from a plate: no panel may sit under a dropped refuge
         # plate with nothing above it to fix to.
@@ -333,18 +336,35 @@ def main():
     checks["void edges reuse the floor slabs"] = not any(
         n.startswith("Stack_Void_") and n.rsplit("_", 1)[-1] in ("Lintel", "Sill")
         for n in names)
-    # The bridge is glazed across the void in the apartment band's curtain-wall
-    # language over all three storeys, including the middle one, so the chevron
-    # truss is covered by glass rather than exposed. The truss storey is
-    # structure, so it still takes no ceiling fixtures.
+    # The bridge reads as three stacked parts: the lowest storey is a full-floor
+    # chevron truss, the middle storey is the glazed planted playground deck, and
+    # the top storey is left unglazed as an open ventilated slot.
+    bridge_truss_z0 = level_apartment + 11 * 4.0
+    bridge_truss_z1 = level_apartment + 12 * 4.0
+    bridge_open_z0 = level_apartment + 13 * 4.0
+    bridge_open_z1 = level_apartment + 14 * 4.0
     checks["bridge is glazed across the void"] = (
-        count("Bridge_Glass") >= 6 and count("Bridge_Spandrel") >= 6
+        count("Bridge_Glass") >= 4 and count("Bridge_Spandrel") >= 4
         and count("Bridge_Mullion") >= 40 and count("Bridge_Transom") >= 6)
-    bridge_truss_z0 = level_apartment + 12 * 4.0
-    bridge_truss_z1 = level_apartment + 13 * 4.0
     checks["bridge truss storey is behind glass"] = any(
         bridge_truss_z0 < center_z(o) < bridge_truss_z1
         for o in bpy.data.objects if "Bridge_Glass" in o.name)
+    # The open top storey carries no glazing across the void, so the air is free.
+    bridge_glass_z = [(o.matrix_world @ Vector(c)).z for o in bpy.data.objects
+                      if "Bridge_Glass" in o.name for c in o.bound_box]
+    checks["bridge top storey is open"] = (
+        bool(bridge_glass_z) and max(bridge_glass_z) <= bridge_open_z0 + 0.5)
+    # That open storey has no exterior wall on any face, like every refuge: no
+    # facade element may sit in it.
+    checks["bridge open storey has no wall"] = not any(
+        o.name[:2] in ("N_", "S_", "E_", "W_")
+        and bridge_open_z0 < center_z(o) < bridge_open_z1
+        for o in bpy.data.objects)
+    # The middle storey is a planted playground deck, not a bare floor.
+    checks["bridge carries a planted deck"] = (
+        count("Stack_Bridge_Garden_Lawn") > 0
+        and count("Stack_Bridge_Garden_Track_") >= 4
+        and count("Stack_Bridge_Garden_Canopy") >= 4)
     # The whole truss storey wraps a chevron truss on all four facades at the
     # full building width and depth, not just the bridge span across the void.
     truss_z0, truss_z1 = bridge_truss_z0, bridge_truss_z1
@@ -363,11 +383,13 @@ def main():
     checks["truss storey is wrapped by the apartment facade"] = any(
         "_Brick" in o.name and truss_z0 < center_z(o) < truss_z1
         for o in bpy.data.objects)
-    bridge_mid_z1 = level_apartment + 13 * 4.0
-    checks["bridge middle has no ceiling lights"] = not any(
-        abs(p.z - bridge_mid_z1) < 0.3
+    # The truss, deck and open storeys are structure and garden, not rooms, so
+    # none of them takes ceiling panel lights.
+    checks["bridge has no ceiling lights"] = not any(
+        abs(p.z - (level_apartment + n * 4.0)) < 0.4
         for o in room_objs
-        for p in (o.matrix_world @ v.co for v in o.data.vertices))
+        for p in (o.matrix_world @ v.co for v in o.data.vertices)
+        for n in (12, 13, 14))
     # All three refuges stand on an Abeno Harukas-style chevron belt truss
     # wrapped on all four faces, on the storey directly BENEATH the running-track
     # deck, not on the track level itself.
@@ -378,7 +400,23 @@ def main():
             for z in (level_base, level_office_high + 5.0, level_apartment - 5.0)
             for part in ("Diag", "Post"))
         and bool(belt_z)
-        and max(belt_z) < level_apartment - 10.0 + 0.5)
+        and max(belt_z) < level_apartment - 5.0 + 0.5)
+    # The apartment refuge is the same three single-storey component: the belt
+    # truss sits in the storey under the deck, the deck is one storey, and only
+    # the plate at the top of the track storey is dropped so the open storey
+    # above it reads as one with it.
+    deck_z = level_apartment - 10.0
+    top_plate = level_apartment - 5.0
+    belt170 = [(o.matrix_world @ Vector(c)).z for o in bpy.data.objects
+               if "Refuge_Belt_170" in o.name for c in o.bound_box]
+    checks["apartment track layer is one storey"] = (
+        bool(belt170) and abs(max(belt170) - deck_z) < 0.6
+        and any(abs(center_z(o) - deck_z) < 0.2
+                for o in bpy.data.objects
+                if o.name.startswith("Stack_Floor_Slab"))
+        and not any(abs(center_z(o) - top_plate) < 0.2
+                    for o in bpy.data.objects
+                    if o.name.startswith("Stack_Floor_Slab")))
     # The mid-office refuge is three stacked parts: the chevron belt inside the
     # diagrid glazing below, the running-track storey glazed by the diagrid band
     # carried on over it, and the fully open storey above. The facade stays one
@@ -391,12 +429,13 @@ def main():
         and any(abs(center_z(o) - level_office_high) < 0.2
                 for o in bpy.data.objects
                 if o.name.startswith("Stack_Floor_Slab")))
-    # The diagrid band runs on over the running-track storey, so its top is the
-    # refuge's open edge and the track glazing keeps the diagrid form.
+    # The diagrid band runs on over the mid-office refuge's truss and track
+    # storeys (its own volume's facade, exactly as the mall base carries the
+    # truss and the deck), and stops at the fully open storey above them.
     level_office_low = level_base + 5 * 5.0
     diagrid_z = [(o.matrix_world @ Vector(c)).z for o in bpy.data.objects
                  if "_Diagrid" in o.name for c in o.bound_box]
-    checks["diagrid carries over the track storey"] = (
+    checks["diagrid runs over the truss and track storeys"] = (
         bool(diagrid_z)
         and abs(min(diagrid_z) - level_office_low) < 0.6
         and abs(max(diagrid_z) - (level_office_high + 5.0)) < 0.6)
