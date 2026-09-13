@@ -13,8 +13,9 @@ over 64 floors.
 The identity of the building is its facade: the exterior is a vertical stack of
 horizontal "neighbourhood" bands, each detailed differently (glazed retail base
 with escalators, vertical shading fins, a diamond diagrid, planted sky gardens,
-a louvre band with a diamond void, tall fins, and the masonry apartment band
-pierced by one large apartment void, under the flat planted City Plaza roof).
+tall vertical fins running up to the apartment refuge, and the masonry apartment
+band pierced by one large apartment void, under the flat planted City Plaza
+roof).
 This module builds that exterior first; the interior is intentionally
 schematic.
 """
@@ -84,6 +85,24 @@ VOIDS = (
 BRIDGE_FIRST_FLOOR = 11
 BRIDGE_LEVELS = tuple(VOID_BOTTOM + (BRIDGE_FIRST_FLOOR + i) * APARTMENT_H
                       for i in range(4))
+# One whole apartment storey is given over to a structural truss: an Abeno
+# Harukas-style chevron truss across the full floor plate, wrapping all four
+# facades at the full building width and depth, not only the bridge span across
+# the void. Like every other truss it stays recessed behind the curtain wall,
+# which runs on over the storey, so it is covered by glass rather than exposed.
+# The bridge deck and the floor above it stay as floor plates.
+BRIDGE_TRUSS_Z0 = BRIDGE_LEVELS[1]
+BRIDGE_TRUSS_Z1 = BRIDGE_LEVELS[2]
+
+# Abeno Harukas-style perimeter chevron trusses, reused for the bridge storey
+# and for a belt band below each refuge: complete upward chevrons with both feet
+# on the lower chord, boundary posts and top/bottom chords, at a fixed ~12 m
+# group spacing.
+CHEVRON_SPACING = 12.0
+CHEVRON_POST_W = 1.40
+CHEVRON_DIAG_W = 0.70
+CHEVRON_CHORD_W = 0.80
+TRUSS_INSET = 0.55              # wrapped belt recessed behind the facade
 
 # The mall is a stack of retail floors around a central escalator atrium, so
 # the long escalator still reads through the glazing.
@@ -153,37 +172,47 @@ def storey_levels():
 
 
 # Office-zone facade band boundaries, in office storeys above the mall top: the
-# garden band takes office storeys 1-5, the diagrid 5-13, the fins 13-21 and the
-# louvre 21 up to the apartment refuge. All four follow from the floor counts.
+# garden band takes office storeys 1-5, the diagrid 5-13, and the fins run 13-21
+# on up to the apartment refuge. All three follow from the floor counts.
 LEVEL_RETAIL = LEVEL_BASE + OFFICE_H
 LEVEL_OFFICE_LOW = LEVEL_BASE + 5 * OFFICE_H
 LEVEL_OFFICE_HIGH = LEVEL_BASE + 13 * OFFICE_H
 LEVEL_HOTEL_HIGH = LEVEL_BASE + 21 * OFFICE_H
 
-# Fully open refuge storeys, one directly above the mall and one directly below
-# the apartment block, each one office storey in the floor program. The plate at
-# the bottom of each refuge is dropped, so the open volume opens downward and
-# reads as a double-height (10 m) garden rather than a narrow 5 m slot. They
-# carry no facade at all, so the block above reads as lifted clear of the one
-# below.
+# Open refuge storeys: one directly above the mall, one in the middle of the
+# office block, and one directly below the apartment block. Each is a
+# double-height (10 m) volume whose bottom plate is dropped, so it opens
+# downward onto its garden/running-track deck. The deck is enclosed by the
+# curtain wall of the band it belongs to, so nobody can fall off, while the
+# storey above the glazing is left completely open for natural air; the chevron
+# belt truss sits in the storey below the deck, also inside that curtain wall.
+# None of the refuges carries a facade of its own, so the block above each one
+# reads as lifted clear of the block below.
 REFUGE_MALL = (LEVEL_BASE, LEVEL_BASE + OFFICE_H)
+REFUGE_OFFICE = (LEVEL_OFFICE_HIGH + OFFICE_H, LEVEL_OFFICE_HIGH + 2 * OFFICE_H)
 REFUGE_APARTMENT = (LEVEL_APARTMENT - OFFICE_H, LEVEL_APARTMENT)
+REFUGES = (REFUGE_MALL, REFUGE_OFFICE, REFUGE_APARTMENT)
 REFUGE_OPEN_H = 2 * OFFICE_H
-REFUGE_DROP_LEVELS = (REFUGE_MALL[0], REFUGE_APARTMENT[0])
+REFUGE_DROP_LEVELS = (REFUGE_MALL[0], REFUGE_OFFICE[0], REFUGE_APARTMENT[0])
 REFUGE_FLOOR_LEVELS = (REFUGE_MALL[0] - MALL_H,
+                       REFUGE_OFFICE[0] - OFFICE_H,
                        REFUGE_APARTMENT[0] - OFFICE_H)
 
 # (z0, z1, band style) from the ground up, in the order read off the physical
-# facade model: base, refuge, trees, diagrid, the vertical-fin office block,
-# the louvre band with the eye, refuge, then the masonry band that runs to the
-# flat top.
+# facade model: base, refuge, trees, the diagrid (which also glazes the
+# mid-office refuge's running-track storey so the band stays one form), the open
+# storey above that refuge, the vertical-fin office block running up to the
+# apartment refuge (the former louvre band and its eye are gone, replaced by the
+# same fine vertical grid), refuge, then the masonry band that runs to the flat
+# top. Every belt truss sits behind the facade of the band it belongs to, so the
+# glazing runs on unbroken.
 BANDS = (
     (0.0, LEVEL_BASE, "base"),
     (REFUGE_MALL[0], REFUGE_MALL[1], "refuge"),
     (LEVEL_RETAIL, LEVEL_OFFICE_LOW, "garden"),
-    (LEVEL_OFFICE_LOW, LEVEL_OFFICE_HIGH, "diagrid"),
-    (LEVEL_OFFICE_HIGH, LEVEL_HOTEL_HIGH, "fins"),
-    (LEVEL_HOTEL_HIGH, REFUGE_APARTMENT[0], "louver"),
+    (LEVEL_OFFICE_LOW, REFUGE_OFFICE[0], "diagrid"),
+    (REFUGE_OFFICE[0], REFUGE_OFFICE[1], "refuge"),
+    (REFUGE_OFFICE[1], REFUGE_APARTMENT[0], "fins"),
     (REFUGE_APARTMENT[0], REFUGE_APARTMENT[1], "refuge"),
     (LEVEL_APARTMENT, HEIGHT, "brick"),
 )
@@ -511,9 +540,9 @@ def room_light_state(floor_index, i, j):
 
 
 def is_refuge(zc):
-    """True for a storey inside one of the two open refuge bands. Storey levels
-    are storey tops, so the refuge storey's top sits on the band's upper edge."""
-    return any(z0 < zc <= z1 for z0, z1 in (REFUGE_MALL, REFUGE_APARTMENT))
+    """True for a storey inside one of the open refuge bands. Storey levels are
+    storey tops, so the refuge storey's top sits on the band's upper edge."""
+    return any(z0 < zc <= z1 for z0, z1 in REFUGES)
 
 
 def on_bridge(zc):
@@ -544,6 +573,10 @@ def room_ceiling_lights(mats):
         # A dropped refuge plate is no ceiling: the storey below it is part of
         # the open refuge, so it takes no panel grid (no floating fixtures).
         if zc in REFUGE_DROP_LEVELS:
+            continue
+        # The truss storey is structure, not rooms: it takes no ceiling fixtures
+        # anywhere on the plate.
+        if zc == BRIDGE_TRUSS_Z1:
             continue
         z = zc - 0.14 - ROOM_LIGHT_H / 2
         for i, px in enumerate(xs):
@@ -597,7 +630,7 @@ def mall_ceiling_lights(mats):
 
 
 def refuge_ceiling_lights(mats):
-    """A cold-white perimeter cove on the two open refuge storeys, which have
+    """A cold-white perimeter cove on the open refuge storeys, which have
     no rooms and so take no panel grid. At the apartment refuge the void splits
     the plate into two towers, so each half closes its own ring: the long bars
     stop at the opening and a bar runs back along each void edge, rather than
@@ -702,28 +735,6 @@ def band_garden(face, z0, z1, mats):
         sphere(f"{face}_Garden_Canopy",
                face_point(face, u, z0 + 2.0 + h, -1.6),
                rng.uniform(1.1, 1.8), mats["foliage"])
-
-
-def band_louver(face, z0, z1, mats):
-    """Horizontal louvres with the central inverted-triangle eye."""
-    length = face_geom(face)[3]
-    panel(f"{face}_Louver_Glass", face, -length / 2, length / 2, z0, z1,
-          FACADE - GLASS_BACK, 0.12, mats["glass_cool"])
-    z = z0 + 1.0
-    while z < z1:
-        beamf(f"{face}_Louver", face, -length / 2, z, length / 2, z, 0.16,
-              mats["louver"])
-        z += 1.6
-    # Inverted triangle ("the eye") on the two wide faces only: its base spans
-    # the clear width between the two service cores and its apex points down,
-    # with the same top and bottom margins the diamond eye used to keep.
-    if face in ("N", "S"):
-        inset = (z1 - z0) * 0.2
-        ztop, zbot = z1 - inset, z0 + inset
-        du = CORE_SPAN / 2
-        beamf(f"{face}_Eye", face, -du, ztop, du, ztop, 0.3, mats["frame"])
-        beamf(f"{face}_Eye", face, -du, ztop, 0, zbot, 0.3, mats["frame"])
-        beamf(f"{face}_Eye", face, du, ztop, 0, zbot, 0.3, mats["frame"])
 
 
 def band_fins(face, z0, z1, mats):
@@ -864,14 +875,92 @@ def void_linings(mats):
                      mats["slab"])
 
 
+def chevron_face(face, u0, u1, z0, z1, mats, prefix, outer, corner_start=False):
+    """Abeno Harukas-style perimeter chevrons: complete upward chevrons with both
+    feet on the lower chord and the apex on the upper chord, one boundary post
+    per group, and a top and bottom chord. Group count follows the span at the
+    fixed ~12 m spacing, so it changes with the face width. The first post is
+    skipped when the band wraps a corner, where the previous face's last post
+    already stands."""
+    width = u1 - u0
+    groups = max(1, int(width / CHEVRON_SPACING + 0.5))
+    step = width / groups
+    post_r, diag_r, chord_r = (CHEVRON_POST_W / 2, CHEVRON_DIAG_W / 2,
+                               CHEVRON_CHORD_W / 2)
+
+    def member(name, ua, za, ub, zb, radius):
+        off = outer - radius
+        start = face_point(face, ua, za, off)
+        end = face_point(face, ub, zb, off)
+        beam(f"{face}_{prefix}_{name}", start, end, radius, mats["steel"])
+
+    # Round tubes, as in the Abeno band trusses: flat members all share the
+    # facade plane and their coincident faces z-fight where they overlap at a
+    # joint, which round sections avoid.
+    # Post end caps are pulled a little off the storey lines, so they never share
+    # a plane with the brick glass, mullions and transoms at the floor above and
+    # below (which would z-fight); the depth-side posts are pulled a little more
+    # than the front/back ones so the two posts that meet at a corner also do not
+    # share a cap plane.
+    inset = 0.10 if face in ("E", "W") else 0.05
+    pz0, pz1 = z0 + inset, z1 - inset
+    for k in range(0 if corner_start else 1, groups + 1):
+        u = u0 + k * step
+        member("Post", u, pz0, u, pz1, post_r)
+    for k in range(groups):
+        f0 = u0 + k * step
+        f1 = f0 + step / 2
+        f2 = f0 + step
+        member("Diag", f0, z0, f1, z1, diag_r)
+        member("Diag", f1, z1, f2, z0, diag_r)
+    for z in (z0, z1):
+        member("Chord", u0, z, u1, z, chord_r)
+
+
 def bridge_glazing(mats):
-    """The three-storey bridge is occupied floor space, so the void is glazed
-    across it with the same curtain-wall component as the apartment band, on the
-    same mullion module and phase, so its windows read identically."""
+    """The bridge is glazed across the void with the same curtain-wall component
+    as the apartment band, on the same mullion module and phase, over all three
+    storeys: the lower and upper ones are occupied floor space, and the middle
+    one wraps the chevron truss so it is covered by glass rather than exposed."""
     w = BAND_BAY
-    z0, z1 = BRIDGE_LEVELS[0], BRIDGE_LEVELS[-1]
     for face in ("N", "S"):
-        window_wall(face, -w, w, z0, z1, mats, "Bridge")
+        window_wall(face, -w, w, BRIDGE_LEVELS[0], BRIDGE_LEVELS[-1], mats,
+                    "Bridge")
+
+
+def bridge_truss(mats):
+    """One whole apartment storey is an Abeno Harukas-style chevron truss, not an
+    occupied floor: complete upward chevrons with boundary posts and chords wrap
+    all four facades at the full storey width and depth, so the truss reads
+    across the entire floor plate rather than only over the void. It stays
+    recessed behind the apartment curtain wall, which runs on over the storey, so
+    the truss is never exposed."""
+    z0, z1 = BRIDGE_TRUSS_Z0, BRIDGE_TRUSS_Z1
+    # Recessed behind the facade plane like the Abeno belt bands, so the truss
+    # never shares a plane with the apartment glass and transoms above and below
+    # the storey (which would z-fight).
+    outer = FACADE - TRUSS_INSET
+    for face in FACES:
+        span = WIDTH if face in ("N", "S") else DEPTH
+        chevron_face(face, -span / 2, span / 2, z0, z1, mats, "BridgeTruss",
+                     outer)
+
+
+def refuge_belt_trusses(mats):
+    """An Abeno Harukas-style chevron belt truss on the storey directly beneath
+    each refuge garden deck — the running-track level — so the track is carried
+    on a structural band and the truss never shares that level. Wrapped on all
+    four faces and recessed behind the curtain wall, so the truss is never
+    exposed: like the mall and apartment belts it reads through the glass, and
+    the facade of its own band runs on over it unbroken."""
+    belts = zip((REFUGE_MALL[0], REFUGE_OFFICE[0], REFUGE_APARTMENT[0]),
+                REFUGE_FLOOR_LEVELS)
+    for start, deck in belts:
+        z0, z1 = deck - OFFICE_H, deck
+        for face in FACES:
+            span = WIDTH if face in ("N", "S") else DEPTH
+            chevron_face(face, -span / 2, span / 2, z0, z1, mats,
+                         f"Refuge_Belt_{int(start)}", FACADE - TRUSS_INSET)
 
 
 def sky_garden(name, z, mats, plates, trees):
@@ -911,9 +1000,10 @@ def sky_garden(name, z, mats, plates, trees):
 
 
 def refuge_gardens(mats):
-    """The two open refuge storeys are planted sky gardens, the same deck as the
-    roof: a lawn, a running track and trees, so the stack reads as green plates.
-    The lower one rings the mall atrium; the upper one is a full plate."""
+    """The three open refuge storeys are planted sky gardens, the same deck as
+    the roof: a lawn, a running track and trees, so the stack reads as green
+    plates. The lowest rings the mall atrium; the mid-office and upper ones are
+    full plates."""
     hx = WIDTH / 2 + FACADE - GLASS_BACK - GLASS_T - GARDEN_MARGIN
     hy = DEPTH / 2 + FACADE - GLASS_BACK - GLASS_T - GARDEN_MARGIN
     mall_ring = ((MALL_VOID_X, hx, -hy, hy), (-hx, -MALL_VOID_X, -hy, hy),
@@ -921,7 +1011,9 @@ def refuge_gardens(mats):
                  (-MALL_VOID_X, MALL_VOID_X, -hy, -MALL_VOID_Y))
     sky_garden("Stack_Refuge_Mall_Garden", REFUGE_FLOOR_LEVELS[0] + 0.14, mats,
                mall_ring, trees=12)
-    sky_garden("Stack_Refuge_Apartment_Garden", REFUGE_FLOOR_LEVELS[1] + 0.14,
+    sky_garden("Stack_Refuge_Office_Garden", REFUGE_FLOOR_LEVELS[1] + 0.14, mats,
+               ((-hx, hx, -hy, hy),), trees=14)
+    sky_garden("Stack_Refuge_Apartment_Garden", REFUGE_FLOOR_LEVELS[2] + 0.14,
                mats, ((-hx, hx, -hy, hy),), trees=16)
 
 
@@ -945,7 +1037,6 @@ BAND_BUILDERS = {
     "refuge": band_refuge,
     "diagrid": band_diagrid,
     "garden": band_garden,
-    "louver": band_louver,
     "fins": band_fins,
     "brick": band_brick,
 }
@@ -980,6 +1071,14 @@ CORE_BRACE_BAYS = tuple(
      round((2 * i + 2) * CORE_BRACE_BAND, 3))
     for i in range(CORE_BRACE_COUNT))
 
+# The perimeter columns engaged by the outriggers: chunky columns near the E/W
+# facade, full height, aligned with the cores' depth; the outriggers connect the
+# cores to them at the open refuge levels, so the frame shares the overturning.
+OUTRIGGER_COL_W = 2.4
+OUTRIGGER_COL_X = WIDTH / 2 - 3.0
+OUTRIGGER_COL_Y = CORE_DEPTH / 2
+OUTRIGGER_LEVELS = (REFUGE_MALL[0], REFUGE_APARTMENT[0])
+
 
 def core_bracing(mats):
     """Giant spatial X-braces between the two service cores: four diagonals per
@@ -1001,6 +1100,40 @@ def core_bracing(mats):
             brace(f"Stack_Core_Brace_{index}_{tag}",
                   (sx, CORE_Y + sy, z0), (ex, CORE_Y + ey, z1),
                   CORE_BRACE_W, CORE_BRACE_D, mats["steel"])
+
+
+def outrigger_columns(mats):
+    """Perimeter columns engaged by the outriggers: four chunky columns near the
+    E/W facade, full height, aligned with the cores' depth."""
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            cube("Stack_Outrigger_Column",
+                 (sx * OUTRIGGER_COL_X, sy * OUTRIGGER_COL_Y, LEVEL_ROOF / 2),
+                 (OUTRIGGER_COL_W, OUTRIGGER_COL_W, LEVEL_ROOF), mats["steel"])
+
+
+def outrigger_trusses(mats):
+    """Horizontal trusses at the refuge levels connecting each core to its
+    adjacent perimeter column, so the columns share the overturning: a top and
+    bottom chord with an X of diagonals between them, one truss per side."""
+    x0 = CORE_X + CORE_WIDTH / 2        # core outer face
+    x1 = OUTRIGGER_COL_X                # column centre
+    for level in OUTRIGGER_LEVELS:
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                y = sy * OUTRIGGER_COL_Y
+                cube("Stack_Outrigger_Chord",
+                     (sx * (x0 + x1) / 2, y, level),
+                     (x1 - x0, 0.8, 0.8), mats["steel"])
+                cube("Stack_Outrigger_Chord",
+                     (sx * (x0 + x1) / 2, y, level + REFUGE_OPEN_H),
+                     (x1 - x0, 0.8, 0.8), mats["steel"])
+                brace("Stack_Outrigger_Diag",
+                      (sx * x0, y, level), (sx * x1, y, level + REFUGE_OPEN_H),
+                      0.5, 0.5, mats["steel"])
+                brace("Stack_Outrigger_Diag",
+                      (sx * x0, y, level + REFUGE_OPEN_H), (sx * x1, y, level),
+                      0.5, 0.5, mats["steel"])
 
 
 def add_interior(mats):
@@ -1163,8 +1296,9 @@ def setup_scene(args, mats):
     scene["elevation_depth_pixels"] = 94
     scene["elevation_height_pixels"] = 992
     scene["facade_bands"] = ",".join(band for _, _, band in BANDS)
-    scene["refuge_floors"] = 2
+    scene["refuge_floors"] = 3
     scene["refuge_levels_m"] = (f"{REFUGE_MALL[0]}-{REFUGE_MALL[1]}, "
+                                f"{REFUGE_OFFICE[0]}-{REFUGE_OFFICE[1]}, "
                                 f"{REFUGE_APARTMENT[0]}-{REFUGE_APARTMENT[1]}")
     scene["depth_override_m"] = DEPTH
     scene["depth_override_note"] = (
@@ -1191,7 +1325,6 @@ def build_materials():
             "Stack_Glass_Dark", engine="BLENDER_EEVEE", tint=(0.20, 0.18, 0.16)),
         "frame": materials.make_metal("Stack_Frame", color=(0.95, 0.95, 0.94)),
         "fin": materials.make_metal("Stack_Fin", color=(0.95, 0.95, 0.94)),
-        "louver": materials.make_metal("Stack_Louver", color=(0.95, 0.95, 0.94)),
         "dark": materials.make_dark("Stack_Dark_Panel", color=(0.06, 0.06, 0.07)),
         "brick": materials.make_wall("Stack_Masonry", color=(0.55, 0.44, 0.34)),
         "spandrel": materials.make_wall("Stack_Spandrel_Blue",
@@ -1226,6 +1359,8 @@ def build(args):
     mats = build_materials()
     ground(mats)
     add_interior(mats)
+    outrigger_columns(mats)
+    outrigger_trusses(mats)
     base_interior(mats)
     base_escalators(mats)
     mall_ceiling_lights(mats)
@@ -1235,11 +1370,15 @@ def build(args):
         for face in FACES:
             builder = BAND_BUILDERS[band]
             if builder is band_brick:
+                # The apartment curtain wall runs on over the bridge truss
+                # storey, so the truss stays behind glass.
                 builder(face, z0, z1, mats, holes=void_holes(face))
             else:
                 builder(face, z0, z1, mats)
     void_linings(mats)
     bridge_glazing(mats)
+    bridge_truss(mats)
+    refuge_belt_trusses(mats)
     refuge_gardens(mats)
     band_roof(mats)
     cameras = setup_scene(args, mats)
