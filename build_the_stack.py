@@ -186,15 +186,18 @@ ROOM_LIGHT_STRENGTH = 8.0
 # around the escalator atrium, all lit and bright rather than fragmented.
 MALL_GLOW_CLEAR = 0.3
 
-# The refuge storeys are open floors with no rooms, so they take no panel grid:
-# a continuous cold-white perimeter cove stands in for the ceiling lights.
-REFUGE_GLOW_W = 2.4
-
 # The open refuge plates and the top roof are planted decks: a lawn inside a
 # perimeter running track, with a scatter of trees.
 GARDEN_MARGIN = 0.8
 TRACK_W = 1.6
 TRACK_INSET = 0.5
+# Street lamps line the inner edge of every garden's running track: a slim
+# dark pole with a warm glowing head every few metres.
+LAMP_H = 3.0
+LAMP_POLE_R = 0.06
+LAMP_HEAD_R = 0.18
+LAMP_SPACING = 9.0
+LAMP_INSET = 0.3
 
 # Refuge garden trees grow up through the truss storey toward the ceiling a full
 # three storeys above the deck, so a 10 m tree still clears the plate.
@@ -840,8 +843,8 @@ def room_ceiling_lights(mats):
     """A grid of panel lights on the ceiling of every office and apartment
     storey, following the house reference. Panels are clipped around the cores,
     the central public shaft and the two apartment voids, and merged into one
-    object per light state. The open refuge storeys are left to the perimeter
-    cove instead."""
+    object per light state. The open refuge storeys take no ceiling lights:
+    their open-air gardens are lit by the track lamps instead."""
     slab_half = WIDTH / 2 + FACADE - GLASS_BACK - GLASS_T
     slab_half_y = DEPTH / 2 + FACADE - GLASS_BACK - GLASS_T
     half = ROOM_LIGHT_W / 2
@@ -912,25 +915,6 @@ def mall_ceiling_lights(mats):
                           (2 * MALL_VOID_X, inner_y - MALL_VOID_Y,
                            ROOM_LIGHT_H)))
     merged_boxes("Stack_Mall_Ceiling_Lights", items, mats["glow"])
-
-
-def refuge_ceiling_lights(mats):
-    """A cold-white perimeter cove on the ceiling of the open refuge volumes,
-    which have no rooms and so take no panel grid. The perimeter runs clear of
-    the central shaft, so the cove is a simple closed ring on each ceiling."""
-    outer = WIDTH / 2 + FACADE - GLASS_BACK - GLASS_T - MALL_GLOW_CLEAR
-    outer_y = DEPTH / 2 + FACADE - GLASS_BACK - GLASS_T - MALL_GLOW_CLEAR
-    w = REFUGE_GLOW_W
-    items = []
-    for zc in REFUGE_CEILING_LEVELS:
-        z = zc - 0.15 - ROOM_LIGHT_H / 2
-        for sx in (-1, 1):
-            items.append(((sx * (outer - w / 2), 0, z),
-                          (w, 2 * outer_y, ROOM_LIGHT_H)))
-        for sy in (-1, 1):
-            items.append(((0, sy * (outer_y - w / 2), z),
-                          (2 * (outer - w), w, ROOM_LIGHT_H)))
-    merged_boxes("Stack_Refuge_Ceiling_Lights", items, mats["glow_cool"])
 
 
 def band_diagrid(face, z0, z1, mats):
@@ -1152,6 +1136,21 @@ def sky_garden(name, z, mats, plates, trees):
     }.items():
         cube(f"{name}_Track_{side}", (px, py, z + 0.06), (dx, dy, 0.10),
              mats["track"])
+    # Street lamps along the inner edge of the running track, centred in each
+    # spacing segment so the corner lamps of two sides never double up. The
+    # track ring hugs the outer deck edge, so every lamp stands on a plate.
+    lamp_x = tx - TRACK_W - LAMP_INSET
+    lamp_y = ty - TRACK_W - LAMP_INSET
+    for half, fixed, along_x in ((tx, lamp_y, True), (tx, -lamp_y, True),
+                                 (ty, lamp_x, False), (ty, -lamp_x, False)):
+        n = max(1, int(2 * half / LAMP_SPACING))
+        for i in range(n):
+            u = -half + (i + 0.5) * 2 * half / n
+            px, py = (u, fixed) if along_x else (fixed, u)
+            beam(f"{name}_Lamp_Post", (px, py, z - 0.1),
+                 (px, py, z + LAMP_H), LAMP_POLE_R, mats["dark"])
+            sphere(f"{name}_Lamp_Head", (px, py, z + LAMP_H), LAMP_HEAD_R,
+                   mats["glow"])
     rng = random.Random(7100 + int(z))
     placed = 0
     for _ in range(trees * 8):
@@ -1417,9 +1416,26 @@ def setup_scene(args, mats):
     world = bpy.data.worlds.new("The_Stack_World")
     bpy.context.scene.world = world
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs["Color"].default_value = (
-        0.30, 0.42, 0.58, 1)
-    world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.7
+    nt = world.node_tree
+    background = nt.nodes["Background"]
+    # Match the Material Preview studio lighting the model is reviewed in: the
+    # bundled interior.exr HDRI lights the scene and reflects in the glass,
+    # while camera rays keep a clean, soft sky-blue backdrop.
+    env = nt.nodes.new("ShaderNodeTexEnvironment")
+    env.image = bpy.data.images.load(os.path.join(
+        bpy.utils.system_resource("DATAFILES"), "studiolights", "world",
+        "interior.exr"))
+    background.inputs["Strength"].default_value = 1.0
+    nt.links.new(env.outputs["Color"], background.inputs["Color"])
+    sky = nt.nodes.new("ShaderNodeBackground")
+    sky.inputs["Color"].default_value = (0.55, 0.66, 0.78, 1)
+    sky.inputs["Strength"].default_value = 1.0
+    light_path = nt.nodes.new("ShaderNodeLightPath")
+    mix = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(light_path.outputs["Is Camera Ray"], mix.inputs[0])
+    nt.links.new(background.outputs[0], mix.inputs[1])
+    nt.links.new(sky.outputs[0], mix.inputs[2])
+    nt.links.new(mix.outputs[0], nt.nodes["World Output"].inputs["Surface"])
     bpy.ops.object.light_add(type="SUN", location=(180, -220, 380))
     sun = bpy.context.object
     sun.data.energy = 4.5
@@ -1545,8 +1561,6 @@ def build_materials():
             "Stack_Light_Off", (0.055, 0.045, 0.035), 0.0),
         "glow": materials.make_ceiling_light(
             "Stack_Mall_Glow", color=(1.0, 0.72, 0.38), strength=16.0),
-        "glow_cool": materials.make_ceiling_light(
-            "Stack_Refuge_Glow", color=(0.80, 0.88, 1.0), strength=16.0),
         "trunk": materials.make_trunk("Stack_Trunk"),
         "foliage": materials.make_foliage("Stack_Foliage", color=(0.09, 0.30, 0.11)),
         "lawn": materials.make_wall("Stack_Lawn", color=(0.16, 0.36, 0.14)),
@@ -1566,7 +1580,6 @@ def build(args):
     mall_escalators(mats)
     spine_escalators(mats)
     mall_ceiling_lights(mats)
-    refuge_ceiling_lights(mats)
     room_ceiling_lights(mats)
     for z0, z1, band in BANDS:
         for face in FACES:

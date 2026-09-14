@@ -179,7 +179,6 @@ def main():
     mall_lights = objects("Stack_Mall_Ceiling_Lights")
     base_glass = [obj for obj in bpy.data.objects if "Base_Glass" in obj.name]
     room_objs = objects("Stack_Room_Lights_")
-    refuge_glow = objects("Stack_Refuge_Ceiling_Lights")
     braces = objects("Stack_Core_Brace_")
     brace_centers = sorted({round(center_z(o), 2) for o in braces})
     brace_z = [p.z for o in braces
@@ -334,7 +333,8 @@ def main():
         and brace_low > 5.0
         and brace_high < model_height - 5.0,
         # The mall ceiling is continuous bright rings; the offices and apartments
-        # take the house panel grid; the open refuges take a perimeter cove.
+        # take the house panel grid; the open refuges take no ceiling lights at
+        # all — their open-air gardens are lit by the track lamps instead.
         "mall ceiling lights": len(mall_lights) == 1
         and len(mall_lights[0].data.vertices) > 0
         and covers(mall_plate_levels, light_z(mall_lights)),
@@ -344,10 +344,7 @@ def main():
         "no floating lights": not any(
             abs(z - (drop - 0.19)) < 0.1
             for z in light_z(room_objs) for drop in refuge_drops),
-        "refuge ceilings are a continuous cove": len(refuge_glow) == 1
-        and max((max(obj.dimensions.x, obj.dimensions.y)
-                 for obj in refuge_glow), default=0.0) >= 100.0
-        and covers(refuge_ceilings, light_z(refuge_glow)),
+        "no refuge ceiling cove": count("Stack_Refuge_Ceiling_Lights") == 0,
         "no panels on the refuge storeys": not any(
             z0 + 0.1 < z < z1 - 0.1 for z in light_z(room_objs)
             for z0, z1 in refuge_volumes),
@@ -369,6 +366,15 @@ def main():
         # layers (truss, glazing, open) instead of reading as four.
         "planted decks": all(
             count(f"{name}_Lawn") > 0 and count(f"{name}_Track_") >= 4
+            for name in ("Stack_Refuge_Mall_Garden",
+                         "Stack_Refuge_Office_Garden",
+                         "Stack_Refuge_Apartment_Garden",
+                         "Stack_Refuge_Apartment_Mid_Garden", "Stack_Roof")),
+        # A street lamp — a slim pole with a warm glowing head — every few
+        # metres along the inner edge of each garden's running track.
+        "garden lamps line the tracks": all(
+            count(f"{name}_Lamp_Post") >= 10
+            and count(f"{name}_Lamp_Head") >= 10
             for name in ("Stack_Refuge_Mall_Garden",
                          "Stack_Refuge_Office_Garden",
                          "Stack_Refuge_Apartment_Garden",
