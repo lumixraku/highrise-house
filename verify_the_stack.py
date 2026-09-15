@@ -1,5 +1,6 @@
 """Verify the editable The Stack proposal scene."""
 
+import math
 import re
 import sys
 
@@ -138,6 +139,8 @@ def main():
                                                "187-207;223-243").split(";")]
     void_spans = tuple((xa, xb, za, zb)
                        for (xa, xb), (za, zb) in zip(void_x, void_z))
+    void_cw_x = [center(obj)[0] for obj in bpy.data.objects
+                 if obj.name.startswith("Stack_Void_CW_Mullion")]
     shaft_x, shaft_y = (float(part)
                         for part in scene.get("spine_shaft_m", "20x12").split("x"))
     shaft_half_x, shaft_half_y = shaft_x / 2, shaft_y / 2
@@ -193,6 +196,46 @@ def main():
     spine_centers = {i: [center(o) for o in spine_objs
                          if o.name.startswith(f"Stack_Spine_Escalator_{i}_")]
                      for i in spine_runs}
+    # The route's runs, grouped back per storey. The office shaft is a long
+    # crossed-diagonal composition (two star-ordered diagonals that intersect over
+    # the centre); the apartment shaft above is a plain one-plane switchback.
+    spine_run = {}
+    for obj in spine_objs:
+        i = int(obj.name.split("_")[3])
+        x0, x1, y0, y1, z0, z1 = bounds(obj)
+        if i in spine_run:
+            px0, px1, py0, py1, pz0, pz1 = spine_run[i]
+            x0, x1 = min(px0, x0), max(px1, x1)
+            y0, y1 = min(py0, y0), max(py1, y1)
+            z0, z1 = min(pz0, z0), max(pz1, z1)
+        spine_run[i] = (x0, x1, y0, y1, z0, z1)
+    # Run direction, from the bottom landing to the top one, so the slant signs
+    # (and therefore whether two diagonals cross) are known.
+    spine_dir = {}
+    for obj in spine_objs:
+        if obj.name.endswith("_Landing_Bottom") or obj.name.endswith("_Landing_Top"):
+            i = int(obj.name.split("_")[3])
+            tag = "b" if obj.name.endswith("_Bottom") else "t"
+            here = spine_dir.setdefault(i, {})
+            here[tag] = center(obj)
+
+    def mid_z(i):
+        return (spine_run[i][4] + spine_run[i][5]) / 2
+
+    spine_vec = {i: (d["t"][0] - d["b"][0], d["t"][1] - d["b"][1])
+                 for i, d in spine_dir.items() if "b" in d and "t" in d}
+    spine_low = [i for i in spine_vec if mid_z(i) < level_apartment]
+    spine_up = [i for i in spine_vec if mid_z(i) >= level_apartment]
+    spine_low_vec = [spine_vec[i] for i in spine_low]
+    # The pitch of each run, from its inclined belt: the climb over the run.
+    spine_pitch = []
+    for obj in spine_objs:
+        if not obj.name.endswith("_Belt"):
+            continue
+        x0, x1, y0, y1, z0, z1 = bounds(obj)
+        horiz = max(x1 - x0, y1 - y0)
+        if horiz > 0.5:
+            spine_pitch.append(math.degrees(math.atan((z1 - z0) / horiz)))
 
     checks = {
         "published height metadata": scene.get("published_height_m") == 356.8,
@@ -256,16 +299,25 @@ def main():
         and not any(hits_core(obj) for obj in bpy.data.objects
                     if obj.name.startswith("Stack_Mall_Escalator_")),
         # One continuous public escalator chain climbs the shaft between the
-        # cores from the mall top to the roof, running along the depth at the
-        # centreline so it never enters either apartment vent void.
+        # cores from the mall top to the roof.
         "public escalator spine": len(spine_runs) >= 50
         and max((z for vs in spine_centers.values() for _, _, z in vs),
                 default=0) > level_roof - 5.0,
-        "spine stays clear of the vents": all(
-            abs(x) < width / 2 for vs in spine_centers.values()
-            for x, _, _ in vs)
-        and max((abs(x) for vs in spine_centers.values()
-                 for x, _, _ in vs), default=0.0) < 3.0,
+        "spine circles the shaft": max(
+            (abs(x) for vs in spine_centers.values() for x, _, _ in vs),
+            default=0.0) > 3.0,
+        # The lower shaft is a crossed-diagonal composition: a rising and a
+        # falling diagonal climb the shaft and intersect over the centre.
+        "office spine is crossed diagonals": any(
+            dx > 1.0 and dy > 1.0 for dx, dy in spine_low_vec)
+        and any(dx > 1.0 and dy < -1.0 for dx, dy in spine_low_vec),
+        # Above the apartment line the route is a plain one-plane switchback.
+        "apartment spine is a switchback": bool(spine_up)
+        and max(abs(spine_vec[i][0]) for i in spine_up) < 2.0
+        and min(abs(spine_vec[i][1]) for i in spine_up) > 4.0,
+        # Each run is pitched like a real escalator (~30°), not a long ramp.
+        "spine runs are pitched ~30°": 25.0 <= min(spine_pitch)
+        and max(spine_pitch) <= 40.0,
         # Each run is a flat inclined belt with side balustrades, handrails and a
         # landing at each end, so it reads like a stair rather than a tube.
         "escalator runs are flat bands": sum(
@@ -277,18 +329,18 @@ def main():
         and sum("_Landing_" in o.name for o in escalators)
         >= 2 * sum(o.name.endswith("_Belt") for o in escalators)
         and not any("_Beam" in o.name or "_Tread" in o.name for o in escalators),
-        # The retail runs hug the ring around the atrium opening; the spine runs
-        # cross the shaft along its depth and reach the plates past the shaft
-        # hole, so neither floats over an opening.
+        # The retail runs hug the ring around the atrium opening; the spine helix
+        # stays inside the central shaft, so neither crosses an opening's edge.
         "escalators keep off the openings": all(
             (bounds(o)[0] >= 30.0 or bounds(o)[1] <= -30.0
              or bounds(o)[2] >= 14.0 or bounds(o)[3] <= -14.0)
             for o in escalators
-            if o.name.startswith("Stack_Mall_Escalator_"))
-        and max((max(abs(bounds(o)[2]), abs(bounds(o)[3]))
-                 for o in escalators
-                 if o.name.startswith("Stack_Spine_Escalator_")),
-                default=0.0) > 6.0,
+            if o.name.startswith("Stack_Mall_Escalator_")),
+        "spine stays inside the shaft": all(
+            max(abs(bounds(o)[0]), abs(bounds(o)[1])) <= shaft_half_x + 0.6
+            and max(abs(bounds(o)[2]), abs(bounds(o)[3])) <= shaft_half_y + 0.6
+            for o in escalators
+            if o.name.startswith("Stack_Spine_Escalator_")),
         "escalators clear the cores": not any(hits_core(o) for o in escalators),
         "escalators stay inside the envelope": all(
             abs(center(o)[0]) <= facade_half and center(o)[2] <= model_height + 0.5
@@ -465,19 +517,23 @@ def main():
         "each vent sits on a refuge open storey": all(
             any(abs(z0 - ceiling) < 0.01 for ceiling in refuge_ceilings)
             for x0, x1, z0, z1 in void_spans),
-        # The missing X-facing sides are closed with the same curtain wall as the
-        # exterior apartment band (glass, spandrel, mullions, transoms), while
-        # the long N/S faces stay fully open — those are the ventilation
-        # openings, so no glass may be added across them.
+        # Both X side walls of each opening are closed with the same curtain wall
+        # as the exterior apartment band (glass, spandrel, mullions, transoms):
+        # the outer face keeps the recess clad and the inner face lines the shaft,
+        # so the escalator climbs indoors. The long N/S faces stay fully open —
+        # those are the ventilation openings, so no glass may be added across them.
         "void X-sides wear the apartment curtain wall": (
-            count("Stack_Void_CW_Mullion") >= 100
-            and count("Stack_Void_CW_Glass") >= 30
-            and count("Stack_Void_CW_Spandrel") >= 30
-            and count("Stack_Void_CW_Transom") >= 60
+            count("Stack_Void_CW_Mullion") >= 110
+            and count("Stack_Void_CW_Glass") >= 15
+            and count("Stack_Void_CW_Spandrel") >= 15
+            and count("Stack_Void_CW_Transom") >= 30
+            and any(x < -19.0 for x in void_cw_x)
+            and any(x > 19.0 for x in void_cw_x)
+            and any(-3.2 < x < -1.8 for x in void_cw_x)
+            and any(1.8 < x < 3.2 for x in void_cw_x)
             and not any("Void_Infill" in o.name for o in bpy.data.objects)),
-        # The X-facing lining runs the void's full height from its base, so both
-        # opposite faces read glazed storey for storey, down to the layer that
-        # opens onto the refuge garden below.
+        # The core-side lining runs the void's full height from its base, down to
+        # the layer that opens onto the refuge garden below.
         "void X-lining reaches the void base": all(
             any(abs(bounds(o)[4] - z0) < 0.05
                 for o in bpy.data.objects

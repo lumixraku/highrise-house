@@ -49,7 +49,7 @@ The image above captures the current Blender working view. The images below are 
 
 ## The Stack
 
-A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 301.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin and masonry bands. Its identity is the public route up the middle: two service cores run the long axis and, between them, one continuous chain of escalators climbs from the ground hall to the planted roof, stopping at four sky-garden plazas. In the retail hall the chain is a rectangular helix — a run on each face of the ring at a real escalator pitch, so from above it reads as a 回 that spirals up — kept on the ring floor beside the atrium opening, never across the draughty void. Each plaza is the same three-storey volume — a planted garden deck at the bottom, the chevron belt truss in the storey above it, and a fully open storey carrying the ceiling — with the garden and truss storeys wrapped by the same curtain-wall style as the band below them (the base glazing, the diagrid, the fins or the masonry band), so the garden stands under two stacked tiers of glazing with the ceiling three storeys up and its trees grown tall toward it: a vertical mall wrapped in a vertical forest. The fourth plaza sits in the middle of the apartment band, in the three storeys between its two offset voids. Those two voids are ventilation openings either side of the centreline, each opening down onto the empty storey of a refuge below it; the public escalator runs up the middle along the building's depth, so it never passes through them. The apartment band is pierced by the two offset voids, each against a core, rather than by a bridge.
+A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 301.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin and masonry bands. Its identity is the public route up the middle: two service cores run the long axis and, between them, one continuous chain of escalators climbs from the ground hall to the planted roof, stopping at four sky-garden plazas. In the retail hall the chain is a rectangular helix — a run on each face of the ring at a real escalator pitch, so from above it reads as a 回 that spirals up — kept on the ring floor beside the atrium opening, never across the draughty void. Each plaza is the same three-storey volume — a planted garden deck at the bottom, the chevron belt truss in the storey above it, and a fully open storey carrying the ceiling — with the garden and truss storeys wrapped by the same curtain-wall style as the band below them (the base glazing, the diagrid, the fins or the masonry band), so the garden stands under two stacked tiers of glazing with the ceiling three storeys up and its trees grown tall toward it: a vertical mall wrapped in a vertical forest. The fourth plaza sits in the middle of the apartment band, in the three storeys between its two offset voids. Those two voids are ventilation openings either side of the centreline, each as wide as half the span between the cores so it runs from its core to the centreline, and each opening down onto the empty storey of a refuge below it; the public escalator interlocks big ~30° diagonal flights across the office shaft — two of them crossing over the centre — then reverts to a plain one-plane switchback through the apartment band above. The apartment band is pierced by the two offset voids, each against a core, rather than by a bridge.
 
 Generated and iterated procedurally with **DeepSeek 4.1**.
 
@@ -65,6 +65,16 @@ Generated and iterated procedurally with **DeepSeek 4.1**.
 | --- |
 | ![The Stack, retail base](docs/images/stack-base.png) |
 
+### Reference
+
+The generator is an image-led approximation of MVRDV's competition proposal; the
+original design (© MVRDV, [mvrdv.com/projects/340/the-stack](https://mvrdv.com/projects/340/the-stack))
+is kept here for comparison:
+
+| MVRDV reference — aerial (photo 16064) | MVRDV reference — atrium escalators |
+| --- | --- |
+| ![The Stack reference, aerial](docs/images/stack-mvrdv-aerial.jpg) | ![The Stack reference, atrium escalators](docs/images/stack-mvrdv-atrium.jpg) |
+
 Build, render the review views and validate it with:
 
 ```bash
@@ -73,6 +83,35 @@ blender --background --factory-startup --python-exit-code 1 --python build_the_s
 blender --background --factory-startup --python-exit-code 1 --python verify_the_stack.py -- out/the_stack.blend
 blender --background --factory-startup --python-exit-code 1 --python check_stack_zfight.py -- out/the_stack.blend
 ```
+
+### Export The Stack for the Browser
+
+The web viewer loads a binary glTF file (`.glb`), not the editable Blender file and not OBJ. The export script opens the source `.blend` in memory, merges static mesh objects that share one material, and writes a browser-ready GLB without saving changes back to the source scene:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 \
+  --python export_the_stack.py -- \
+  --source out/the_stack.blend \
+  --output web/assets/the_stack.glb
+```
+
+Material merging is enabled by default because browser performance is more sensitive to draw calls than to this model's triangle count. It preserves the geometry, floor slabs, materials, and triangle count; it only reduces the number of independent mesh primitives. To export without this web optimization:
+
+```bash
+blender --background --factory-startup --python export_the_stack.py -- \
+  --no-merge-materials
+```
+
+The current The Stack web export is approximately:
+
+```text
+GLB size:        11.26 MB
+Mesh/primitives: 20 (optimized from 6,708)
+Vertices:        395,832
+Triangles:       197,780
+```
+
+The original editable scene remains `out/the_stack.blend`. The web asset is loaded by `web/index.html` through Three.js's `GLTFLoader`. The `--profile`, `--draco`, `--lod`, and `--report` options are not implemented in the current exporter; they are future presets/features, not required arguments.
 
 ## Repository Structure
 

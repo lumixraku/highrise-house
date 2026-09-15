@@ -93,21 +93,28 @@ CORE_BRACE_BAYS = tuple(
 
 # The public route climbs a central shaft between the cores. The shaft runs from
 # the top of the retail atrium to the roof, and every office and apartment plate
-# is cut by it, so the escalator chain reads as one continuous vertical street.
+# is cut by it. In the office zone the route is a set of big crossing diagonals:
+# its runs walk the shaft corners in star order, so two long ~30° flights cross
+# each other over the void and the route reads lively and interwoven, like the
+# lobby atria in the reference. Above the apartment line it reverts to a plain
+# one-plane switchback, so the artistry belongs to the public lower shaft.
 SPINE_HALF_X, SPINE_HALF_Y = 10.0, 6.0
+SPINE_CROSS_X, SPINE_CROSS_Y = 8.0, 3.4   # crisscross rectangle half-extents
 
 # The apartment band carries two offset voids — one against the west core, one
 # against the east core — so the tower reads as one prism punctured by two
 # openings, not as two towers joined by a bridge. Each is (x0, x1, z0, z1). The
 # width is a whole number of mullion modules and the height a whole number of
 # apartment storeys, so the opening edges land on the band grid and on floor
-# lines. Both were enlarged to more than twice the original 15 x 20 m opening,
-# and their inner edges clear the escalator spine that runs up the centreline.
+# lines. Both were enlarged to more than twice the original 15 x 20 m opening.
+# Each opening is now half as wide as the span between the two core faces, so it
+# runs from its core's inner face to the centreline; the escalator chain leaves
+# the centreline and climbs the opposite half of the shaft to stay clear of it.
 # Each vent opening sits directly on the open storey of a walking-garden refuge
 # below it, so the two connect as one tall void: the low void on the apartment
 # refuge's empty storey, the high void on the mid-apartment refuge's.
 VOID_MODULES = 14
-VOID_W = VOID_MODULES * APARTMENT_MULLION_SPACING               # 17.5 m
+VOID_W = VOID_MODULES * APARTMENT_MULLION_SPACING               # 20.0 m
 VOID_FLOORS = 9
 REFUGE_MID_OPEN = (LEVEL_APARTMENT + 14 * APARTMENT_H,
                    LEVEL_APARTMENT + 15 * APARTMENT_H)          # 231-235
@@ -139,8 +146,8 @@ MALL_VOID_X, MALL_VOID_Y = 30.0, 14.0
 # helix around the void — a run on each face of the ring, one storey per run at
 # a real escalator pitch — so from above the route reads as a "回" that spirals
 # up. Every run stays on the ring plate beside the opening, never across it, and
-# the spine runs up the middle of the shaft along the building's depth, so
-# nothing reaches the two apartment vent voids.
+# the spine runs along the building's depth, weaving between the halves of the
+# shaft so it stays clear of the two apartment vent voids.
 FLIGHT_ANGLE = 30.0
 MALL_HELIX_Y = MALL_VOID_Y + 2.4     # N/S lane, on the ring
 MALL_HELIX_X = CORE_OUTER + 6.0      # E/W lane, clear of the cores
@@ -575,24 +582,22 @@ def x_panel(name, x, normal, u0, u1, z0, z1, thick, mat):
 
 
 def void_curtain_wall(mats):
-    """Dress the X-facing sides of each apartment void in the same curtain wall
-    as the exterior apartment band — dark vision glass over a light spandrel on
-    the shared 1.25 m mullion module, with white mullions and transoms — so each
-    void is closed by a matching finished facade. Both opposite (X-facing) walls
-    run the full height of the opening, storey for storey; only the long N/S
-    faces stay fully open, because those are the ventilation openings. The whole
-    lining sits inside the opening, clear of the core face behind it, so no
-    member ever intersects the concrete."""
+    """Dress both X faces of each apartment void in the same curtain wall as the
+    exterior apartment band — dark vision glass over a light spandrel on the
+    shared 1.25 m mullion module, with white mullions and transoms. The outer
+    face keeps the recess clad as before; the inner (shaft-side) face closes the
+    shaft off from the open void, and the void's width leaves the public
+    escalator's lane clear of it, so the route always climbs indoors. The linings
+    sit inside the opening, clear of the core face beyond the void."""
     levels_all = storey_levels()
     for x0, x1, z0, z1 in VOIDS:
         cw0 = z0
         hy = DEPTH / 2
+        # Both X side walls of the recess: the outer face keeps the cladding it
+        # has always had, the inner face is the lining that closes the shaft.
         for inner, s in ((x0, 1.0), (x1, -1.0)):
-            # s = +1 on the west wall, -1 on the east one; d measures inward
-            # from the core face. The skin steps back in the same depth ladder
-            # as the exterior, so mullion, transom and glass never share a
-            # plane, and even the deepest member stays in the void.
-            def line(name, d, thick, u0, u1, za, zb, mat):
+            def line(name, d, thick, u0, u1, za, zb, mat,
+                     inner=inner, s=s):
                 x_panel(name, inner + s * d, -s, u0, u1, za, zb, thick, mat)
 
             nu = max(1, round(DEPTH / APARTMENT_MULLION_SPACING))
@@ -806,22 +811,40 @@ def mall_escalators(mats):
                        (x0, y0, z0), (x1, y1, z1), mats)
 
 
+def spine_route(levels):
+    """Landing (x, y) for every storey level. In the public lower shaft — the
+    office zone — the route walks the shaft corners in star order: two long
+    diagonals cross over the centre, interleaved with runs along the two long
+    edges, all at a real escalator's ~30° pitch. Above the apartment line it
+    settles into a plain one-plane switchback along the depth."""
+    a, b = SPINE_CROSS_X, SPINE_CROSS_Y
+    cross = ((-a, -b), (0.0, 0.0), (a, b), (0.0, b),
+             (-a, b), (0.0, 0.0), (a, -b), (0.0, -b))
+    split = sum(1 for z in levels if z < LEVEL_APARTMENT)
+    route = []
+    for i in range(len(levels)):
+        if i < split:
+            route.append(cross[i % len(cross)])
+        else:
+            route.append((0.0, -b if (i - split) % 2 == 0 else b))
+    return route
+
+
 def spine_escalators(mats):
-    """The public route above the retail base: one escalator run per storey,
-    running along the building's depth (Y) in the middle of the shaft between
-    the cores and alternating direction each storey, so the chain climbs as one
-    continuous switchback. Because every run stays on the centreline in X, the
-    route never enters the two apartment vent voids — the openings sit either
-    side of it."""
+    """The public route above the retail base: one escalator run per storey. In
+    the office zone it is a long crossed-diagonal composition — the flights walk
+    the shaft corners in star order, so two ~30° diagonals cross in the middle of
+    the shaft and the run along each long edge interlocks with them. Above the
+    apartment line it is a plain one-plane switchback along the depth, so the
+    artistry reads only in the public lower shaft."""
     levels = [z for z in storey_levels() if z >= LEVEL_BASE]
-    reach = SPINE_HALF_Y - 1.0
+    route = spine_route(levels)
     for i in range(len(levels) - 1):
         z0, z1 = levels[i], levels[i + 1]
-        if i % 2 == 0:
-            start, end = (0.0, -reach, z0), (0.0, reach, z1)
-        else:
-            start, end = (0.0, reach, z0), (0.0, -reach, z1)
-        base_escalator(f"Stack_Spine_Escalator_{i}", start, end, mats)
+        x0, y0 = route[i]
+        x1, y1 = route[i + 1]
+        base_escalator(f"Stack_Spine_Escalator_{i}",
+                       (x0, y0, z0), (x1, y1, z1), mats)
 
 
 def room_light_state(floor_index, i, j):

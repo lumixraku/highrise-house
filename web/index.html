@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Interactive Three.js viewer for The Stack architectural study." />
+    <title>The Stack / Interactive Model</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="./">
+          <span class="brand-mark">TS</span>
+          <span>The Stack <em>/</em> 3D study</span>
+        </a>
+        <div class="topbar-meta">
+          <span class="live-dot"></span>
+          <span id="load-status">Loading model</span>
+        </div>
+      </header>
+
+      <section class="viewer-shell" aria-label="Interactive 3D building viewer">
+        <div id="viewer" class="viewer"></div>
+        <div class="viewer-wash"></div>
+        <div class="viewer-label">
+          <span>01</span>
+          <strong>Vertical neighbourhood</strong>
+          <small>Orbit to inspect the public route, gardens and stacked programs.</small>
+        </div>
+        <div class="axis-key" aria-hidden="true">
+          <span class="axis-z">Z</span>
+          <span class="axis-x">X</span>
+          <span class="axis-y">Y</span>
+        </div>
+        <div class="loading-card" id="loading-card">
+          <span class="spinner"></span>
+          <span>Preparing the building</span>
+        </div>
+      </section>
+
+      <aside class="info-panel">
+        <div class="eyebrow">MVRDV competition proposal / web conversion</div>
+        <h1>A vertical city,<br /><i>stacked in public.</i></h1>
+        <p class="intro">A procedural architectural study translated from Blender into a browser-native model. Move through the tower as a sequence of retail, garden, work and living bands.</p>
+
+        <div class="metrics">
+          <div><strong>301.8</strong><span>metres high</span></div>
+          <div><strong>64</strong><span>storeys</span></div>
+          <div><strong>115 × 40</strong><span>metre footprint</span></div>
+        </div>
+
+        <div class="controls-block">
+          <div class="section-heading"><span>View</span><span class="hint">drag · scroll · keys</span></div>
+          <div class="view-buttons">
+            <button class="view-button is-active" data-view="overview">Overview <span>01</span></button>
+            <button class="view-button" data-view="garden">Garden band <span>02</span></button>
+            <button class="view-button" data-view="base">Retail base <span>03</span></button>
+          </div>
+          <button id="reset-view" class="reset-button">Reset orbit <span>R</span></button>
+        </div>
+
+        <div class="legend">
+          <div class="section-heading"><span>Program bands</span><span>scroll to explore</span></div>
+          <div class="legend-row"><span class="legend-swatch retail"></span><span>Retail / public hall</span><b>00—10</b></div>
+          <div class="legend-row"><span class="legend-swatch office"></span><span>Office / garden</span><b>11—35</b></div>
+          <div class="legend-row"><span class="legend-swatch living"></span><span>Apartment / refuge</span><b>36—64</b></div>
+        </div>
+
+        <footer class="panel-footer"><span>Procedural model · 2026</span><span>Three.js / glTF</span></footer>
+      </aside>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
