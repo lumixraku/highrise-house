@@ -52,6 +52,11 @@ h1 i { color: #829a79; font-style: normal; }
 .section-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; font: 600 11px 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; }
 .hint { font-size: 9px; font-weight: 400; letter-spacing: 0; text-transform: lowercase; }
 .view-buttons { display: grid; gap: 5px; }
+.model-list { display: grid; gap: 5px; max-height: 190px; overflow: auto; }
+.model-button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 9px 12px; border: 1px solid var(--line); background: transparent; color: var(--ink); text-align: left; font-size: 11px; transition: background .18s, border-color .18s, color .18s; }
+.model-button small { color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; }
+.model-button:hover, .model-button.is-active { border-color: var(--ink); background: var(--ink); color: var(--acid); }
+.model-button:hover small, .model-button.is-active small { color: #a5c85d; }
 .view-button, .reset-button { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); background: transparent; text-align: left; transition: background .18s, border-color .18s, color .18s; }
 .view-button { padding: 10px 12px; font-size: 12px; }
 .view-button span, .reset-button span { color: var(--muted); font: 10px 'DM Mono', monospace; }

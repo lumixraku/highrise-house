@@ -41,14 +41,19 @@
       </section>
 
       <aside class="info-panel">
-        <div class="eyebrow">MVRDV competition proposal / web conversion</div>
-        <h1>A vertical city,<br /><i>stacked in public.</i></h1>
-        <p class="intro">A procedural architectural study translated from Blender into a browser-native model. Move through the tower as a sequence of retail, garden, work and living bands.</p>
+        <div class="eyebrow" id="model-eyebrow">MVRDV competition proposal / web conversion</div>
+        <h1 id="model-title">A vertical city,<br /><i>stacked in public.</i></h1>
+        <p class="intro" id="model-intro">A procedural architectural study translated from Blender into a browser-native model. Move through the tower as a sequence of retail, garden, work and living bands.</p>
 
         <div class="metrics">
-          <div><strong>301.8</strong><span>metres high</span></div>
-          <div><strong>64</strong><span>storeys</span></div>
-          <div><strong>115 × 40</strong><span>metre footprint</span></div>
+          <div><strong id="metric-height">301.8</strong><span>metres high</span></div>
+          <div><strong id="metric-storeys">64</strong><span>storeys</span></div>
+          <div><strong id="metric-footprint">115 × 40</strong><span>metre footprint</span></div>
+        </div>
+
+        <div class="controls-block model-selector">
+          <div class="section-heading"><span>Models</span><span class="hint">select asset</span></div>
+          <div class="model-list" id="model-list"></div>
         </div>
 
         <div class="controls-block">

@@ -101,30 +101,24 @@ def main():
     level_apartment = level_base + office_floors * 5.0
     level_roof = level_apartment + apartment_floors * 4.0
     model_height = level_roof + scene.get("crown_height_m", 0.0)
-    # Each refuge is one open three-storey volume: a planted garden deck on its
-    # bottom plate, the belt truss in the storey above it, and the fully open
-    # storey on top carrying the ceiling. The deck and ceiling plates stay, and
-    # the two floors between them are dropped, so the garden reads as a single
-    # tall volume with the ceiling three storeys up. Four of them: mall, office,
-    # apartment base and mid-apartment.
-    refuge_decks = (level_base - 10.0, level_base + 60.0,
-                    level_base + 110.0, level_apartment + 12 * 4.0)
+    # Each refuge is one two-storey volume: a planted garden deck on its bottom
+    # plate, with the chunky chevron belt truss spanning both storeys above it to
+    # the ceiling plate. The storey line between the deck and the ceiling is
+    # dropped, so the garden and the truss read as one volume. Four of them:
+    # mall, office, apartment base and mid-apartment.
+    refuge_decks = (level_base - 10.0, level_base + 55.0,
+                    level_apartment - 10.0, level_apartment + 12 * 4.0)
     refuge_storey = tuple(5.0 if i < 3 else 4.0
                           for i in range(len(refuge_decks)))
-    refuge_truss_bottoms = tuple(deck + h
-                                 for deck, h in zip(refuge_decks, refuge_storey))
-    refuge_drops = tuple(deck + 2 * h
+    refuge_truss_bottoms = refuge_decks
+    refuge_drops = tuple(deck + h
                          for deck, h in zip(refuge_decks, refuge_storey))
-    refuge_ceilings = tuple(deck + 3 * h
+    refuge_ceilings = tuple(deck + 2 * h
                             for deck, h in zip(refuge_decks, refuge_storey))
-    # The open garden air: from each deck plate up to its ceiling.
     refuge_volumes = tuple(zip(refuge_decks, refuge_ceilings))
-    # The full three-storey component, deck plate included.
     refuge_spans = tuple(zip(refuge_decks, refuge_ceilings))
-    # The top (open) storey of each component.
-    refuge_open_spans = tuple((drop, ceiling)
-                              for drop, ceiling in zip(refuge_drops,
-                                                       refuge_ceilings))
+    # No refuge storey is left open now: the folded screen wraps both storeys.
+    refuge_open_spans = ()
     # The two offset apartment voids sit against the two core inner faces.
     core_inner = 20.0
     void_width = scene.get("void_width_m", 15.0)
@@ -152,9 +146,8 @@ def main():
     upper_levels = storeys[mall_floors:]
     mall_ground_height = scene.get("mall_ground_height_m", 5.0)
     mall_plate_levels = [z for z in mall_levels
-                         if mall_ground_height - 0.01 <= z < level_base - 0.01
-                         and z not in refuge_drops
-                         and z not in refuge_truss_bottoms]
+                         if mall_ground_height - 0.01 <= z <= refuge_decks[0]
+                         and z not in refuge_drops]
     refuge_levels = [z for z in upper_levels
                      if any(z0 < z <= z1 for z0, z1 in refuge_volumes)]
     expected_room_levels = [z for z in upper_levels
@@ -246,28 +239,28 @@ def main():
         and scene.get("elevation_depth_pixels") == 94
         and scene.get("elevation_height_pixels") == 992,
         "band sequence recorded": scene.get("facade_bands") ==
-        "base,refuge,garden,diagrid,refuge,fins,refuge,brick,refuge,brick",
-        "storey program recorded": scene.get("floor_count") == 64
+        "base,refuge,garden,refuge,fins,refuge,brick,refuge,brick",
+        "storey program recorded": scene.get("floor_count") == 60
         and scene.get("mall_floors") == 10
-        and scene.get("office_floors") == 25
-        and scene.get("apartment_floors") == 29,
+        and scene.get("office_floors") == 22
+        and scene.get("apartment_floors") == 28,
         "storey heights recorded": scene.get("storey_heights_m") ==
         "mall 5.0, office 5.0, apartment 4.0",
-        # Each refuge is one three-storey volume — a garden deck on the bottom
-        # plate, the belt truss above it, an open storey carrying the ceiling —
-        # so it reads as a tall garden room, not a stack of thin layers. The two
-        # floors between the deck and the ceiling are dropped. There are four
-        # such refuges, the fourth in the apartment zone between the two voids.
-        "refuge is a four three-storey volume": scene.get(
-            "refuge_floors") == 3
+        # Each refuge is one two-storey volume — a garden deck on the bottom
+        # plate with the chunky chevron belt truss spanning both storeys above it
+        # to the ceiling plate. The storey line between the deck and the ceiling
+        # is dropped. There are four such refuges, the fourth in the apartment
+        # zone between the two voids.
+        "refuge is a four two-storey volume": scene.get(
+            "refuge_floors") == 2
         and scene.get("refuges") == 4
-        and scene.get("refuge_layers") == "garden,truss,open"
-        and all(ceiling - deck in (15.0, 12.0)
+        and scene.get("refuge_layers") == "garden,truss"
+        and all(ceiling - deck in (10.0, 8.0)
                 for (deck, ceiling) in refuge_spans)
         and not any(abs(center_z(obj) - z) < 0.2
                     for obj in bpy.data.objects
                     if obj.name.startswith("Stack_Floor_Slab")
-                    for z in refuge_truss_bottoms + refuge_drops),
+                    for z in refuge_drops),
         "refuge garden decks exist": all(
             any(abs(center_z(obj) - deck) < 0.2 for obj in bpy.data.objects
                 if obj.name.startswith(("Stack_Floor_Slab", "Stack_Mall_Slab")))
@@ -300,7 +293,7 @@ def main():
                     if obj.name.startswith("Stack_Mall_Escalator_")),
         # One continuous public escalator chain climbs the shaft between the
         # cores from the mall top to the roof.
-        "public escalator spine": len(spine_runs) >= 50
+        "public escalator spine": len(spine_runs) >= 40
         and max((z for vs in spine_centers.values() for _, _, z in vs),
                 default=0) > level_roof - 5.0,
         "spine circles the shaft": max(
@@ -353,7 +346,7 @@ def main():
                  if "Base_Mullion" in o.name), default=0.0) >= 0.25,
         "base glass grouped two storeys": (
             len(base_glass)
-            == int((level_base - mall_ground_height) / (2 * 5.0))
+            == int((refuge_decks[0] - mall_ground_height) / (2 * 5.0))
             * len(("N", "S", "E", "W"))
             and all(abs(o.dimensions.z - 2 * 5.0) < 0.01 for o in base_glass)
             and min(o.location.z - o.dimensions.z / 2 for o in base_glass)
@@ -374,9 +367,38 @@ def main():
                     and bounds(o)[3]
                     < bounds(bpy.data.objects["Stack_Core_East"])[3] + 0.01
                     for o in braces)),
-        "outrigger columns": count("Stack_Outrigger_Column") == 4,
         "outrigger trusses": count("Stack_Outrigger_Chord") == 32
         and count("Stack_Outrigger_Diag") == 32,
+        # Chunky full-height columns ring the interior of the curtain wall. The
+        # two long faces skip any bay that falls inside an apartment void and
+        # also skip their end bays — on the wide face those ends are the
+        # short-face columns seen edge-on — so the only columns at the extreme
+        # sides are those short-face columns, at the quarter and three-quarter
+        # points of the depth.
+        "perimeter column ring": (
+            count("Stack_Perimeter_Column") == 12
+            and all(abs(o.dimensions.x - 2.4) < 0.01
+                    and abs(o.dimensions.y - 2.4) < 0.01
+                    and abs(o.dimensions.z - level_roof) < 0.01
+                    for o in objects("Stack_Perimeter_Column"))),
+        "no perimeter columns in the voids": not any(
+            any(xa - 1.2 < center(o)[0] < xb + 1.2 for xa, xb in void_x)
+            for o in objects("Stack_Perimeter_Column")),
+        "short faces carry quarter-point columns": all(
+            sorted(round(center(o)[1], 1)
+                   for o in objects("Stack_Perimeter_Column")
+                   if abs(center(o)[0] - sx * 54.5) < 0.01)
+            == [-10.0, 10.0] for sx in (-1, 1)),
+        # One column at the middle of each long face, between the cores and on
+        # the long-face column line, running the full height from the ground to
+        # the top: it breaks the long span between the cores.
+        "midspan columns between the cores": (
+            count("Stack_Midspan_Column") == 2
+            and all(abs(center(o)[0]) < 0.01
+                    and abs(abs(center(o)[1]) - 17.0) < 0.01
+                    and abs(o.dimensions.z - level_roof) < 0.01
+                    and abs(bounds(o)[4]) < 0.01
+                    for o in objects("Stack_Midspan_Column"))),
         "uniform X-braces": len({round(world_size(o)[2], 1)
                                  for o in braces}) == 1,
         "evenly spaced core braces": len(brace_centers) == 5
@@ -440,14 +462,15 @@ def main():
         and all(max(((obj.matrix_world @ Vector(c)).z
                      for obj in bpy.data.objects
                      if obj.name.startswith(f"{name}_Canopy")
-                     for c in obj.bound_box), default=0.0) <= deck + 10.5
-                for name, deck in (("Stack_Refuge_Mall_Garden", refuge_decks[0]),
-                                   ("Stack_Refuge_Office_Garden",
-                                    refuge_decks[1]),
-                                   ("Stack_Refuge_Apartment_Garden",
-                                    refuge_decks[2]),
-                                   ("Stack_Refuge_Apartment_Mid_Garden",
-                                    refuge_decks[3]))),
+                     for c in obj.bound_box), default=0.0) <= ceiling - 0.5
+                for name, ceiling in (("Stack_Refuge_Mall_Garden",
+                                       refuge_ceilings[0]),
+                                      ("Stack_Refuge_Office_Garden",
+                                       refuge_ceilings[1]),
+                                      ("Stack_Refuge_Apartment_Garden",
+                                       refuge_ceilings[2]),
+                                      ("Stack_Refuge_Apartment_Mid_Garden",
+                                       refuge_ceilings[3]))),
         "camera assigned": scene.camera is not None,
         "viewport framed on building": any(
             area.spaces.active.region_3d is not None
@@ -461,31 +484,46 @@ def main():
             (top_of("Stack_Core_") or 0.0) - model_height) < 0.05,
         "no core protrudes above top": (
             top_of("Stack_Core_") or 0.0) <= model_height + 0.01,
-        # Only the top storey of each three-layer refuge carries no facade at
-        # all; the truss and deck storeys below it are wrapped.
-        "open refuge slits": (
-            scene.get("refuge_floors") == 3
+        # Both storeys of each refuge are wrapped by the folded glass screen, so
+        # no refuge layer is left open. Every screen leaf and post runs the full
+        # two-storey volume.
+        "refuges wear a folded screen": (
+            scene.get("refuge_floors") == 2
             and scene.get("refuges") == 4
+            and scene.get("refuge_layers") == "garden,truss"
+            and scene.get("refuge_open_levels_m") == ""
             and scene.get("refuge_levels_m") == ", ".join(
                 f"{a:g}-{b:g}"
                 for a, b in zip(refuge_decks, refuge_ceilings))
-            and scene.get("refuge_open_levels_m") == ", ".join(
-                f"{a:g}-{b:g}" for a, b in refuge_open_spans)
-            and not any(o.name[:2] in ("N_", "S_", "E_", "W_")
-                        and any(z0 < o.location.z < z1
-                                for z0, z1 in refuge_open_spans)
-                        for o in bpy.data.objects)),
-        # The garden and truss storeys of each refuge are wrapped by the same
-        # facade style as the group that carries them, so the band reads
-        # continuously through the refuge.
-        "gardens wrapped by their band's own facade": all(
-            any(style in o.name
-                and bounds(o)[4] <= z0 + 0.01 and bounds(o)[5] >= z1 - 0.01
-                for o in bpy.data.objects
-                if o.name[:2] in ("N_", "S_", "E_", "W_"))
-            for (z0, z1), style in zip(
-                zip(refuge_decks, refuge_drops),
-                ("Base_", "Diagrid", "Fin", "Brick"))),
+            and count("Refuge_Screen") > 0
+            and count("Refuge_Screen_Post") > 0
+            and all(any("Refuge_Screen" in o.name and "Post" not in o.name
+                        and bounds(o)[4] <= z0 + 0.01
+                        and bounds(o)[5] >= z1 - 0.01
+                        for o in bpy.data.objects)
+                    for z0, z1 in refuge_spans)),
+        # The folded screen is drawn inward from the envelope: its outer folds
+        # sit on the shared facade plane and nothing stands proud of it.
+        "folded screen stays inside the envelope": all(
+            (bounds(o)[3] <= depth / 2 + 0.301
+             if o.name.startswith("N_") else True)
+            and (bounds(o)[2] >= -(depth / 2 + 0.301)
+                 if o.name.startswith("S_") else True)
+            and (bounds(o)[1] <= width / 2 + 0.301
+                 if o.name.startswith("E_") else True)
+            and (bounds(o)[0] >= -(width / 2 + 0.301)
+                 if o.name.startswith("W_") else True)
+            for o in bpy.data.objects
+            if "Refuge_Screen" in o.name),
+        # No band curtain wall runs on into a refuge: the screen owns both
+        # storeys, so the band reads as stopping at the deck.
+        "bands stop at the refuges": not any(
+            any(style in o.name for style in ("Base_", "Diagrid", "Fin"))
+            or ("Brick_" in o.name)
+            for o in bpy.data.objects
+            if o.name[:2] in ("N_", "S_", "E_", "W_")
+            and any(z0 + 0.05 < center_z(o) < z1 - 0.05
+                    for z0, z1 in refuge_spans)),
         "bands wrap four faces": all(
             count(f"{face}_Diagrid") > 0 and count(f"{face}_Fin") > 0
             and count(f"{face}_Brick_Mullion") > 0
@@ -512,9 +550,9 @@ def main():
                     if obj.name.startswith(("N_Brick_Mullion", "N_Brick_Glass",
                                             "S_Brick_Mullion", "S_Brick_Glass")))
             for x0, x1, z0, z1 in void_spans),
-        # Each vent opening sits directly on the open storey of a walking-garden
-        # refuge, so the opening and that empty layer connect.
-        "each vent sits on a refuge open storey": all(
+        # Each vent opening sits directly on the ceiling of a walking-garden
+        # refuge, so the opening and that planted volume connect.
+        "each vent sits on a refuge ceiling": all(
             any(abs(z0 - ceiling) < 0.01 for ceiling in refuge_ceilings)
             for x0, x1, z0, z1 in void_spans),
         # Both X side walls of each opening are closed with the same curtain wall
@@ -552,10 +590,11 @@ def main():
             for cx0, cx1, cy0, cy1, cz0, cz1 in (
                 bounds(bpy.data.objects["Stack_Core_West"]),
                 bounds(bpy.data.objects["Stack_Core_East"]))),
-        # The mid-apartment refuge is an empty storey, so no apartment-band
+        # The mid-apartment refuge is its own volume, so no apartment-band
         # mullion may run through it: each stays inside one of the brick bands.
         "apartment mullions stay inside their band": all(
-            not (bounds(o)[4] < 234.95 and bounds(o)[5] > 231.05)
+            not (bounds(o)[4] < refuge_ceilings[3] - 0.05
+                 and bounds(o)[5] > refuge_decks[3] + 0.05)
             for o in bpy.data.objects
             if o.name.startswith(("N_Brick_Mullion", "S_Brick_Mullion",
                                   "E_Brick_Mullion", "W_Brick_Mullion"))),
