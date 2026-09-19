@@ -4,11 +4,11 @@ The competition entry has no as-built drawings. The massing follows the
 orthographic elevation sheet in the MVRDV gallery: measured 321 px wide, 94 px
 deep and 992 px tall against the published 356.8 m height, giving a slender
 slab of about 115 x 34 m. The depth is deliberately widened to 40 m: the
-drawing's 34 m slab is implausibly thin for a 282.8 m tower's gravity and wind
+drawing's 34 m slab is implausibly thin for a 298.8 m tower's gravity and wind
 loads, and the client asked for a 40 m short side. The storey program sets the
-height: 10 mall floors at 5 m, 22 office floors at 5 m and 28 apartment floors
-at 4 m make a top plate at 272 m, with the glass running on to the 282.8 m top
-over 60 floors. The four refuge plazas are two storeys each — a planted garden
+height: 10 mall floors at 5 m, 22 office floors at 5 m and 32 apartment floors
+at 4 m make a top plate at 288 m, with the glass running on to the 298.8 m top
+over 64 floors. The four refuge plazas are two storeys each — a planted garden
 deck with a chunky Abeno-style chevron belt truss spanning both storeys above it
 — and both storeys wear a folded glass screen rather than an open slot.
 
@@ -55,7 +55,7 @@ WIDTH, DEPTH = 115.0, 40.0
 # above it), so removing its former open storey drops the stack by one storey
 # per refuge.
 MALL_H, OFFICE_H, APARTMENT_H = 5.0, 5.0, 4.0
-MALL_FLOORS, OFFICE_FLOORS, APARTMENT_FLOORS = 10, 22, 28
+MALL_FLOORS, OFFICE_FLOORS, APARTMENT_FLOORS = 10, 22, 32
 LEVEL_BASE = MALL_FLOORS * MALL_H
 LEVEL_APARTMENT = LEVEL_BASE + OFFICE_FLOORS * OFFICE_H
 LEVEL_ROOF = LEVEL_APARTMENT + APARTMENT_FLOORS * APARTMENT_H
@@ -116,20 +116,36 @@ SPINE_CROSS_X, SPINE_CROSS_Y = 8.0, 3.4   # crisscross rectangle half-extents
 # Each opening is now half as wide as the span between the two core faces, so it
 # runs from its core's inner face to the centreline; the escalator chain leaves
 # the centreline and climbs the opposite half of the shaft to stay clear of it.
-# Each vent opening sits directly on the ceiling of a walking-garden refuge
-# below it, so the two connect as one tall void: the low void above the
-# apartment refuge's roof plate, the high void above the mid-apartment refuge's.
+# Every vent is centred on a core X-brace bay, so the chunky brace reads in the
+# middle of the opening. The lower vent is a free opening in the brick band — a
+# few storeys of wall below it, the mid-apartment refuge above; the upper vent
+# sits on that refuge's ceiling, as before.
 VOID_MODULES = 14
-VOID_W = VOID_MODULES * APARTMENT_MULLION_SPACING               # 20.0 m
-VOID_FLOORS = 9
-# The fourth refuge, in the middle of the apartment zone: two storeys whose top
-# carries the high void.
-REFUGE_MID_OPEN = (LEVEL_APARTMENT + 12 * APARTMENT_H,
-                   LEVEL_APARTMENT + 14 * APARTMENT_H)          # 208-216
-VOID_LOW_Z0 = LEVEL_APARTMENT                                   # 160
-VOID_LOW_Z1 = VOID_LOW_Z0 + VOID_FLOORS * APARTMENT_H           # 196
-VOID_HIGH_Z0 = REFUGE_MID_OPEN[1]                               # 216
-VOID_HIGH_Z1 = VOID_HIGH_Z0 + VOID_FLOORS * APARTMENT_H         # 252
+VOID_W = VOID_MODULES * APARTMENT_MULLION_SPACING               # 17.5 m
+VOID_LOW_FLOORS, VOID_HIGH_FLOORS = 12, 10
+# The fourth refuge, in the middle of the apartment zone: two storeys sitting on
+# the lower vent, whose ceiling carries the high void.
+REFUGE_MID_OPEN = (LEVEL_APARTMENT + 15 * APARTMENT_H,
+                   LEVEL_APARTMENT + 17 * APARTMENT_H)          # 220-228
+
+
+def _brace_centre(index):
+    """Centre height of core X-brace bay `index`."""
+    return (2 * index + 1.5) * CORE_BRACE_BAND
+
+
+def _void_span(index, floors):
+    """A vent of `floors` storeys centred on brace bay `index`, snapped to the
+    apartment floor lines so its edges land on the band grid."""
+    centre = _brace_centre(index)
+    z0 = LEVEL_APARTMENT + APARTMENT_H * round(
+        (centre - floors * APARTMENT_H / 2 - LEVEL_APARTMENT) / APARTMENT_H)
+    return z0, z0 + floors * APARTMENT_H
+
+
+VOID_LOW_Z0, VOID_LOW_Z1 = _void_span(3, VOID_LOW_FLOORS)       # 172-220
+VOID_HIGH_Z0 = REFUGE_MID_OPEN[1]                               # 228
+VOID_HIGH_Z1 = VOID_HIGH_Z0 + VOID_HIGH_FLOORS * APARTMENT_H    # 268
 VOIDS = (
     (-CORE_INNER, -CORE_INNER + VOID_W, VOID_LOW_Z0, VOID_LOW_Z1),
     (CORE_INNER - VOID_W, CORE_INNER, VOID_HIGH_Z0, VOID_HIGH_Z1),
@@ -140,9 +156,9 @@ VOIDS = (
 # posts and top/bottom chords, at a fixed ~12 m group spacing. The truss spans
 # the refuge's full two storeys, so each face reads as one tall claw.
 CHEVRON_SPACING = 12.0
-CHEVRON_POST_W = 1.80           # Abeno post gauge: chunky, like the reference
-CHEVRON_DIAG_W = 0.70
-CHEVRON_CHORD_W = 0.80
+CHEVRON_POST_W = 2.20           # chunky, like the Abeno reference
+CHEVRON_DIAG_W = 1.20
+CHEVRON_CHORD_W = 1.10
 # The refuge skin is a vertical sawtooth in plan (a folding screen): its outer
 # folds sit on the shared facade plane and its inner folds are drawn back, so
 # nothing ever stands proud of the envelope. The truss is set behind the deepest
@@ -1178,14 +1194,23 @@ def chevron_face(face, u0, u1, z0, z1, mats, prefix, outer, corner_start=False):
     inset = 0.10 if face in ("E", "W") else 0.05
     pz0, pz1 = z0 + inset, z1 - inset
     for k in range(0 if corner_start else 1, groups + 1):
-        u = u0 + k * step
+        # Keep the boundary posts inside the face end: a round post overhangs
+        # its centre by post_r, so an end post left on the building corner would
+        # stick out past the envelope. Pull the two end posts in by their own
+        # radius; the interior posts are unaffected (the step is far wider).
+        u = min(u0 + k * step, u1 - post_r)
+        u = max(u, u0 + post_r)
         member("Post", u, pz0, u, pz1, post_r)
     for k in range(groups):
         f0 = u0 + k * step
         f1 = f0 + step / 2
         f2 = f0 + step
-        member("Diag", f0, z0, f1, z1, diag_r)
-        member("Diag", f1, z1, f2, z0, diag_r)
+        # Pull the two outer feet in by their own radius too: the round cap at a
+        # foot left on the face end overhangs the corner just like a post does.
+        a = max(f0, u0 + diag_r) if k == 0 else f0
+        b = min(f2, u1 - diag_r) if k == groups - 1 else f2
+        member("Diag", a, z0, f1, z1, diag_r)
+        member("Diag", f1, z1, b, z0, diag_r)
     for z in (z0, z1):
         member("Chord", u0, z, u1, z, chord_r)
 
@@ -1652,8 +1677,11 @@ def setup_scene(args, mats):
         "plausibility (client direction).")
     scene["voids"] = len(VOIDS)
     scene["void_width_m"] = VOID_W
-    scene["void_height_m"] = VOID_FLOORS * APARTMENT_H
-    scene["void_area_m2"] = VOID_W * VOID_FLOORS * APARTMENT_H
+    scene["void_heights_m"] = (f"{VOID_LOW_FLOORS * APARTMENT_H:g},"
+                               f"{VOID_HIGH_FLOORS * APARTMENT_H:g}")
+    scene["void_area_m2"] = VOID_W * (VOID_LOW_FLOORS
+                                      + VOID_HIGH_FLOORS) * APARTMENT_H
+    scene["void_centre_on_brace"] = "true"
     scene["void_x_spans_m"] = ";".join(
         f"{x0:g}-{x1:g}" for x0, x1, _, _ in VOIDS)
     scene["void_z_spans_m"] = ";".join(

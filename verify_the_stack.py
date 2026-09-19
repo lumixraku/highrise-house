@@ -107,7 +107,7 @@ def main():
     # dropped, so the garden and the truss read as one volume. Four of them:
     # mall, office, apartment base and mid-apartment.
     refuge_decks = (level_base - 10.0, level_base + 55.0,
-                    level_apartment - 10.0, level_apartment + 12 * 4.0)
+                    level_apartment - 10.0, level_apartment + 15 * 4.0)
     refuge_storey = tuple(5.0 if i < 3 else 4.0
                           for i in range(len(refuge_decks)))
     refuge_truss_bottoms = refuge_decks
@@ -122,10 +122,11 @@ def main():
     # The two offset apartment voids sit against the two core inner faces.
     core_inner = 20.0
     void_width = scene.get("void_width_m", 15.0)
-    void_height = scene.get("void_height_m", 20.0)
 
     def span(text):
-        return tuple(float(v) for v in re.findall(r"-?\d+(?:\.\d+)?", text))
+        # "a-b", where either end may itself be negative ("-20--2.5").
+        match = re.match(r"^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$", text)
+        return float(match.group(1)), float(match.group(2))
 
     void_x = [span(part) for part in scene.get("void_x_spans_m",
                                                "-20--5;5-20").split(";")]
@@ -133,6 +134,11 @@ def main():
                                                "187-207;223-243").split(";")]
     void_spans = tuple((xa, xb, za, zb)
                        for (xa, xb), (za, zb) in zip(void_x, void_z))
+    void_area = sum((xb - xa) * (zb - za) for xa, xb, za, zb in void_spans)
+    # The five core X-brace bays are equal bands over the top plate, each its own
+    # height with equal gaps; bay `index` is centred on this height.
+    core_brace_band = level_roof / 11.0
+    brace_centres = tuple((2 * i + 1.5) * core_brace_band for i in range(5))
     void_cw_x = [center(obj)[0] for obj in bpy.data.objects
                  if obj.name.startswith("Stack_Void_CW_Mullion")]
     shaft_x, shaft_y = (float(part)
@@ -240,10 +246,10 @@ def main():
         and scene.get("elevation_height_pixels") == 992,
         "band sequence recorded": scene.get("facade_bands") ==
         "base,refuge,garden,refuge,fins,refuge,brick,refuge,brick",
-        "storey program recorded": scene.get("floor_count") == 60
+        "storey program recorded": scene.get("floor_count") == 64
         and scene.get("mall_floors") == 10
         and scene.get("office_floors") == 22
-        and scene.get("apartment_floors") == 28,
+        and scene.get("apartment_floors") == 32,
         "storey heights recorded": scene.get("storey_heights_m") ==
         "mall 5.0, office 5.0, apartment 4.0",
         # Each refuge is one two-storey volume — a garden deck on the bottom
@@ -515,6 +521,16 @@ def main():
                  if o.name.startswith("W_") else True)
             for o in bpy.data.objects
             if "Refuge_Screen" in o.name),
+        # Neither the folded screen nor the belt truss may overhang the corners:
+        # a round post left on the building corner would stick out past the
+        # envelope by its own radius.
+        "refuge structure stays inside the envelope": not any(
+            max(bounds(o)[1] - (width / 2 + 0.301),
+                -(bounds(o)[0] + width / 2 + 0.301),
+                bounds(o)[3] - (depth / 2 + 0.301),
+                -(bounds(o)[2] + depth / 2 + 0.301)) > 0.01
+            for o in bpy.data.objects
+            if "Refuge_Belt" in o.name or "Refuge_Screen" in o.name),
         # No band curtain wall runs on into a refuge: the screen owns both
         # storeys, so the band reads as stopping at the deck.
         "bands stop at the refuges": not any(
@@ -541,20 +557,22 @@ def main():
         and scene.get("void_x_spans_m") == "-20--2.5;2.5-20"
         and count("N_Brick_Glass") > 2 and count("S_Brick_Glass") > 2,
         # Each opening is now more than twice the original 15 x 20 m (300 m2).
-        "voids enlarged past twice the area": scene.get(
-            "void_area_m2", 0.0) >= 600.0
-        and abs(scene.get("void_area_m2", 0.0) - void_width * void_height) < 0.01,
+        "voids enlarged past twice the area": void_area >= 600.0
+        and abs(scene.get("void_area_m2", 0.0) - void_area) < 0.01,
         "void openings are punched in the band": all(
             not any(x0 < center(obj)[0] < x1 and z0 < center(obj)[2] < z1
                     for obj in bpy.data.objects
                     if obj.name.startswith(("N_Brick_Mullion", "N_Brick_Glass",
                                             "S_Brick_Mullion", "S_Brick_Glass")))
             for x0, x1, z0, z1 in void_spans),
-        # Each vent opening sits directly on the ceiling of a walking-garden
-        # refuge, so the opening and that planted volume connect.
-        "each vent sits on a refuge ceiling": all(
-            any(abs(z0 - ceiling) < 0.01 for ceiling in refuge_ceilings)
+        # Every vent is centred on a core X-brace bay, so the brace reads in the
+        # vertical middle of the opening; the upper vent also sits on the
+        # mid-apartment refuge's ceiling, so it still connects to that garden.
+        "each vent is centred on a core brace bay": all(
+            any(abs((z0 + z1) / 2 - centre) < 1.5 for centre in brace_centres)
             for x0, x1, z0, z1 in void_spans),
+        "upper vent sits on the mid refuge ceiling": abs(
+            void_spans[1][2] - refuge_ceilings[3]) < 0.01,
         # Both X side walls of each opening are closed with the same curtain wall
         # as the exterior apartment band (glass, spandrel, mullions, transoms):
         # the outer face keeps the recess clad and the inner face lines the shaft,
