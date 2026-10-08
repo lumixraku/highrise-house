@@ -1,4 +1,5 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
+import { WebGPURenderer } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -22,15 +23,15 @@ const metricFootprint = document.querySelector('#metric-footprint');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#8e9d93');
 
-const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 1200);
+const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 2500);
 const devicePixelRatio = window.devicePixelRatio || 1;
 const idlePixelRatio = Math.min(devicePixelRatio, 2);
 const interactionPixelRatio = Math.min(devicePixelRatio, 1);
-const renderer = new THREE.WebGLRenderer({
+const renderer = new WebGPURenderer({
   antialias: true,
-  alpha: false,
   powerPreference: 'high-performance',
 });
+await renderer.init();
 renderer.setPixelRatio(idlePixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.sortObjects = true;
@@ -44,7 +45,7 @@ viewer.appendChild(renderer.domElement);
 // real to reflect without adding haze to the camera view.
 const pmrem = new THREE.PMREMGenerator(renderer);
 const environment = new RoomEnvironment();
-scene.environment = pmrem.fromScene(environment, 0.04).texture;
+scene.environment = (await pmrem.fromSceneAsync(environment, 0.04)).texture;
 scene.environmentIntensity = 0.6;
 environment.dispose();
 pmrem.dispose();
@@ -71,7 +72,7 @@ const reflectionTexture = new THREE.CanvasTexture(reflectionCanvas);
 reflectionTexture.colorSpace = THREE.SRGBColorSpace;
 reflectionTexture.mapping = THREE.EquirectangularReflectionMapping;
 const reflectionPmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = reflectionPmrem.fromEquirectangular(reflectionTexture).texture;
+scene.environment = (await reflectionPmrem.fromEquirectangularAsync(reflectionTexture)).texture;
 scene.environmentIntensity = 1.0;
 reflectionTexture.dispose();
 reflectionPmrem.dispose();
@@ -266,7 +267,7 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 let loadToken = 0;
 
 function clearCeilingGlow() {
-  removeCeilingGlow(ceilingGlow);
+  if (ceilingGlow) removeCeilingGlow({ ...ceilingGlow, root: model });
   ceilingGlow = null;
 }
 
@@ -319,7 +320,7 @@ function loadModel(id) {
   const token = ++loadToken;
   loader.load(
     config.asset,
-    (gltf) => {
+    async (gltf) => {
       if (token !== loadToken) {
         disposeModel(gltf.scene);
         return;
@@ -327,11 +328,37 @@ function loadModel(id) {
       model = gltf.scene;
       scene.add(model);
       frameModel(model);
+      model.traverse((object) => {
+        if (!object.isMesh) return;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if ((material?.transmission ?? 0) > 0.5) {
+            // Grazing views turn physical glass into a mirror, which hides every
+            // lit room from above. Keep it a thin tinted pane instead.
+            material.transmission = 0;
+            material.transparent = true;
+            material.opacity = 0.08;
+            material.depthWrite = false;
+            material.metalness = 0;
+            material.roughness = 0.08;
+            material.metalnessMap = null;
+            material.roughnessMap = null;
+            material.envMapIntensity = 0.04;
+            material.clearcoat = 0;
+            material.specularIntensity = 0.04;
+            material.needsUpdate = true;
+          }
+        }
+      });
       if (ceilingGlowOn) {
         const started = performance.now();
-        const glow = addCeilingGlow(model);
+        const glow = await addCeilingGlow(model);
+        if (token !== loadToken) {
+          removeCeilingGlow(glow);
+          return;
+        }
         if (glow) {
-          ceilingGlow = glow.group;
+          ceilingGlow = glow;
           console.info(
             `Ceiling glow: ${glow.panels} fixtures, ${glow.floors} floors, ${Math.round(performance.now() - started)} ms`,
           );
@@ -356,12 +383,12 @@ function loadModel(id) {
 }
 
 viewButtons.forEach((button) => button.addEventListener('click', () => applyView(button.dataset.view)));
-function setCeilingGlow(enabled) {
+async function setCeilingGlow(enabled) {
   ceilingGlowOn = enabled;
   ceilingGlowButton.classList.toggle('is-active', ceilingGlowOn);
   ceilingGlowButton.querySelector('span').textContent = ceilingGlowOn ? 'on' : 'off';
   clearCeilingGlow();
-  if (ceilingGlowOn && model) ceilingGlow = addCeilingGlow(model)?.group ?? null;
+  if (ceilingGlowOn && model) ceilingGlow = await addCeilingGlow(model);
   requestRender();
 }
 

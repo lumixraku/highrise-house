@@ -49,7 +49,7 @@ The image above captures the current Blender working view. The images below are 
 
 ## The Stack
 
-A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 298.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin and masonry bands. Its identity is the public route up the middle: two service cores run the long axis and, between them, one continuous chain of escalators climbs from the ground hall to the planted roof, stopping at four sky-garden plazas. In the retail hall the chain is a rectangular helix — a run on each face of the ring at a real escalator pitch, so from above it reads as a 回 that spirals up — kept on the ring floor beside the atrium opening, never across the draughty void. Each plaza is the same two-storey volume — a planted garden deck at the bottom, with the chunky Abeno Harukas-style chevron belt truss rising from that deck and spanning both storeys to the ceiling — and both storeys are wrapped by a folded glass screen: a vertical sawtooth in plan whose outer folds sit on the shared facade plane and whose inner folds are drawn back, so the layer reads as a folding screen and never stands proud of the envelope, with the truss reading through the glass. The garden and its trees grow up through the truss toward the ceiling two storeys above: a vertical mall wrapped in a vertical forest. The fourth plaza sits in the middle of the apartment band, between its two offset voids. Those two voids are ventilation openings either side of the centreline, each as wide as half the span between the cores so it runs from its core to the centreline; each is centred on one of the core's chunky X-brace bays, so the brace reads in the vertical middle of the opening — the taller lower vent stands free in the brick band with a few storeys of wall below it, while the upper one opens down onto the garden roof of the mid-apartment refuge. The public escalator interlocks big ~30° diagonal flights across the office shaft — two of them crossing over the centre — then reverts to a plain one-plane switchback through the apartment band above. The apartment band is pierced by the two offset voids, each against a core, rather than by a bridge.
+A second, independent procedural study in this repository: an image-led approximation of MVRDV's *The Stack* competition proposal, built by `build_the_stack.py`. It is a slender 115 × 40 m slab rising to 338.8 m, read as a vertical stack of horizontal neighbourhood bands — a double-height retail hall, garden, diagrid, fin and masonry bands. Its identity is the public route up the middle: two service cores run the long axis and, between them, one continuous chain of escalators climbs from the ground hall to the planted roof, stopping at four sky-garden plazas. The office block above the retail hall is 27 uniform 5 m storeys — one plate per storey, and the diamond diagrid runs unbroken over its whole height. In the retail hall the chain is a rectangular helix — a run on each face of the ring at a real escalator pitch, so from above it reads as a 回 that spirals up — kept on the ring floor beside the atrium opening, never across the draughty void. Each plaza is the same two-storey volume — a planted garden deck at the bottom, with the chunky Abeno Harukas-style chevron belt truss rising from that deck and spanning both storeys to the ceiling — and both storeys are wrapped by a folded glass screen: a vertical sawtooth in plan whose outer folds sit on the shared facade plane and whose inner folds are drawn back, so the layer reads as a folding screen and never stands proud of the envelope, with the truss reading through the glass. The garden and its trees grow up through the truss toward the ceiling two storeys above: a vertical mall wrapped in a vertical forest. The fourth plaza sits in the middle of the apartment band, between its two offset voids. Those two voids are ventilation openings either side of the centreline, each as wide as half the span between the cores so it runs from its core to the centreline; each is centred on one of the core's chunky X-brace bays, so the brace reads in the vertical middle of the opening — both vents are the same 10 apartment storeys tall, the lower one standing free in the brick band with the mid-apartment refuge just above it, the upper one opening down onto that refuge's garden roof. The public escalator interlocks big ~30° diagonal flights across the office shaft — two of them crossing over the centre — then reverts to a plain one-plane switchback through the apartment band above. The apartment band is pierced by the two offset voids, each against a core, rather than by a bridge.
 
 Generated and iterated procedurally with **DeepSeek 4.1**.
 
@@ -115,6 +115,60 @@ To leave all Blender material node graphs untouched during export, add:
 ```bash
 --preserve-materials
 ```
+
+#### Glass and glTF
+
+The glass problem is not that browsers cannot render glass — it is that glTF cannot
+describe the Blender node graph. `materials.make_glass` (EEVEE branch) builds a pane
+from `Transparent` + `Anisotropic`/`Glossy` + `Mix Shader`, wired straight into the
+Material Output. glTF's material model only covers PBR metallic-roughness plus a
+fixed set of extensions, and Blender's exporter maps only a subset of a `Principled
+BSDF`. Exported as-is, that mixed node graph is dropped or approximated, and the
+glass arrives in the browser opaque or wrong.
+
+`translate_glass_materials()` therefore rewrites the glass on the in-memory export
+copy only. It detects a glass-like shader by structure (`_is_glass_like`) and rebuilds
+a single `Principled BSDF` (`_make_web_glass`) carrying transmission, IOR, specular,
+coat, and alpha. The exporter then writes these as standard extensions —
+`KHR_materials_transmission`, `KHR_materials_ior`, `KHR_materials_specular` — which the
+browser renders with Three.js's `MeshPhysicalMaterial` (`transmission`, `ior`,
+`clearcoat`, alpha blending). The result is an approximation, not true refraction: it
+looks right mainly with an environment map, and alpha-blended panes depend on correct
+transparency sorting. With `--preserve-materials` the graph is left untouched and the
+browser loses the glass semantics. The exporter never writes back to the source `.blend`.
+
+#### Ceiling lights in the viewer
+
+The ceiling fixtures travel in the GLB as emissive panels (`Stack_Room_Lights_Warm`,
+`Stack_Room_Lights_Daylight`, and the mall strips). glTF emissive only makes the panel
+itself glow. It does not light the floor, the ceiling soffit, or anything else, and
+this viewer does not instance one real-time point light per fixture: there are 6277
+of them, which will not fit in a shader's light list.
+
+`web/ceiling-glow.js` treats each fixture as a source anyway. It keeps the downward
+face of every lit panel, merges the two faces of one panel, then groups the panels
+by storey. For each floor vertex it sums the fixtures on the ceiling directly above
+that storey. The contribution is inverse-square with a Lambert term from the drop
+between fixture and floor, clamped so one nearby panel cannot blow out. The same
+fixtures also mark the soffit immediately around themselves. Warm and daylight
+fixtures keep their own colours. The sum is stored on the floor mesh as `roomLight`
+and shown through a node material, so the plate itself reads as lit when seen through
+the glass.
+
+Two practical limits forced extra geometry work. The exported floor plates are a few
+huge triangles, so a per-vertex colour turns into a long smear. Horizontal triangles
+are split until an edge is about four metres, and floor vertices are snapped onto the
+nearest lit storey so a plate reads as a layer from above instead of as a thin edge.
+The shared GLB palette also bakes the glass to metalness 1 and roughness 1, and a
+physical transmission shader becomes a mirror at a steep downward view, which hides
+the rooms. On load, `web/main.js` replaces that glass with a thin transparent pane
+(`opacity` 0.08, no transmission) so the lit floors stay visible from the street and
+from above. The **Ceiling glow** button turns the contribution on and off.
+
+This is not CUDA and not a path tracer. The machine this was built on is an Apple
+M4 with no NVIDIA GPU and no `nvcc`. Walls are not lit, and a floor still shows the
+contribution as patches rather than a smooth room wash. The Blender scene is
+unchanged: the lighting exists only in the viewer.
 
 The current The Stack web assets are approximately:
 
