@@ -3,12 +3,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { addCeilingGlow, removeCeilingGlow } from './ceiling-glow.js';
 
 const viewer = document.querySelector('#viewer');
 const status = document.querySelector('#load-status');
 const loadingCard = document.querySelector('#loading-card');
 const viewButtons = [...document.querySelectorAll('.view-button')];
 const resetButton = document.querySelector('#reset-view');
+const ceilingGlowButton = document.querySelector('#ceiling-glow');
 const modelList = document.querySelector('#model-list');
 const modelEyebrow = document.querySelector('#model-eyebrow');
 const modelTitle = document.querySelector('#model-title');
@@ -31,6 +33,7 @@ const renderer = new THREE.WebGLRenderer({
 });
 renderer.setPixelRatio(idlePixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.sortObjects = true;
 window.__stackDebug = { renderer, scene, camera, renderFrames: 0 };
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.82;
@@ -190,6 +193,8 @@ const models = {
   },
 };
 let model;
+let ceilingGlow;
+let ceilingGlowOn = true;
 let activeModelId = 'stack';
 let modelBounds;
 let defaultView;
@@ -260,6 +265,11 @@ const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
 let loadToken = 0;
 
+function clearCeilingGlow() {
+  removeCeilingGlow(ceilingGlow);
+  ceilingGlow = null;
+}
+
 function disposeModel(root) {
   root.traverse((object) => {
     if (!object.isMesh) return;
@@ -296,6 +306,7 @@ function loadModel(id) {
   activeModelId = id;
   updateModelMeta(config);
   renderModelList();
+  clearCeilingGlow();
   if (model) {
     disposeModel(model);
     model = null;
@@ -316,6 +327,16 @@ function loadModel(id) {
       model = gltf.scene;
       scene.add(model);
       frameModel(model);
+      if (ceilingGlowOn) {
+        const started = performance.now();
+        const glow = addCeilingGlow(model);
+        if (glow) {
+          ceilingGlow = glow.group;
+          console.info(
+            `Ceiling glow: ${glow.panels} fixtures, ${glow.floors} floors, ${Math.round(performance.now() - started)} ms`,
+          );
+        }
+      }
       requestRender();
       status.textContent = 'Model ready';
       loadingCard.classList.add('is-hidden');
@@ -335,6 +356,16 @@ function loadModel(id) {
 }
 
 viewButtons.forEach((button) => button.addEventListener('click', () => applyView(button.dataset.view)));
+function setCeilingGlow(enabled) {
+  ceilingGlowOn = enabled;
+  ceilingGlowButton.classList.toggle('is-active', ceilingGlowOn);
+  ceilingGlowButton.querySelector('span').textContent = ceilingGlowOn ? 'on' : 'off';
+  clearCeilingGlow();
+  if (ceilingGlowOn && model) ceilingGlow = addCeilingGlow(model)?.group ?? null;
+  requestRender();
+}
+
+ceilingGlowButton.addEventListener('click', () => setCeilingGlow(!ceilingGlowOn));
 resetButton.addEventListener('click', () => {
   if (defaultView) {
     camera.position.copy(defaultView.position);
