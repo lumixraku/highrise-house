@@ -117,13 +117,29 @@ controls.addEventListener('end', () => {
   );
 });
 
-scene.add(new THREE.HemisphereLight('#f4f7ed', '#7e8d83', 0.9));
+const hemiLight = new THREE.HemisphereLight('#f4f7ed', '#7e8d83', 0.9);
+scene.add(hemiLight);
 const keyLight = new THREE.DirectionalLight('#fff8e5', 2.2);
-keyLight.position.set(160, 360, -180);
 scene.add(keyLight);
 const fillLight = new THREE.DirectionalLight('#c3d9e5', 0.8);
-fillLight.position.set(-200, 170, 120);
 scene.add(fillLight);
+const SUN_DISTANCE = 420;
+const DAY_BACKGROUND = new THREE.Color('#8e9d93');
+const NIGHT_BACKGROUND = new THREE.Color('#141c22');
+const DAY_GROUND = new THREE.Color('#aeb9af');
+const NIGHT_GROUND = new THREE.Color('#2a3330');
+const SUN_COLOR_NOON = new THREE.Color('#fff8e5');
+const SUN_COLOR_HORIZON = new THREE.Color('#ff8a3a');
+const SUN_COLOR_NIGHT = new THREE.Color('#8aa4c4');
+const FILL_COLOR_DAY = new THREE.Color('#c3d9e5');
+const FILL_COLOR_NIGHT = new THREE.Color('#1c2836');
+const HEMI_SKY_DAY = new THREE.Color('#f4f7ed');
+const HEMI_SKY_NIGHT = new THREE.Color('#1a2430');
+const HEMI_GROUND_DAY = new THREE.Color('#7e8d83');
+const HEMI_GROUND_NIGHT = new THREE.Color('#12181c');
+const SUN_HANDLE_R = 54;
+const SUN_CENTER = 70;
+let sunHour = 10;
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(900, 900),
@@ -331,7 +347,14 @@ function loadModel(id) {
       model.traverse((object) => {
         if (!object.isMesh) return;
         const materials = Array.isArray(object.material) ? object.material : [object.material];
+        const glassName = /glass/i.test(object.name)
+          && !/frost/i.test(object.name);
+        // Palettized dark vision glass on The Stack was merged into the
+        // apartment frame mesh and lost the Glass name.
+        const palettizedVision = object.name === 'Web_Stack_Apartment_Frame';
         for (const material of materials) {
+          const namedGlass = /glass/i.test(material?.name ?? '')
+            && !/frost/i.test(material?.name ?? '');
           if ((material?.transmission ?? 0) > 0.5) {
             // Grazing views turn physical glass into a mirror, which hides every
             // lit room from above. Keep it a thin tinted pane instead.
@@ -347,14 +370,7 @@ function loadModel(id) {
             material.clearcoat = 0;
             material.specularIntensity = 0.04;
             material.needsUpdate = true;
-          }
-        }
-        // The apartment-band dark vision glass was palettized into the
-        // opaque Apartment_Frame mesh during GLB optimization. Make it
-        // semi-transparent so the interior light volumes read through it
-        // — without punching holes in the skin.
-        if (object.name === 'Web_Stack_Apartment_Frame') {
-          for (const material of materials) {
+          } else if (glassName || namedGlass || palettizedVision) {
             material.transparent = true;
             material.opacity = 0.35;
             material.depthWrite = false;
@@ -415,6 +431,151 @@ resetButton.addEventListener('click', () => {
     applyView('overview', true);
   }
 });
+
+const sunDial = document.querySelector('#sun-dial');
+const sunHandle = document.querySelector('#sun-handle');
+const sunTime = document.querySelector('#sun-time');
+const sunPhase = document.querySelector('#sun-phase');
+const sunTicks = document.querySelector('#sun-ticks');
+const sunLabels = document.querySelector('#sun-labels');
+const scratchColor = new THREE.Color();
+
+function hourAngle(hour) {
+  return ((hour - 12) / 24) * Math.PI * 2 - Math.PI / 2;
+}
+
+function padHour(hour) {
+  const wrapped = ((hour % 24) + 24) % 24;
+  const hours = Math.floor(wrapped);
+  const minutes = Math.round((wrapped - hours) * 60);
+  if (minutes === 60) return `${String((hours + 1) % 24).padStart(2, '0')}:00`;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function sunPhaseName(hour) {
+  if (hour >= 5 && hour < 7) return 'dawn';
+  if (hour >= 7 && hour < 11) return 'morning';
+  if (hour >= 11 && hour < 14) return 'noon';
+  if (hour >= 14 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 19.5) return 'dusk';
+  return 'night';
+}
+
+function drawSunDial() {
+  sunTicks.replaceChildren();
+  sunLabels.replaceChildren();
+  for (let hour = 0; hour < 24; hour += 1) {
+    const angle = hourAngle(hour);
+    const inner = hour % 6 === 0 ? 46 : 50;
+    const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    tick.setAttribute('x1', String(SUN_CENTER + Math.cos(angle) * inner));
+    tick.setAttribute('y1', String(SUN_CENTER + Math.sin(angle) * inner));
+    tick.setAttribute('x2', String(SUN_CENTER + Math.cos(angle) * SUN_HANDLE_R));
+    tick.setAttribute('y2', String(SUN_CENTER + Math.sin(angle) * SUN_HANDLE_R));
+    tick.setAttribute('class', hour % 6 === 0 ? 'sun-tick is-major' : 'sun-tick');
+    sunTicks.append(tick);
+    if (hour % 6 !== 0) continue;
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('class', 'sun-label');
+    label.setAttribute('x', String(SUN_CENTER + Math.cos(angle) * 38));
+    label.setAttribute('y', String(SUN_CENTER + Math.sin(angle) * 38));
+    label.textContent = String(hour);
+    sunLabels.append(label);
+  }
+}
+
+function setSunHour(hour) {
+  sunHour = ((hour % 24) + 24) % 24;
+  const azimuth = (sunHour / 24) * Math.PI * 2;
+  const elevation = Math.sin((sunHour - 6) / 12 * Math.PI) * (70 * Math.PI / 180);
+  const cosEl = Math.cos(elevation);
+  const x = SUN_DISTANCE * Math.sin(azimuth) * cosEl;
+  const y = SUN_DISTANCE * Math.max(Math.sin(elevation), 0.04);
+  const z = -SUN_DISTANCE * Math.cos(azimuth) * cosEl;
+  keyLight.position.set(x, y, z);
+  fillLight.position.set(-x * 0.7, Math.max(y * 0.35, 80), -z * 0.7);
+
+  const above = Math.max(Math.sin(elevation), 0);
+  const horizon = Math.max(0, 1 - Math.abs(elevation) / 0.35);
+  const night = 1 - above;
+  scratchColor.copy(SUN_COLOR_NOON).lerp(SUN_COLOR_HORIZON, horizon * above);
+  scratchColor.lerp(SUN_COLOR_NIGHT, night);
+  keyLight.color.copy(scratchColor);
+  keyLight.intensity = 0.08 + above * 2.2 + horizon * above * 0.4;
+  fillLight.color.copy(FILL_COLOR_DAY).lerp(FILL_COLOR_NIGHT, night);
+  fillLight.intensity = 0.08 + above * 0.72;
+  hemiLight.color.copy(HEMI_SKY_DAY).lerp(HEMI_SKY_NIGHT, night);
+  hemiLight.groundColor.copy(HEMI_GROUND_DAY).lerp(HEMI_GROUND_NIGHT, night);
+  hemiLight.intensity = 0.18 + above * 0.72;
+  scene.background.copy(DAY_BACKGROUND).lerp(NIGHT_BACKGROUND, night);
+  ground.material.color.copy(DAY_GROUND).lerp(NIGHT_GROUND, night);
+  scene.environmentIntensity = 0.18 + above * 0.82;
+  renderer.toneMappingExposure = 0.42 + above * 0.4;
+
+  const angle = hourAngle(sunHour);
+  sunHandle.setAttribute('cx', String(SUN_CENTER + Math.cos(angle) * SUN_HANDLE_R));
+  sunHandle.setAttribute('cy', String(SUN_CENTER + Math.sin(angle) * SUN_HANDLE_R));
+  sunTime.textContent = padHour(sunHour);
+  sunPhase.textContent = sunPhaseName(sunHour);
+  sunDial.setAttribute('aria-valuenow', sunHour.toFixed(2));
+  sunDial.setAttribute('aria-valuetext', `${padHour(sunHour)} ${sunPhaseName(sunHour)}`);
+  requestRender();
+}
+
+function hourFromPointer(event) {
+  const bounds = sunDial.querySelector('svg').getBoundingClientRect();
+  const dx = event.clientX - (bounds.left + bounds.width / 2);
+  const dy = event.clientY - (bounds.top + bounds.height / 2);
+  const svgAngle = Math.atan2(dy, dx);
+  return (12 + (svgAngle + Math.PI / 2) / (Math.PI * 2) * 24 + 24) % 24;
+}
+
+function bindSunDial() {
+  drawSunDial();
+  let dragging = false;
+  sunDial.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dragging = true;
+    sunDial.classList.add('is-dragging');
+    sunDial.setPointerCapture(event.pointerId);
+    setSunHour(hourFromPointer(event));
+  });
+  sunDial.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    event.preventDefault();
+    setSunHour(hourFromPointer(event));
+  });
+  const stopDrag = (event) => {
+    if (!dragging) return;
+    dragging = false;
+    sunDial.classList.remove('is-dragging');
+    if (sunDial.hasPointerCapture(event.pointerId)) {
+      sunDial.releasePointerCapture(event.pointerId);
+    }
+  };
+  sunDial.addEventListener('pointerup', stopDrag);
+  sunDial.addEventListener('pointercancel', stopDrag);
+  sunDial.addEventListener('keydown', (event) => {
+    const step = event.shiftKey ? 1 : 0.25;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setSunHour(sunHour + step);
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      setSunHour(sunHour - step);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setSunHour(12);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      setSunHour(0);
+    }
+  });
+  setSunHour(sunHour);
+}
+
+bindSunDial();
 window.addEventListener('keydown', (event) => {
   if (event.key.toLowerCase() === 'r') resetButton.click();
   if (event.key === '1') applyView('overview');

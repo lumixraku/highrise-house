@@ -24,6 +24,18 @@
       <section class="viewer-shell" aria-label="Interactive 3D building viewer">
         <div id="viewer" class="viewer"></div>
         <div class="viewer-wash"></div>
+        <div class="sun-dial" id="sun-dial" role="slider" aria-label="Time of day" aria-valuemin="0" aria-valuemax="24" aria-valuenow="10" tabindex="0">
+          <svg viewBox="0 0 140 140" aria-hidden="true">
+            <circle class="sun-track" cx="70" cy="70" r="54" />
+            <g id="sun-ticks"></g>
+            <g id="sun-labels"></g>
+            <circle id="sun-handle" class="sun-handle" r="6.5" />
+          </svg>
+          <div class="sun-readout">
+            <strong id="sun-time">10:00</strong>
+            <span id="sun-phase">morning</span>
+          </div>
+        </div>
         <div class="viewer-label">
           <span>01</span>
           <strong>Vertical neighbourhood</strong>
