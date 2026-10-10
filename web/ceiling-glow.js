@@ -1,23 +1,17 @@
 import * as THREE from 'three/webgpu';
+import { RectAreaLightTexturesLib } from './vendor/RectAreaLightTexturesLib.js';
 
-// Each lit ceiling fixture fills the air under it with a translucent volume,
-// so the occupied room reads as lit from any street angle. The web GLB has no
-// real lights; this is a merged mesh of one box per fixture, not a bake
-// onto the floor and not a sticker on the facade.
-//
-// The volumes sit strictly inside the curtain wall — no clamping to the facade
-// plane, no outset, no window punching. The apartment-band dark glass is made
-// semi-transparent in main.js so the glow reads through it.
+// Thousands of ceiling fixtures cannot each be a GPU light. Cluster the
+// occupied plates, then keep a handful of large downward rect lights — real
+// lighting, not a mesh volume. WebGPU evaluates every area light per pixel.
 const CELL = 0.75;
-// A lantern of light under each fixture, clipped to the glass envelope so an
-// outer-ring lamp never pushes past the facade. HALF is half the ~3.5 m lamp
-// pitch so neighbouring pools almost meet; DROP is most of a 4 m storey.
-const HALF = 1.2;
-const DROP = 2.6;
 const MASS_PAD = 0.35;
 const MASS_LINK = 8;
-const TOP_GAIN = 5.5;
-const BOTTOM_GAIN = 1.4;
+const LIGHT_INSET = 2.4;
+const LIGHT_NITS = 28;
+const LIGHT_DROP = 0.25;
+const MAX_LIGHTS = 12;
+let areaLightsReady = false;
 
 function panelsOf(object, color, strength) {
   const geometry = object.geometry;
@@ -210,142 +204,169 @@ function clusterMasses(panels) {
     }
     for (const bucket of buckets.values()) {
       if (bucket.length < 4) continue;
-      masses.push(orientedMass(bucket, storey.y));
+      masses.push({ ...orientedMass(bucket, storey.y), panels: bucket });
     }
   }
   return masses;
 }
 
-function massAt(masses, panel) {
-  let best = null;
-  let bestDist = Infinity;
+function averageColor(list) {
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  for (const panel of list) {
+    red += panel.color[0];
+    green += panel.color[1];
+    blue += panel.color[2];
+  }
+  const n = list.length;
+  return new THREE.Color(red / n, green / n, blue / n);
+}
+
+function buildingBox(model, masses) {
+  const box = new THREE.Box3();
+  model.traverse((object) => {
+    if (!object.isMesh) return;
+    if (/ground|site|foliage|trunk|light/i.test(object.name)) return;
+    box.expandByObject(object);
+  });
+  let minY = Infinity;
   for (const mass of masses) {
-    if (Math.abs(mass.y - panel.y) > 0.8) continue;
-    const dx = panel.x - mass.cx;
-    const dz = panel.z - mass.cz;
-    const u = dx * mass.cos + dz * mass.sin;
-    const v = -dx * mass.sin + dz * mass.cos;
-    if (u < mass.minU - 0.5 || u > mass.maxU + 0.5) continue;
-    if (v < mass.minV - 0.5 || v > mass.maxV + 0.5) continue;
-    const dist = Math.abs(mass.y - panel.y);
-    if (dist >= bestDist) continue;
+    if (mass.y < minY) minY = mass.y;
+  }
+  return {
+    minX: box.min.x + LIGHT_INSET,
+    maxX: box.max.x - LIGHT_INSET,
+    minY,
+    maxY: box.max.y,
+    minZ: box.min.z + LIGHT_INSET,
+    maxZ: box.max.z - LIGHT_INSET,
+  };
+}
+
+function factorGrid(count, sx, sy, sz) {
+  let nx = 1;
+  let ny = count;
+  let nz = 1;
+  let best = Infinity;
+  for (let x = 1; x <= count; x += 1) {
+    for (let y = 1; x * y <= count; y += 1) {
+      if (count % (x * y)) continue;
+      const z = count / (x * y);
+      const cx = sx / x;
+      const cy = sy / y;
+      const cz = sz / z;
+      const score = Math.max(cx, cy, cz) / Math.min(cx, cy, cz);
+      if (score >= best) continue;
+      best = score;
+      nx = x;
+      ny = y;
+      nz = z;
+    }
+  }
+  return { nx, ny, nz };
+}
+
+function nearestMass(masses, x, y, z) {
+  let best = masses[0];
+  let bestD = Infinity;
+  for (const mass of masses) {
+    const dx = mass.cx - x;
+    const dy = mass.y - y;
+    const dz = mass.cz - z;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d >= bestD) continue;
+    bestD = d;
     best = mass;
-    bestDist = dist;
   }
   return best;
 }
 
-function lanternCorners(panel, mass, y1, y0) {
-  const dx = panel.x - mass.cx;
-  const dz = panel.z - mass.cz;
-  const u = dx * mass.cos + dz * mass.sin;
-  const v = -dx * mass.sin + dz * mass.cos;
-  const u0 = Math.max(mass.minU, u - HALF);
-  const u1 = Math.min(mass.maxU, u + HALF);
-  const v0 = Math.max(mass.minV, v - HALF);
-  const v1 = Math.min(mass.maxV, v + HALF);
-  if (u1 - u0 < 0.2 || v1 - v0 < 0.2) return null;
-  const world = (uu, vv) => ({
-    x: mass.cx + uu * mass.cos - vv * mass.sin,
-    z: mass.cz + uu * mass.sin + vv * mass.cos,
-  });
-  const a = world(u0, v0);
-  const b = world(u1, v0);
-  const c = world(u1, v1);
-  const d = world(u0, v1);
-  return [
-    [a.x, y1, a.z], [b.x, y1, b.z], [c.x, y1, c.z], [d.x, y1, d.z],
-    [a.x, y0, a.z], [b.x, y0, b.z], [c.x, y0, c.z], [d.x, y0, d.z],
-  ];
+function ensureAreaLights() {
+  if (areaLightsReady) return;
+  THREE.RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
+  areaLightsReady = true;
 }
 
-function addLightVolumes(model, panels) {
-  const skip = sparseHeights(panels);
-  const masses = clusterMasses(panels);
-  const positions = [];
-  const colors = [];
-  const indices = [];
-  let volumes = 0;
-  for (const panel of panels) {
-    if (skip.some((y) => Math.abs(y - panel.y) < 0.8)) continue;
-    const y1 = panel.y - 0.05;
-    const y0 = y1 - DROP;
-    if (y0 < 1) continue;
-    const mass = massAt(masses, panel);
-    if (!mass) continue;
-    const corners = lanternCorners(panel, mass, y1, y0);
-    if (!corners) continue;
-    const top = [
-      panel.color[0] * TOP_GAIN,
-      panel.color[1] * TOP_GAIN,
-      panel.color[2] * TOP_GAIN,
-    ];
-    const bottom = [
-      panel.color[0] * BOTTOM_GAIN,
-      panel.color[1] * BOTTOM_GAIN,
-      panel.color[2] * BOTTOM_GAIN,
-    ];
-    const index = positions.length / 3;
-    for (let corner = 0; corner < 8; corner += 1) {
-      positions.push(corners[corner][0], corners[corner][1], corners[corner][2]);
-      const tint = corner < 4 ? top : bottom;
-      colors.push(tint[0], tint[1], tint[2]);
+function receiveInteriorLight(model) {
+  model.traverse((object) => {
+    if (!object.isMesh) return;
+    if (/glass|frame|truss|mullion|metal|light|ground|site|foliage|trunk/i.test(object.name)) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      if (!material || material.metalness === undefined) continue;
+      material.metalness = 0;
+      material.needsUpdate = true;
     }
-    indices.push(
-      // top
-      index, index + 1, index + 2, index, index + 2, index + 3,
-      // bottom
-      index + 4, index + 6, index + 5, index + 4, index + 7, index + 6,
-      // sides
-      index, index + 4, index + 5, index, index + 5, index + 1,
-      index + 1, index + 5, index + 6, index + 1, index + 6, index + 2,
-      index + 2, index + 6, index + 7, index + 2, index + 7, index + 3,
-      index + 3, index + 7, index + 4, index + 3, index + 4, index,
-    );
-    volumes += 1;
-  }
-  if (!indices.length) return null;
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
-  const material = new THREE.MeshBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    depthWrite: false,
-    depthTest: true,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
   });
-  const object = new THREE.Mesh(geometry, material);
-  object.name = 'CeilingGlow_Volumes';
-  object.renderOrder = 2;
-  model.add(object);
-  return { object, volumes };
+}
+
+function addFloorLights(model, panels) {
+  const skip = sparseHeights(panels);
+  const masses = clusterMasses(panels).filter(
+    (mass) => !skip.some((y) => Math.abs(y - mass.y) < 0.8),
+  );
+  if (!masses.length) return null;
+  const box = buildingBox(model, masses);
+  const sx = Math.max(2, box.maxX - box.minX);
+  const sy = Math.max(2, box.maxY - box.minY);
+  const sz = Math.max(2, box.maxZ - box.minZ);
+  const { nx, ny, nz } = factorGrid(MAX_LIGHTS, sx, sy, sz);
+  const cellX = sx / nx;
+  const cellY = sy / ny;
+  const cellZ = sz / nz;
+  const group = new THREE.Group();
+  group.name = 'CeilingGlow_Lights';
+  let lights = 0;
+  for (let iy = 0; iy < ny; iy += 1) {
+    // Sit on the cell ceiling and shine down, so the crown is covered.
+    const y = box.minY + (iy + 1) * cellY - LIGHT_DROP;
+    for (let ix = 0; ix < nx; ix += 1) {
+      for (let iz = 0; iz < nz; iz += 1) {
+        const x = box.minX + (ix + 0.5) * cellX;
+        const z = box.minZ + (iz + 0.5) * cellZ;
+        const mass = nearestMass(masses, x, y, z);
+        const light = new THREE.RectAreaLight(
+          averageColor(mass.panels),
+          LIGHT_NITS,
+          Math.max(2, cellZ - LIGHT_INSET * 2),
+          Math.max(2, cellX - LIGHT_INSET * 2),
+        );
+        light.position.set(x, y, z);
+        light.lookAt(x, y - 4, z);
+        light.name = 'CeilingGlow_Area';
+        group.add(light);
+        lights += 1;
+      }
+    }
+  }
+  if (!lights) return null;
+  model.add(group);
+  return { object: group, lights };
 }
 
 export async function addCeilingGlow(model) {
   model.updateWorldMatrix(true, true);
   const panels = collectLights(model);
   if (!panels.length) return null;
-  // No hideApartmentVision — the exterior geometry stays intact.
-  // The apartment dark glass is made semi-transparent in main.js so the
-  // interior volumes read through it.
-  const volumes = addLightVolumes(model, panels);
-  if (!volumes) return { panels: panels.length, floors: 0 };
+  ensureAreaLights();
+  receiveInteriorLight(model);
+  const glow = addFloorLights(model, panels);
+  if (!glow) return { panels: panels.length, floors: 0 };
   return {
     panels: panels.length,
-    floors: volumes.volumes,
-    overlays: [volumes],
+    floors: glow.lights,
+    overlays: [glow],
   };
 }
 
 export function removeCeilingGlow(state) {
   if (!state?.overlays) return;
   for (const overlay of state.overlays) {
-    overlay.object.material?.dispose();
-    overlay.object.geometry?.dispose();
+    overlay.object.traverse((object) => {
+      object.geometry?.dispose();
+      object.material?.dispose();
+    });
     overlay.object.parent?.remove(overlay.object);
   }
 }
