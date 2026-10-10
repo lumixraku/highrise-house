@@ -349,6 +349,18 @@ function loadModel(id) {
             material.needsUpdate = true;
           }
         }
+        // The apartment-band dark vision glass was palettized into the
+        // opaque Apartment_Frame mesh during GLB optimization. Make it
+        // semi-transparent so the interior light volumes read through it
+        // — without punching holes in the skin.
+        if (object.name === 'Web_Stack_Apartment_Frame') {
+          for (const material of materials) {
+            material.transparent = true;
+            material.opacity = 0.35;
+            material.depthWrite = false;
+            material.needsUpdate = true;
+          }
+        }
       });
       if (ceilingGlowOn) {
         const started = performance.now();
