@@ -9,18 +9,18 @@ loads, and the client asked for a 40 m short side. The storey program sets the
 height: 10 mall floors at 5 m, 22 office floors at 5 m and 32 apartment floors
 at 4 m make a top plate at 288 m, with the glass running on to the 298.8 m top
 over 64 floors. The four refuge plazas are two storeys each — a planted garden
-deck with a chunky Abeno-style chevron belt truss spanning both storeys above it
-— and both storeys wear a folded glass screen rather than an open slot.
+deck with a chunky Abeno-style chevron belt truss spanning both storeys above it.
 
 The identity of the building is the public route up its middle: two service
 cores run along the long axis and, between them, one continuous chain of
 escalators climbs the full height from the ground hall to the planted roof,
-stopping at four two-storey sky-garden plazas. The exterior is a vertical stack of
-horizontal "neighbourhood" bands (glazed retail base around a crisscross
-escalator atrium, a planted garden band, a diamond diagrid, planted sky gardens,
-tall fins and the apartment band pierced by two offset voids), so the interior
-reads as a vertical mall wrapped in a vertical forest rather than a
-tower-and-podium.
+stopping at four two-storey sky-garden plazas. The envelope is one continuous
+glass skin wrapped in a chunky square-section frame cage on a ~20 m module,
+flush with the glass, so at distance the tower reads as a stack of big 田-grid
+frames. The only breaks in the glass are the two ventilation holes, each punched
+to whole grid cells (one bay wide by two beam rows tall) with their edges on
+grid lines, so the interior reads as a vertical mall wrapped in a vertical
+forest rather than a tower-and-podium.
 """
 
 import argparse
@@ -63,6 +63,37 @@ LEVEL_ROOF = LEVEL_APARTMENT + APARTMENT_FLOORS * APARTMENT_H
 # a storey count, so the deck sits two-and-a-bit apartment storeys below the top.
 CROWN_H = 2.7 * APARTMENT_H
 HEIGHT = LEVEL_ROOF + CROWN_H
+
+# The facade cage module: chunky square members flush with the glass, spaced
+# about FRAME_SPAN (~20 m) on every face, so at distance the tower reads as a
+# stack of big 田-grid frames rather than a plain glass slab. The grid lines are
+# also the module the ventilation voids snap to, so each vent is a whole number
+# of cells with its edges on grid lines.
+FRAME_SPAN = 20.0
+FRAME_SQUARE = 2.4
+FRAME_GAP = 0.05
+# Columns end a hair further off the top/bottom than the beams, so the two
+# families' end faces never share a plane at the building's ground or roof.
+FRAME_COL_GAP = FRAME_GAP + 0.03
+
+
+def facades_x_lines():
+    """X positions of the long-face (N/S) facade columns."""
+    half = FRAME_SQUARE / 2
+    bays = max(1, round(WIDTH / FRAME_SPAN))
+    u0, u1 = -WIDTH / 2 + half, WIDTH / 2 - half
+    step = (u1 - u0) / bays
+    return [u0 + k * step for k in range(bays + 1)]
+
+
+def facades_z_lines():
+    """Z positions of the facade beams."""
+    half = FRAME_SQUARE / 2
+    rows = max(1, round(HEIGHT / FRAME_SPAN))
+    z0, z1 = half + FRAME_GAP, HEIGHT - half - FRAME_GAP
+    step = (z1 - z0) / rows
+    return [z0 + k * step for k in range(rows + 1)]
+
 
 # The fine vertical mullion module shared by the apartment band and the two
 # apartment voids, so every frame line in the upper band lines up.
@@ -107,48 +138,20 @@ CORE_BRACE_BAYS = tuple(
 SPINE_HALF_X, SPINE_HALF_Y = 10.0, 6.0
 SPINE_CROSS_X, SPINE_CROSS_Y = 8.0, 3.4   # crisscross rectangle half-extents
 
-# The apartment band carries two offset voids — one against the west core, one
-# against the east core — so the tower reads as one prism punctured by two
-# openings, not as two towers joined by a bridge. Each is (x0, x1, z0, z1). The
-# width is a whole number of mullion modules and the height a whole number of
-# apartment storeys, so the opening edges land on the band grid and on floor
-# lines. Both were enlarged to more than twice the original 15 x 20 m opening.
-# Each opening is now half as wide as the span between the two core faces, so it
-# runs from its core's inner face to the centreline; the escalator chain leaves
-# the centreline and climbs the opposite half of the shaft to stay clear of it.
-# Every vent is centred on a core X-brace bay, so the chunky brace reads in the
-# middle of the opening. The lower vent is a free opening in the brick band — a
-# few storeys of wall below it, the mid-apartment refuge above; the upper vent
-# sits on that refuge's ceiling, as before.
-VOID_MODULES = 14
-VOID_W = VOID_MODULES * APARTMENT_MULLION_SPACING               # 17.5 m
-VOID_LOW_FLOORS, VOID_HIGH_FLOORS = 12, 10
-# The fourth refuge, in the middle of the apartment zone: two storeys sitting on
-# the lower vent, whose ceiling carries the high void.
+# The tower reads as one prism punctured by two ventilation openings — one on
+# the west half, one on the east — rather than two towers joined by a bridge.
+# Each is (x0, x1, z0, z1). Each vent is punched to the facade grid: one
+# long-face bay wide and three beam rows tall, its edges on grid lines, so the
+# glass reads as the cage with whole cells left open. Both vents were grown
+# downward by one cell from the two-cell scheme: the lower frees the cells
+# below the refuge and the upper reaches down over it.
 REFUGE_MID_OPEN = (LEVEL_APARTMENT + 15 * APARTMENT_H,
                    LEVEL_APARTMENT + 17 * APARTMENT_H)          # 220-228
 
-
-def _brace_centre(index):
-    """Centre height of core X-brace bay `index`."""
-    return (2 * index + 1.5) * CORE_BRACE_BAND
-
-
-def _void_span(index, floors):
-    """A vent of `floors` storeys centred on brace bay `index`, snapped to the
-    apartment floor lines so its edges land on the band grid."""
-    centre = _brace_centre(index)
-    z0 = LEVEL_APARTMENT + APARTMENT_H * round(
-        (centre - floors * APARTMENT_H / 2 - LEVEL_APARTMENT) / APARTMENT_H)
-    return z0, z0 + floors * APARTMENT_H
-
-
-VOID_LOW_Z0, VOID_LOW_Z1 = _void_span(3, VOID_LOW_FLOORS)       # 172-220
-VOID_HIGH_Z0 = REFUGE_MID_OPEN[1]                               # 228
-VOID_HIGH_Z1 = VOID_HIGH_Z0 + VOID_HIGH_FLOORS * APARTMENT_H    # 268
+_GRID_X, _GRID_Z = facades_x_lines(), facades_z_lines()
 VOIDS = (
-    (-CORE_INNER, -CORE_INNER + VOID_W, VOID_LOW_Z0, VOID_LOW_Z1),
-    (CORE_INNER - VOID_W, CORE_INNER, VOID_HIGH_Z0, VOID_HIGH_Z1),
+    (_GRID_X[2], _GRID_X[3], _GRID_Z[8], _GRID_Z[11]),
+    (_GRID_X[3], _GRID_X[4], _GRID_Z[11], _GRID_Z[14]),
 )
 
 # Abeno Harukas-style perimeter chevron trusses, used for the belt band of every
@@ -159,13 +162,9 @@ CHEVRON_SPACING = 12.0
 CHEVRON_POST_W = 2.20           # chunky, like the Abeno reference
 CHEVRON_DIAG_W = 1.20
 CHEVRON_CHORD_W = 1.10
-# The refuge skin is a vertical sawtooth in plan (a folding screen): its outer
-# folds sit on the shared facade plane and its inner folds are drawn back, so
-# nothing ever stands proud of the envelope. The truss is set behind the deepest
-# fold so it never pierces the glass.
-SCREEN_BAY = 3.0                # peak-to-peak spacing of the sawtooth
-SCREEN_FOLD = 1.0               # how far the inner fold is drawn back
-TRUSS_INSET = SCREEN_FOLD + 0.25
+# The refuge belt truss is set back behind the glass so it never pierces it and
+# reads through the continuous glazing.
+TRUSS_INSET = 1.25
 
 # The mall is a stack of retail floors around a central escalator atrium; the
 # retail runs climb it as a rectangular helix, so the public route reads as a
@@ -199,12 +198,6 @@ ESCALATOR_ENTRIES = (
     ((-46.0, 9.0), (0.0, -1.0)),
     ((-50.0, -9.0), (0.0, 1.0)),
 )
-
-# The base curtain wall groups its frosted glass two storeys high, on the
-# floor plates, running from the suspended first mall plate up to the band top
-# (the mall plus the garden storeys it wraps); the lowest storeys are left as
-# openwork, per the client direction.
-BASE_GROUP_H = 2 * MALL_H
 
 # Office and apartment ceiling lighting, following the house reference: a grid
 # of small emissive panels on every storey ceiling, each independently lit
@@ -253,27 +246,26 @@ def storey_levels():
 
 
 # Every sky-garden plaza is now one two-storey volume: a planted garden deck at
-# the bottom, with the chunky chevron belt truss spanning both storeys above it,
-# and a folded glass screen wrapping the whole volume. The plate between the two
-# storeys is dropped, so the garden opens straight up into the truss. The
-# apartment zone carries a fourth refuge in the middle of its height, between the
-# two voids.
-#
-# Office-zone band boundaries: the diagrid band carries the office storeys up to
-# the office refuge — its diamond lattice is one band — and the fins run from
-# that refuge up to the apartment one.
+# the bottom, with the chunky chevron belt truss spanning both storeys above it.
+# The plate between the two storeys is dropped, so the garden opens straight up
+# into the truss. The apartment zone carries a fourth refuge in the middle of its
+# height, between the two vents.
 #
 # Each refuge is two storeys tall; the deck is its bottom plate and the ceiling
 # its top plate, both of which stay, so the truss and the garden read through the
-# folded screen as one tall planted room.
+# continuous glass as one tall planted room. The apartment refuge deck sits on
+# the apartment base (160 m), which lands it just above the facade-cage beam at
+# ~159.3 m like the mid-apartment refuge above (~220 m) — its garden and truss
+# frame the grid instead of straddling a beam. The office refuge keeps its garden
+# but carries no belt truss (that truss layer was removed).
 REFUGE_MALL = (LEVEL_BASE - 2 * MALL_H, LEVEL_BASE)                      # 40-50
 REFUGE_OFFICE = (LEVEL_BASE + 11 * OFFICE_H, LEVEL_BASE + 13 * OFFICE_H)  # 105-115
-REFUGE_APARTMENT = (LEVEL_APARTMENT - 2 * OFFICE_H, LEVEL_APARTMENT)     # 150-160
-REFUGE_APARTMENT_MID = REFUGE_MID_OPEN                                   # 208-216
+REFUGE_APARTMENT = (LEVEL_APARTMENT, LEVEL_APARTMENT + 2 * APARTMENT_H)  # 160-168
+REFUGE_APARTMENT_MID = REFUGE_MID_OPEN                                   # 220-228
 REFUGES = (REFUGE_MALL, REFUGE_OFFICE, REFUGE_APARTMENT,
            REFUGE_APARTMENT_MID)
 # One storey height per refuge, and two storeys per refuge.
-REFUGE_HEIGHTS = (MALL_H, OFFICE_H, OFFICE_H, APARTMENT_H)
+REFUGE_HEIGHTS = (MALL_H, OFFICE_H, APARTMENT_H, APARTMENT_H)
 REFUGE_STOREY_H = tuple(2 * h for h in REFUGE_HEIGHTS)
 REFUGE_OPEN_H = 0.0
 # The garden deck sits on the bottom plate; the belt truss rises from it to the
@@ -286,20 +278,14 @@ REFUGE_FLOOR_LEVELS = REFUGE_DECK_LEVELS
 REFUGE_DROP_LEVELS = tuple(z0 + h
                            for (z0, _), h in zip(REFUGES, REFUGE_HEIGHTS))
 REFUGE_COMPONENT_SPANS = tuple(zip(REFUGE_DECK_LEVELS, REFUGE_CEILING_LEVELS))
+# Refuges that keep their garden but carry no belt truss.
+REFUGE_NO_TRUSS = (REFUGE_OFFICE[0],)
 
-# (z0, z1, band style) from the ground up, in the order read off the physical
-# facade model: each block's own curtain-wall style, then the folded refuse
-# screen, alternating up the stack.
+# The envelope is one continuous glass skin from the ground hall to the top of
+# the crown, wrapped in the square-frame cage (built separately by
+# facade_grid_columns / facade_grid_beams).
 BANDS = (
-    (0.0, REFUGE_MALL[0], "base"),
-    (REFUGE_MALL[0], REFUGE_MALL[1], "refuge"),
-    (REFUGE_MALL[1], REFUGE_OFFICE[0], "garden"),
-    (REFUGE_OFFICE[0], REFUGE_OFFICE[1], "refuge"),
-    (REFUGE_OFFICE[1], REFUGE_APARTMENT[0], "fins"),
-    (REFUGE_APARTMENT[0], REFUGE_APARTMENT[1], "refuge"),
-    (REFUGE_APARTMENT[1], REFUGE_APARTMENT_MID[0], "brick"),
-    (REFUGE_APARTMENT_MID[0], REFUGE_APARTMENT_MID[1], "refuge"),
-    (REFUGE_APARTMENT_MID[1], HEIGHT, "brick"),
+    (0.0, HEIGHT, "glass"),
 )
 
 FACES = ("N", "S", "E", "W")
@@ -450,36 +436,13 @@ def sphere(name, loc, radius, mat):
 # Facade frame: local (u, normal) coordinates on each of the four faces
 # ---------------------------------------------------------------------------
 
-# One exterior plane shared by every band: glass, frame, louvre, lattice, fin
-# and garden-tree outer faces are all coplanar, so nothing stands proud of the
-# facade. The glass is set back a hair so the opaque frame still reads in front
-# of it without the two surfaces z-fighting.
+# The exterior glass plane shared by every face. The chunky facade cage sits on
+# it too (a hair proud, so the two never share a plane and z-fight).
 FACADE = 0.30
 GLASS_BACK = 0.01
 GLASS_T = 0.12
-
-# Every frame member shares one section, matching the diagrid's square depth, so
-# no band reads deeper than another.
-FRAME_DEPTH = 0.44
-FRAME_BLADE_W = 0.18
-
-# Each facade family sits on its own depth plane, so two members of different
-# families that cross — the diagrid lattice over its glazing, mullions over
-# transoms — never share a face plane. Coplanar, overlapping faces are exactly
-# what z-fights, and a 2-6 cm step is far above the depth resolution at the
-# 60-600 m review distances, so the offsets remove the flicker without reading
-# as depth.
-MULLION_OUT = FACADE
-TRANSOM_OUT = FACADE - 0.06
 GLASS_OUT = FACADE - 0.03
-DIAGRID_OUT = FACADE - 0.04
-FIN_OUT = FACADE
-MULLION_D = FRAME_DEPTH
-TRANSOM_D = 0.40
 GLASS_D = 0.10
-# Band-edge transoms sit a hair inside the shared storey line, so their caps do
-# not land on the same plane as the mullions they meet.
-SEAM = 0.02
 
 # Every face runs a little past the building corner so the bands of two adjacent
 # faces overlap and read as one continuous sharp corner. The few centimetres
@@ -503,12 +466,9 @@ def face_geom(face):
 
 
 def glass_span(face):
-    """Half the u-range a band's glass runs: the building dimension, carried on
-    past the corner exactly as the frame is, a little less. So the glass of two
-    adjacent faces meets in the corner zone and closes it, while its end stays
-    clear of the neighbouring face's own member planes (the transom, diagrid,
-    glass and fin stand at 0.24, 0.26, 0.27 and 0.30 out), so no cap lands on
-    another member's plane."""
+    """Half the u-range the glass skin runs: the building dimension, carried on
+    past the corner so the glass of two adjacent faces meets in the corner zone
+    and closes it, stopping just short of the neighbouring face's plane."""
     span = WIDTH if face in ("N", "S") else DEPTH
     return span / 2 + CORNER_EXT - 0.05
 
@@ -540,100 +500,11 @@ def panel(name, face, u0, u1, z0, z1, outer, thick, mat, pad_u=0.0, pad_z=0.0,
     return cube(name, (cx, cy, (z0 + z1) / 2), dims, mat)
 
 
-def folded_panel(name, face, u0, o0, u1, o1, z0, z1, thick, mat):
-    """One leaf of a folded (sawtooth) screen: a thin box whose outer face runs
-    from the face-local plan point (u0, o0) to (u1, o1), its thickness drawn back
-    along the face normal. The fold depth is free, so the outer folds can sit
-    exactly on the shared facade plane and the inner folds be drawn back — the
-    screen reads as a vertical folding fan and never stands proud of the
-    envelope."""
-    (ox, oy), (ux, uy), (nx, ny), _, bias = face_geom(face)
-    n = Vector((nx, ny, 0.0)).normalized()
-    o0, o1 = o0 + bias, o1 + bias
-    p0 = Vector((ox + ux * u0 + nx * o0, oy + uy * u0 + ny * o0, 0.0))
-    p1 = Vector((ox + ux * u1 + nx * o1, oy + uy * u1 + ny * o1, 0.0))
-    axis = p1 - p0
-    length = axis.length
-    if length < 1e-6:
-        return None
-    axis.normalize()
-    up = Vector((0.0, 0.0, 1.0))
-    mid = (p0 + p1) / 2 - n * (thick / 2)
-    mid.z = (z0 + z1) / 2
-    hl, hw, ht = length / 2, (z1 - z0) / 2, thick / 2
-    verts = []
-    for i in (-1, 1):
-        for j in (-1, 1):
-            for k in (-1, 1):
-                verts.append(tuple(mid + axis * (hl * i) + up * (hw * j)
-                                   + n * (ht * k)))
-
-    def idx(i, j, k):
-        return ((i + 1) // 2) * 4 + ((j + 1) // 2) * 2 + ((k + 1) // 2)
-
-    faces = (
-        (idx(-1, -1, -1), idx(-1, -1, 1), idx(-1, 1, 1), idx(-1, 1, -1)),
-        (idx(1, -1, -1), idx(1, 1, -1), idx(1, 1, 1), idx(1, -1, 1)),
-        (idx(-1, -1, -1), idx(1, -1, -1), idx(1, -1, 1), idx(-1, -1, 1)),
-        (idx(-1, 1, -1), idx(-1, 1, 1), idx(1, 1, 1), idx(1, 1, -1)),
-        (idx(-1, -1, -1), idx(-1, 1, -1), idx(1, 1, -1), idx(1, -1, -1)),
-        (idx(-1, -1, 1), idx(1, -1, 1), idx(1, 1, 1), idx(-1, 1, 1)),
-    )
-    mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata(verts, [], faces)
-    mesh.update()
-    mesh.materials.append(mat)
-    return _link(mesh, name)
-
-
 def face_pad(face, base=0.0, step=0.008):
     """The per-face part of a pad: N, S, E and W each step a little further, so
     two bands of the same family meeting at a building corner do not share a cap
     plane either."""
     return base + FACES.index(face) * step
-
-
-def bar_span(zc, z0, z1, w, pad):
-    """A frame bar centred on zc with blade width w, clipped to [z0, z1] and
-    pulled off an edge by pad when it lands on the band boundary, so a boundary
-    bar and the mullions it meets do not share a cap plane."""
-    if zc <= z0 + 1e-6:
-        return z0 + pad, z0 + pad + w
-    if zc >= z1 - 1e-6:
-        return z1 - pad - w, z1 - pad
-    return zc - w / 2, zc + w / 2
-
-
-def beamf(name, face, u0, z0, u1, z1, radius, mat, outer=FACADE):
-    """A facade member with a square section (never a round tube) whose outer
-    face lies on the given plane and whose depth runs along the face normal, so
-    the frame stays flat and flush with the glass."""
-    (ox, oy), (ux, uy), (nx, ny), _, bias = face_geom(face)
-    side = 2 * radius
-    normal = Vector((nx, ny, 0.0)).normalized()
-    start = Vector(face_point(face, u0, z0, outer - side / 2))
-    end = Vector(face_point(face, u1, z1, outer - side / 2))
-    delta = end - start
-    length = delta.length
-    if length < 1e-6:
-        return None
-    z_axis = delta / length
-    x_axis = normal.cross(z_axis).normalized()
-    y_axis = z_axis.cross(x_axis).normalized()
-    mesh = bpy.data.meshes.new(name)
-    verts = [(vx * side / 2, vy * side / 2, vz * length / 2)
-             for vx, vy, vz in _CUBE_VERTS]
-    mesh.from_pydata(verts, [], _CUBE_FACES)
-    mesh.update()
-    mesh.materials.append(mat)
-    obj = _link(mesh, name)
-    obj.matrix_world = Matrix.Translation((start + end) / 2) @ Matrix((
-        (x_axis.x, y_axis.x, z_axis.x, 0.0),
-        (x_axis.y, y_axis.y, z_axis.y, 0.0),
-        (x_axis.z, y_axis.z, z_axis.z, 0.0),
-        (0.0, 0.0, 0.0, 1.0),
-    ))
-    return obj
 
 
 # ---------------------------------------------------------------------------
@@ -646,57 +517,6 @@ def void_holes(face):
     if face not in ("N", "S"):
         return []
     return list(VOIDS)
-
-
-def x_panel(name, x, normal, u0, u1, z0, z1, thick, mat):
-    """A panel on a vertical X-facing plane: its finished face sits at x, its
-    thickness runs away from the void along -normal, and u is measured in y, so
-    the void side walls can carry the same curtain wall as the exterior."""
-    cube(name, (x - normal * thick / 2, (u0 + u1) / 2, (z0 + z1) / 2),
-         (thick, abs(u1 - u0), abs(z1 - z0)), mat)
-
-
-def void_curtain_wall(mats):
-    """Dress both X faces of each apartment void in the same curtain wall as the
-    exterior apartment band — dark vision glass over a light spandrel on the
-    shared 1.25 m mullion module, with white mullions and transoms. The outer
-    face keeps the recess clad as before; the inner (shaft-side) face closes the
-    shaft off from the open void, and the void's width leaves the public
-    escalator's lane clear of it, so the route always climbs indoors. The linings
-    sit inside the opening, clear of the core face beyond the void."""
-    levels_all = storey_levels()
-    for x0, x1, z0, z1 in VOIDS:
-        cw0 = z0
-        hy = DEPTH / 2
-        # Both X side walls of the recess: the outer face keeps the cladding it
-        # has always had, the inner face is the lining that closes the shaft.
-        for inner, s in ((x0, 1.0), (x1, -1.0)):
-            def line(name, d, thick, u0, u1, za, zb, mat,
-                     inner=inner, s=s):
-                x_panel(name, inner + s * d, -s, u0, u1, za, zb, thick, mat)
-
-            nu = max(1, round(DEPTH / APARTMENT_MULLION_SPACING))
-            du = DEPTH / nu
-            for m in range(nu + 1):
-                u = -DEPTH / 2 + m * du
-                line("Stack_Void_CW_Mullion", 0.06, MULLION_D,
-                     u - FRAME_BLADE_W / 2, u + FRAME_BLADE_W / 2,
-                     cw0 + 0.01, z1 - 0.01, mats["apartment_frame"])
-            zs = [cw0] + [z for z in levels_all if cw0 < z < z1] + [z1]
-            for a, b in zip(zs, zs[1:]):
-                split = a + (b - a) * APARTMENT_SPLIT
-                line("Stack_Void_CW_Spandrel", 0.31, GLASS_D,
-                     -hy + 0.03, hy - 0.03, a, split, mats["spandrel"])
-                line("Stack_Void_CW_Glass", 0.31, GLASS_D,
-                     -hy + 0.03, hy - 0.03, split, b, mats["glass_dark"])
-            cuts = sorted({round(z, 3) for z in zs}
-                          | {round(a + (b - a) * APARTMENT_SPLIT, 3)
-                             for a, b in zip(zs, zs[1:])})
-            for zc in cuts:
-                za, zb = bar_span(zc, cw0, z1, FRAME_BLADE_W, SEAM)
-                line("Stack_Void_CW_Transom", 0.04, TRANSOM_D,
-                     -hy + 0.015, hy - 0.015, za, zb,
-                     mats["apartment_frame"])
 
 
 def u_intervals(u0, u1, holes):
@@ -738,48 +558,6 @@ def rects_outside(u0, u1, z0, z1, holes):
 # ---------------------------------------------------------------------------
 # The band builders
 # ---------------------------------------------------------------------------
-
-def band_base(face, z0, z1, mats):
-    """Frosted glass curtain wall over the base hall, framed like the apartment
-    band: white blade mullions of the same section, with the glass grouped two
-    storeys high and aligned to the floor plates. The glazing runs from the
-    suspended first mall plate up to the band top, which is the top of the
-    garden it carries; the lowest storeys are left as openwork. The glass is
-    translucent, so the hall and the garden behind it read as a lit volume
-    rather than a hole. Extending z1 adds whole two-storey groups, so the same
-    style wraps the mall garden without changing the mall glazing below."""
-    length = face_geom(face)[3]
-    glazed_bottom = LEVEL_MALL_FIRST
-    groups = max(1, int(round((z1 - glazed_bottom) / BASE_GROUP_H)))
-    # White blade mullions on the base module, running the full height so the
-    # unglazed lowest storeys read as openwork.
-    n = max(1, round(length / 4.2))
-    step = length / n
-    for i in range(n + 1):
-        u = -length / 2 + i * step
-        panel(f"{face}_Base_Mullion", face, u - FRAME_BLADE_W / 2,
-              u + FRAME_BLADE_W / 2, z0, z1, MULLION_OUT, MULLION_D,
-              mats["apartment_frame"], pad_z=face_pad(face, 0.006))
-    # A transom on every glazed group line, on the floor plates.
-    for k in range(groups + 1):
-        zb = glazed_bottom + k * BASE_GROUP_H
-        if zb > z1 + 0.01:
-            break
-        a, b = bar_span(zb, z0, z1, FRAME_BLADE_W, SEAM)
-        panel(f"{face}_Base_Transom", face, -length / 2, length / 2, a, b,
-              TRANSOM_OUT, TRANSOM_D, mats["apartment_frame"],
-              pad_u=face_pad(face, 0.012, 0.004),
-              pad_z=face_pad(face, 0.012, 0.004))
-    # Frosted glass, one two-storey panel per group.
-    # Frosted glass, one two-storey panel per group. The glass stops on the
-    # building dimension, not the corner-extended length, so two faces' glass
-    # never overlaps in the corner zone.
-    for k in range(groups):
-        za = glazed_bottom + k * BASE_GROUP_H
-        panel(f"{face}_Base_Glass", face, -glass_span(face), glass_span(face), za,
-              min(za + BASE_GROUP_H, z1), GLASS_OUT, GLASS_D,
-              mats["glass_frost"], shift_z=face_pad(face, 0.0, 0.006))
-
 
 def base_interior(mats):
     """The transparent base hall seen through its glass: a white stair block at
@@ -1018,144 +796,16 @@ def mall_ceiling_lights(mats):
     merged_boxes("Stack_Mall_Ceiling_Lights", items, mats["glow"])
 
 
-def band_diagrid(face, z0, z1, mats):
-    """Diamond diagrid lattice over glazing, one diamond row per storey so the
-    diamond crossings land on the floor plates. The horizontal pitch matches the
-    storey height to keep the diamonds square."""
-    length = face_geom(face)[3]
-    panel(f"{face}_Diagrid_Glass", face, -glass_span(face), glass_span(face), z0, z1,
-          GLASS_OUT, 0.12, mats["glass_cool"],
-          shift_z=face_pad(face, 0.0, 0.006))
-    nz = max(1, sum(1 for z in storey_levels() if z0 < z <= z1))
-    dz = (z1 - z0) / nz
-    nu = max(1, round(length / dz))
-    du = length / nu
-    m = FRAME_DEPTH / 2
-    for i in range(nu):
-        for j in range(nz):
-            u0 = -length / 2 + i * du
-            u1 = u0 + du
-            za = z0 + j * dz
-            zb = za + dz
-            um, zm = (u0 + u1) / 2, (za + zb) / 2
-            beamf(f"{face}_Diagrid", face, u0, zm, um, zb, m, mats["frame"],
-                  DIAGRID_OUT)
-            beamf(f"{face}_Diagrid", face, um, zb, u1, zm, m, mats["frame"],
-                  DIAGRID_OUT)
-            beamf(f"{face}_Diagrid", face, u1, zm, um, za, m, mats["frame"],
-                  DIAGRID_OUT)
-            beamf(f"{face}_Diagrid", face, um, za, u0, zm, m, mats["frame"],
-                  DIAGRID_OUT)
-
-
-def band_garden(face, z0, z1, mats):
-    """D-zone office band: the same diamond diagrid lattice as the band above —
-    the cross pattern runs on through the zone rather than a fork-column
-    colonnade — with a sparse, recessed planting at its base so the band still
-    reads as a garden. The band carries the whole office zone up to the refuge,
-    so the lattice and its glazing are one continuous surface with no seam."""
-    band_diagrid(face, z0, z1, mats)
-    length = face_geom(face)[3]
-    rng = random.Random(4200 + FACES.index(face))
-    m = max(1, round(length / 16))
-    for i in range(m):
-        u = -length / 2 + (i + 0.5) * length / m
-        h = rng.uniform(2.5, min(8.0, (z1 - z0) * 0.4))
-        beam(f"{face}_Garden_Trunk", face_point(face, u, z0, -1.6),
-             face_point(face, u, z0 + 1.2 + h, -1.6), 0.16, mats["trunk"])
-        sphere(f"{face}_Garden_Canopy",
-               face_point(face, u, z0 + 2.0 + h, -1.6),
-               rng.uniform(1.1, 1.8), mats["foliage"])
-
-
-def band_fins(face, z0, z1, mats):
-    """Tall vertical fins, flat in the shared facade plane."""
-    length = face_geom(face)[3]
-    panel(f"{face}_Fins_Glass", face, -glass_span(face), glass_span(face), z0, z1,
-          GLASS_OUT, 0.12, mats["glass_cool"],
-          shift_z=face_pad(face, 0.0, 0.006))
-    n = max(2, round(length / 1.1))
-    for i in range(n + 1):
-        u = -length / 2 + i * length / n
-        panel(f"{face}_Fin", face, u - 0.09, u + 0.09, z0, z1,
-              FIN_OUT, MULLION_D, mats["fin"], pad_z=face_pad(face, 0.022))
-
-
-
-# Upper apartment band: a fine vertical-strip curtain wall after the Abeno
-# Harukas reference. Narrow panes on the shared mullion module, a transom at
-# every floor and at each storey's lower-quarter vision/spandrel split, over a
-# dark glass skin so the band reads as vertical strips rather than long
-# horizontal bands. Every frame line is a thin blade with real depth, matching
-# the fins band, rather than a flat line on the facade plane.
-APARTMENT_SPLIT = 0.25
-
-
-def window_wall(face, u0, u1, z0, z1, mats, prefix, holes=()):
-    """One run of the apartment-band curtain wall: narrow vertical panes on the
-    shared mullion module, dark vision glass over a light blue spandrel in each
-    storey's lower quarter, a transom at every floor line and spandrel split,
-    and fine vertical mullions through all floors."""
-    # A hole may belong to a void that lies above or below this band, so clip
-    # every hole to the band's own height first; otherwise the mullion skip
-    # would run a pane a whole storey past the band top and leave a stray frame
-    # standing in the open refuge above it.
+def band_glass(face, z0, z1, mats, holes=()):
+    """A plain glass curtain wall: one continuous glazed skin over the whole
+    face, cut only around the apartment voids. No framing, masonry or per-zone
+    treatment — the whole envelope reads as a single glass surface."""
     holes = [(a, b, max(c, z0), min(d, z1)) for a, b, c, d in holes
              if max(c, z0) < min(d, z1)]
-    levels = [z0] + [z for z in storey_levels() if z0 < z <= z1]
-    if levels[-1] < z1:
-        levels.append(z1)
-    spans = list(zip(levels, levels[1:]))
-    spandrel_spans = [(a, a + (b - a) * APARTMENT_SPLIT) for a, b in spans]
-    cuts = sorted({round(z, 3) for z in levels}
-                  | {round(s, 3) for _, s in spandrel_spans})
-    # Curtain-wall skin, split at every floor and spandrel line: dark vision
-    # glass above, a light blue spandrel panel in the lower quarter. No solid
-    # masonry backing.
-    for a, b, c, d in rects_outside(u0, u1, z0, z1, holes):
-        zs = [c] + [z for z in cuts if c < z < d] + [d]
-        for zc0, zc1 in zip(zs, zs[1:]):
-            mid = (zc0 + zc1) / 2
-            if any(s0 <= mid <= s1 for s0, s1 in spandrel_spans):
-                panel(f"{face}_{prefix}_Spandrel", face, a, b, zc0, zc1,
-                      GLASS_OUT, GLASS_D, mats["spandrel"],
-                      shift_z=face_pad(face, 0.0, 0.006))
-            else:
-                panel(f"{face}_{prefix}_Glass", face, a, b, zc0, zc1,
-                      GLASS_OUT, GLASS_D, mats["glass_dark"],
-                      shift_z=face_pad(face, 0.0, 0.006))
-    nu = max(1, round((u1 - u0) / APARTMENT_MULLION_SPACING))
-    du = (u1 - u0) / nu
-    # Fine vertical mullions on the pane module, unbroken through all floors.
-    for m in range(nu + 1):
-        u = u0 + m * du
-        skip = sorted((c, d) for a, b, c, d in holes if a < u < b)
-        for za, zb in u_intervals(z0, z1, skip):
-            panel(f"{face}_{prefix}_Mullion", face, u - FRAME_BLADE_W / 2,
-                  u + FRAME_BLADE_W / 2, za, zb, MULLION_OUT, MULLION_D,
-                  mats["apartment_frame"], pad_z=face_pad(face, 0.006))
-    # A transom at every floor line and at each storey's lower-quarter
-    # vision/spandrel split. The bars are cut where the void opening is, its
-    # bottom edge included, so each tower half closes its own frame ring rather
-    # than sharing one bar across the slot. Only the void's head stays unbroken,
-    # where the two halves meet again above the opening.
-    for zb in cuts:
-        cut = [(a, b) for a, b, c, d in holes if c <= zb < d]
-        for a, b in u_intervals(u0, u1, cut):
-            za, zc = bar_span(zb, z0, z1, FRAME_BLADE_W, SEAM)
-            panel(f"{face}_{prefix}_Transom", face, a, b, za, zc,
-                  TRANSOM_OUT, TRANSOM_D, mats["apartment_frame"],
-                  pad_u=face_pad(face, 0.012, 0.004),
-                  pad_z=face_pad(face, 0.012, 0.004))
-
-
-def band_brick(face, z0, z1, mats, holes=()):
-    """Upper apartment band: one run of the shared curtain-wall component over
-    the whole face, cut around the two apartment voids."""
-    # The facade ends exactly on its last mullion, so the grid and the skin are
-    # laid on the building dimension, not the corner-extended face length.
-    span = WIDTH if face in ("N", "S") else DEPTH
-    window_wall(face, -span / 2, span / 2, z0, z1, mats, "Brick", holes)
+    for a, b, c, d in rects_outside(-glass_span(face), glass_span(face),
+                                    z0, z1, holes):
+        panel(f"{face}_Glass", face, a, b, c, d, GLASS_OUT, GLASS_D,
+              mats["glass_cool"], shift_z=face_pad(face, 0.0, 0.006))
 
 
 # The two apartment voids are open notches cut between each core and the public
@@ -1216,12 +866,14 @@ def chevron_face(face, u0, u1, z0, z1, mats, prefix, outer, corner_start=False):
 
 
 def refuge_belt_trusses(mats):
-    """An Abeno Harukas-style chevron belt truss spanning each refuge's full two
+    """An Abeno Harukas-style chevron belt truss spanning a refuge's full two
     storeys, its feet on the garden deck and its apex on the ceiling, so each
     face reads as one chunky claw. Wrapped on all four faces and recessed behind
-    the folded glass screen, so the truss reads through the screen rather than
-    standing in front of it."""
+    the glass, so the truss reads through it. A refuge in REFUGE_NO_TRUSS keeps
+    its garden but carries no belt truss."""
     for deck, top in zip(REFUGE_DECK_LEVELS, REFUGE_CEILING_LEVELS):
+        if deck in REFUGE_NO_TRUSS:
+            continue
         for face in FACES:
             span = WIDTH if face in ("N", "S") else DEPTH
             chevron_face(face, -span / 2, span / 2, deck, top, mats,
@@ -1316,70 +968,24 @@ def band_roof(mats):
                trees=14)
 
 
-def band_refuge(face, z0, z1, mats, holes=()):
-    """The folded screen that wraps every refuge. A vertical sawtooth runs the
-    full two-storey volume: its outer folds sit on the shared facade plane and
-    its inner folds are drawn back by SCREEN_FOLD, so the skin reads as a
-    folding screen and nothing stands proud of the envelope. Thin white posts
-    run up every fold, framing the glass like a screen; the chunky chevron truss
-    stands behind the deepest fold and reads through."""
-    span = WIDTH if face in ("N", "S") else DEPTH
-    teeth = max(1, round(span / SCREEN_BAY))
-    du = span / teeth
-    peak, valley = FACADE, FACADE - SCREEN_FOLD
-    for k in range(teeth):
-        u0 = -span / 2 + k * du
-        u1 = u0 + du / 2
-        u2 = u0 + du
-        folded_panel(f"{face}_Refuge_Screen", face, u0, peak, u1, valley,
-                     z0, z1, GLASS_T, mats["glass_cool"])
-        folded_panel(f"{face}_Refuge_Screen", face, u1, valley, u2, peak,
-                     z0, z1, GLASS_T, mats["glass_cool"])
-    # A post on every fold, pulled a hair inside its own leaf so the two never
-    # share a cap plane and no post protrudes past the envelope.
-    for k in range(teeth + 1):
-        u = -span / 2 + k * du
-        outer = peak if k % 2 == 0 else valley
-        panel(f"{face}_Refuge_Screen_Post", face, u - FRAME_BLADE_W / 2,
-              u + FRAME_BLADE_W / 2, z0 + 0.02, z1 - 0.02, outer - 0.05,
-              MULLION_D, mats["apartment_frame"],
-              pad_z=face_pad(face, 0.006))
-
-
-BAND_BUILDERS = {
-    "base": band_base,
-    "refuge": band_refuge,
-    "garden": band_garden,
-    "fins": band_fins,
-    "brick": band_brick,
-}
-
-
 # ---------------------------------------------------------------------------
 # Interior (the public route and its gardens) and site
 # ---------------------------------------------------------------------------
 
-# The chunky perimeter columns the outriggers engage: their plane and section
-# are shared by the full ring (see perimeter_columns). The outriggers now run
-# from each core's edges to the ring's single mid-depth column on the short
-# faces, at the open refuge levels, so the frame shares the overturning.
+# The chunky columns the outriggers engage, on the short faces (see
+# outrigger_trusses). The outriggers run from each core's edge to the column at
+# the quarter point of the short face, at the open refuge levels, so the frame
+# shares the overturning.
 OUTRIGGER_COL_W = 2.4
 OUTRIGGER_COL_X = WIDTH / 2 - 3.0
 OUTRIGGER_COL_Y = CORE_DEPTH / 2
 OUTRIGGER_LEVELS = REFUGE_FLOOR_LEVELS
-
-# A full perimeter ring of the same big-frame steel columns, carried evenly
-# around the building just inside the curtain wall and set back behind the glass
-# like the outriggers. The long faces divide into equal bays but skip any bay
-# that falls inside an apartment void and skip their end (corner) bays, since on
-# the wide face those ends are the short-face columns seen edge-on; the short
-# faces carry two columns only, at the quarter and three-quarter points of the
-# depth, so the middle half of the short face is column-free — and those two
-# columns are also where the outriggers land.
-RING_COL_W = OUTRIGGER_COL_W
-RING_COL_INSET = WIDTH / 2 - OUTRIGGER_COL_X        # same plane as the outriggers
-RING_LONG_BAYS = 7
 RING_SHORT_Y = DEPTH / 4                            # 1/4 and 3/4 of the short face
+
+# The facade cage sits on the exterior glass plane. Its two families (columns,
+# beams) ride separate 2 cm-apart depth planes and their ends are kept off each
+# other's planes, so no two coplanar faces overlap (z-fighting).
+FRAME_BEAM_OUT = FACADE + 0.02                      # beams a hair proud
 
 
 def core_bracing(mats):
@@ -1407,38 +1013,55 @@ def core_bracing(mats):
                   CORE_BRACE_W, CORE_BRACE_D, mats["steel"])
 
 
-def perimeter_columns(mats):
-    """A ring of chunky steel columns just inside the curtain wall, set back
-    behind the glass like the outriggers. The long faces carry equal bays but no
-    end columns — on the wide face the ends are the short-face columns seen
-    edge-on — and skip any bay inside an apartment void; each short face carries
-    two columns, at the quarter and three-quarter points."""
-    hx = WIDTH / 2 - RING_COL_INSET
-    hy = DEPTH / 2 - RING_COL_INSET
-    bay = 2 * hx / RING_LONG_BAYS
-    half = RING_COL_W / 2
-
-    def in_void(x):
-        return any(x0 - half < x < x1 + half for x0, x1, _, _ in VOIDS)
-
-    points = [(-hx + k * bay, sy * hy)
-              for sy in (-1, 1) for k in range(1, RING_LONG_BAYS)
-              if not in_void(-hx + k * bay)]
-    points += [(sx * hx, sy * RING_SHORT_Y)
-               for sx in (-1, 1) for sy in (-1, 1)]
-    for x, y in points:
-        cube("Stack_Perimeter_Column", (x, y, LEVEL_ROOF / 2),
-             (RING_COL_W, RING_COL_W, LEVEL_ROOF), mats["steel"])
+def facade_column(face, u, z0, z1, side, mat, out=FACADE):
+    """One square facade column, its outer face flush with the glass plane."""
+    (ox, oy), (ux, uy), (nx, ny), _, bias = face_geom(face)
+    off = out - side / 2 + bias
+    return cube("Stack_Facade_Column",
+                (ox + ux * u + nx * off, oy + uy * u + ny * off,
+                 (z0 + z1) / 2), (side, side, z1 - z0), mat)
 
 
-def midspan_columns(mats):
-    """One chunky column at the exact middle of each long face, between the two
-    cores and on the long-face column line, full height from the ground to the
-    top: it breaks the long span between the cores."""
-    y = DEPTH / 2 - RING_COL_INSET
-    for sy in (-1, 1):
-        cube("Stack_Midspan_Column", (0.0, sy * y, LEVEL_ROOF / 2),
-             (RING_COL_W, RING_COL_W, LEVEL_ROOF), mats["steel"])
+def facade_beam(face, z, u0, u1, side, mat, out=FRAME_BEAM_OUT):
+    """One square facade beam, its outer face flush with the glass plane."""
+    (ox, oy), (ux, uy), (nx, ny), _, bias = face_geom(face)
+    uc = (u0 + u1) / 2
+    off = out - side / 2 + bias
+    length = abs(u1 - u0)
+    dims = (length, side, side) if ux != 0 else (side, length, side)
+    return cube("Stack_Facade_Beam",
+                (ox + ux * uc + nx * off, oy + uy * uc + ny * off, z),
+                dims, mat)
+
+
+def facade_grid_columns(mats):
+    """The vertical prongs of the facade cage: chunky square columns on all four
+    faces, flush with the glass, one every ~FRAME_SPAN. The end columns are
+    pulled in by half a section so no member overhangs the envelope."""
+    half = FRAME_SQUARE / 2
+    for face in FACES:
+        span = WIDTH if face in ("N", "S") else DEPTH
+        bays = max(1, round(span / FRAME_SPAN))
+        u0, u1 = -span / 2 + half, span / 2 - half
+        step = (u1 - u0) / bays
+        for k in range(bays + 1):
+            facade_column(face, u0 + k * step, FRAME_COL_GAP,
+                          HEIGHT - FRAME_COL_GAP, FRAME_SQUARE,
+                          mats["steel"])
+
+
+def facade_grid_beams(mats):
+    """The horizontal rungs of the facade cage: chunky square beams at the same
+    ~FRAME_SPAN pitch, flush with the glass, closing the 田 grid."""
+    half = FRAME_SQUARE / 2
+    rows = max(1, round(HEIGHT / FRAME_SPAN))
+    z0, z1 = half + FRAME_GAP, HEIGHT - half - FRAME_GAP
+    step = (z1 - z0) / rows
+    for face in FACES:
+        span = WIDTH if face in ("N", "S") else DEPTH
+        for k in range(rows + 1):
+            facade_beam(face, z0 + k * step, -span / 2 + FRAME_GAP,
+                        span / 2 - FRAME_GAP, FRAME_SQUARE, mats["steel"])
 
 
 def outrigger_trusses(mats):
@@ -1577,12 +1200,61 @@ def frame_viewport(location, target, lens=55):
             space.lens = lens
             space.clip_start = 5.0
             space.clip_end = 6000
+            # Open on the lit EEVEE preview with the scene lights and world on,
+            # so the interior glow and the area lights are visible in the
+            # viewport instead of a flat solid shade. (Material Preview persists
+            # in the saved file; Rendered does not in background builds.)
+            space.shading.type = "MATERIAL"
+            space.shading.use_scene_lights = True
+            space.shading.use_scene_world = True
             found = True
     if not found:
         print("warning: no 3D viewport found to frame")
 
 
+# A handful of large downward area lights inside the occupied plates — the
+# Blender counterpart of the browser's CeilingGlow rect lights — so the tower
+# reads as lit and glowing from within, especially at night. The envelope is
+# split into a coarse GLOW_COLS x GLOW_ROWS grid and one warm sheet is hung
+# under each cell ceiling, inset from the shell.
+GLOW_COLS, GLOW_ROWS = 2, 6          # <= 12 rect lights
+GLOW_INSET = 2.4                     # keep each sheet off the envelope
+GLOW_DROP = 0.4                      # hang just under the cell ceiling
+GLOW_COLOR = (1.0, 0.78, 0.45)       # warm interior light
+GLOW_ENERGY = 12000.0                # W per sheet (day)
+GLOW_NIGHT = 4.0                     # night multiplier so the tower glows
+NIGHT_LIGHT_BOOST = 10.0             # emissive fixture boost at night
+
+
+def interior_glow_lights(night=False):
+    """Hang the warm rect area lights that make the interior glow."""
+    half_x = WIDTH / 2 - GLOW_INSET
+    half_y = DEPTH / 2 - GLOW_INSET
+    size_x = 2 * half_x / GLOW_COLS
+    size_y = 2 * half_y
+    energy = GLOW_ENERGY * (GLOW_NIGHT if night else 1.0)
+    for row in range(GLOW_ROWS):
+        z = HEIGHT * (row + 1) / GLOW_ROWS - GLOW_DROP
+        for col in range(GLOW_COLS):
+            light = bpy.data.lights.new(f"Stack_Glow_{row}_{col}", "AREA")
+            light.shape = "RECTANGLE"
+            light.size = size_x
+            light.size_y = size_y
+            light.color = GLOW_COLOR
+            light.energy = energy
+            # No shadow occlusion, like the browser's unshadowed rect lights, so
+            # each sheet lights every plate it reaches instead of only its own
+            # cell — the light passes through the floors and reads as a glowing
+            # interior rather than a dark box.
+            light.use_shadow = False
+            obj = bpy.data.objects.new(light.name, light)
+            obj.location = (-half_x + size_x * (col + 0.5), 0.0, z)
+            bpy.context.collection.objects.link(obj)
+            obj["glow"] = "interior"
+
+
 def setup_scene(args, mats):
+    night = args.night
     world = bpy.data.worlds.new("The_Stack_World")
     bpy.context.scene.world = world
     world.use_nodes = True
@@ -1590,16 +1262,18 @@ def setup_scene(args, mats):
     background = nt.nodes["Background"]
     # Match the Material Preview studio lighting the model is reviewed in: the
     # bundled interior.exr HDRI lights the scene and reflects in the glass,
-    # while camera rays keep a clean, soft sky-blue backdrop.
+    # while camera rays keep a clean, soft sky-blue backdrop. At night the
+    # environment is dropped to a dark ambient so the interior glow reads.
     env = nt.nodes.new("ShaderNodeTexEnvironment")
     env.image = bpy.data.images.load(os.path.join(
         bpy.utils.system_resource("DATAFILES"), "studiolights", "world",
         "interior.exr"))
-    background.inputs["Strength"].default_value = 1.0
+    background.inputs["Strength"].default_value = 0.03 if night else 1.0
     nt.links.new(env.outputs["Color"], background.inputs["Color"])
     sky = nt.nodes.new("ShaderNodeBackground")
-    sky.inputs["Color"].default_value = (0.55, 0.66, 0.78, 1)
-    sky.inputs["Strength"].default_value = 1.0
+    sky.inputs["Color"].default_value = ((0.015, 0.02, 0.035, 1) if night
+                                         else (0.55, 0.66, 0.78, 1))
+    sky.inputs["Strength"].default_value = 1.0 if not night else 0.6
     light_path = nt.nodes.new("ShaderNodeLightPath")
     mix = nt.nodes.new("ShaderNodeMixShader")
     nt.links.new(light_path.outputs["Is Camera Ray"], mix.inputs[0])
@@ -1608,10 +1282,11 @@ def setup_scene(args, mats):
     nt.links.new(mix.outputs[0], nt.nodes["World Output"].inputs["Surface"])
     bpy.ops.object.light_add(type="SUN", location=(180, -220, 380))
     sun = bpy.context.object
-    sun.data.energy = 4.5
+    sun.data.energy = 0.0 if night else 4.5
     sun.data.angle = math.radians(6.0)
     sun.rotation_euler = (math.radians(52), math.radians(-18),
                           math.radians(-32))
+    interior_glow_lights(night)
 
     camera_data = []
     for name, loc, target, lens in (
@@ -1670,18 +1345,17 @@ def setup_scene(args, mats):
         f"{z0:g}-{z1:g}" for z0, z1 in REFUGE_COMPONENT_SPANS)
     scene["refuge_open_levels_m"] = ""
     scene["refuge_open_heights_m"] = ""
-    scene["refuge_screen_m"] = f"fold {SCREEN_FOLD:g}, bay {SCREEN_BAY:g}"
     scene["depth_override_m"] = DEPTH
     scene["depth_override_note"] = (
         "Elevation sheet reads 34 m; depth widened to 40 m for load "
         "plausibility (client direction).")
     scene["voids"] = len(VOIDS)
-    scene["void_width_m"] = VOID_W
-    scene["void_heights_m"] = (f"{VOID_LOW_FLOORS * APARTMENT_H:g},"
-                               f"{VOID_HIGH_FLOORS * APARTMENT_H:g}")
-    scene["void_area_m2"] = VOID_W * (VOID_LOW_FLOORS
-                                      + VOID_HIGH_FLOORS) * APARTMENT_H
-    scene["void_centre_on_brace"] = "true"
+    scene["void_width_m"] = VOIDS[0][1] - VOIDS[0][0]
+    scene["void_heights_m"] = ",".join(
+        f"{z1 - z0:g}" for _, _, z0, z1 in VOIDS)
+    scene["void_area_m2"] = sum((x1 - x0) * (z1 - z0)
+                                for x0, x1, z0, z1 in VOIDS)
+    scene["void_on_grid"] = "true"
     scene["void_x_spans_m"] = ";".join(
         f"{x0:g}-{x1:g}" for x0, x1, _, _ in VOIDS)
     scene["void_z_spans_m"] = ";".join(
@@ -1695,17 +1369,20 @@ def setup_scene(args, mats):
     scene["structural_scheme"] = (
         "Two service cores on the long axis, X-braced on their inner faces, "
         "with one public escalator shaft and four two-storey planted refuge "
-        "gardens, each under a chevron belt truss and wrapped in a folded "
-        "glass screen.")
+        "gardens, each under a chevron belt truss behind a single continuous "
+        "glass envelope in a ~20 m square-frame cage.")
     scene["core_bracing"] = CORE_BRACE_COUNT
-    scene["perimeter_columns"] = 2 * (RING_LONG_BAYS + 1) + 2
+    scene["facade_cage_m"] = f"span {FRAME_SPAN:g}, section {FRAME_SQUARE:g}"
     scene["approximation_note"] = (
         "Competition proposal; dimensions and facade bands inferred from MVRDV "
         "elevation, section and model imagery.")
     return dict(camera_data)
 
 
-def build_materials():
+def build_materials(night=False):
+    # At night the interior fixtures burn brighter so every plate reads as a lit
+    # band through the glass — the visible glow the area lights then reinforce.
+    lit = NIGHT_LIGHT_BOOST if night else 1.0
     return {
         "glass_cool": materials.make_glass(
             "Stack_Glass_Cool", engine="BLENDER_EEVEE", tint=(0.34, 0.58, 0.66)),
@@ -1727,14 +1404,14 @@ def build_materials():
         "ground": materials.make_ground("Stack_Ground", color=(0.13, 0.14, 0.13)),
         "light_daylight": materials.make_ceiling_light(
             "Stack_Light_Daylight", materials.CEILING_LIGHT_DAYLIGHT,
-            ROOM_LIGHT_STRENGTH),
+            ROOM_LIGHT_STRENGTH * lit),
         "light_warm": materials.make_ceiling_light(
             "Stack_Light_Warm", materials.CEILING_LIGHT_WARM,
-            ROOM_LIGHT_STRENGTH),
+            ROOM_LIGHT_STRENGTH * lit),
         "light_off": materials.make_ceiling_light(
             "Stack_Light_Off", (0.055, 0.045, 0.035), 0.0),
         "glow": materials.make_ceiling_light(
-            "Stack_Mall_Glow", color=(1.0, 0.72, 0.38), strength=16.0),
+            "Stack_Mall_Glow", color=(1.0, 0.72, 0.38), strength=16.0 * lit),
         "trunk": materials.make_trunk("Stack_Trunk"),
         "foliage": materials.make_foliage("Stack_Foliage", color=(0.09, 0.30, 0.11)),
         "lawn": materials.make_wall("Stack_Lawn", color=(0.16, 0.36, 0.14)),
@@ -1744,11 +1421,11 @@ def build_materials():
 
 def build(args):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    mats = build_materials()
+    mats = build_materials(args.night)
     ground(mats)
     add_interior(mats)
-    perimeter_columns(mats)
-    midspan_columns(mats)
+    facade_grid_columns(mats)
+    facade_grid_beams(mats)
     outrigger_trusses(mats)
     base_interior(mats)
     base_escalators(mats)
@@ -1757,13 +1434,9 @@ def build(args):
     mall_ceiling_lights(mats)
     room_ceiling_lights(mats)
     for z0, z1, band in BANDS:
+        assert band == "glass"
         for face in FACES:
-            builder = BAND_BUILDERS[band]
-            if builder is band_brick:
-                builder(face, z0, z1, mats, holes=void_holes(face))
-            else:
-                builder(face, z0, z1, mats)
-    void_curtain_wall(mats)
+            band_glass(face, z0, z1, mats, holes=void_holes(face))
     refuge_belt_trusses(mats)
     refuge_gardens(mats)
     band_roof(mats)
@@ -1771,10 +1444,11 @@ def build(args):
     os.makedirs(OUT_DIR, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=BLEND_PATH)
     if not args.no_render:
+        suffix = "_night" if args.night else ""
         for view in args.views:
             bpy.context.scene.camera = cameras[view]
             bpy.context.scene.render.filepath = os.path.join(
-                OUT_DIR, f"the_stack_{view}.png")
+                OUT_DIR, f"the_stack_{view}{suffix}.png")
             bpy.ops.render.render(write_still=True)
     print(f"Built The Stack proposal: {len(bpy.data.objects)} objects")
     print(f"Saved editable model: {BLEND_PATH}")
@@ -1783,6 +1457,7 @@ def build(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-render", action="store_true")
+    parser.add_argument("--night", action="store_true")
     parser.add_argument("--views", nargs="+", default=list(VIEW_NAMES))
     args = parser.parse_args(
         sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])

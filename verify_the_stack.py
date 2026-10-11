@@ -8,11 +8,9 @@ import bpy
 from mathutils import Vector
 
 BAND_MARKERS = {
-    "base glazing": "Base_Glass",
-    "diagrid band": "Diagrid",
-    "garden band": "Garden_Canopy",
-    "fin band": "Fin",
-    "masonry band": "Brick_Mullion",
+    "glass envelope": "N_Glass",
+    "facade cage columns": "Stack_Facade_Column",
+    "facade cage beams": "Stack_Facade_Beam",
     "roof garden": "Stack_Roof_Canopy",
 }
 
@@ -105,23 +103,20 @@ def main():
     # plate, with the chunky chevron belt truss spanning both storeys above it to
     # the ceiling plate. The storey line between the deck and the ceiling is
     # dropped, so the garden and the truss read as one volume. Four of them:
-    # mall, office, apartment base and mid-apartment.
+    # mall, office, apartment base (aligned to a facade-cage beam) and
+    # mid-apartment. The office refuge carries a garden but no belt truss.
     refuge_decks = (level_base - 10.0, level_base + 55.0,
-                    level_apartment - 10.0, level_apartment + 15 * 4.0)
-    refuge_storey = tuple(5.0 if i < 3 else 4.0
-                          for i in range(len(refuge_decks)))
-    refuge_truss_bottoms = refuge_decks
+                    level_apartment, level_apartment + 15 * 4.0)
+    refuge_storey = (5.0, 5.0, 4.0, 4.0)
+    refuge_no_truss = {level_base + 55.0}
+    refuge_truss_bottoms = tuple(deck for deck in refuge_decks
+                                 if deck not in refuge_no_truss)
     refuge_drops = tuple(deck + h
                          for deck, h in zip(refuge_decks, refuge_storey))
     refuge_ceilings = tuple(deck + 2 * h
                             for deck, h in zip(refuge_decks, refuge_storey))
     refuge_volumes = tuple(zip(refuge_decks, refuge_ceilings))
     refuge_spans = tuple(zip(refuge_decks, refuge_ceilings))
-    # No refuge storey is left open now: the folded screen wraps both storeys.
-    refuge_open_spans = ()
-    # The two offset apartment voids sit against the two core inner faces.
-    core_inner = 20.0
-    void_width = scene.get("void_width_m", 15.0)
 
     def span(text):
         # "a-b", where either end may itself be negative ("-20--2.5").
@@ -135,18 +130,30 @@ def main():
     void_spans = tuple((xa, xb, za, zb)
                        for (xa, xb), (za, zb) in zip(void_x, void_z))
     void_area = sum((xb - xa) * (zb - za) for xa, xb, za, zb in void_spans)
-    # The five core X-brace bays are equal bands over the top plate, each its own
-    # height with equal gaps; bay `index` is centred on this height.
-    core_brace_band = level_roof / 11.0
-    brace_centres = tuple((2 * i + 1.5) * core_brace_band for i in range(5))
-    void_cw_x = [center(obj)[0] for obj in bpy.data.objects
-                 if obj.name.startswith("Stack_Void_CW_Mullion")]
     shaft_x, shaft_y = (float(part)
                         for part in scene.get("spine_shaft_m", "20x12").split("x"))
     shaft_half_x, shaft_half_y = shaft_x / 2, shaft_y / 2
     width = scene.get("estimated_width_m", 115.0)
     depth = scene.get("estimated_depth_m", 40.0)
     facade_half = width / 2 + 0.30
+    # The facade cage grid, recomputed the way the generator lays it: square
+    # members on a ~FRAME_SPAN module, so the vents snap to whole cells.
+    frame_span, frame_square, frame_gap = 20.0, 2.4, 0.05
+    frame_col_gap = frame_gap + 0.03
+    x_bays = max(1, round(width / frame_span))
+    grid_x = [-width / 2 + frame_square / 2
+              + k * (width - frame_square) / x_bays
+              for k in range(x_bays + 1)]
+    z_rows = max(1, round(model_height / frame_span))
+    grid_z = [frame_square / 2 + frame_gap
+              + k * (model_height - frame_square - 2 * frame_gap) / z_rows
+              for k in range(z_rows + 1)]
+
+    def on_grid(line, lines):
+        return any(abs(line - g) < 0.02 for g in lines)
+
+    belt_decks = sorted({int(name.split("Refuge_Belt_")[1].split("_")[0])
+                         for name in names if "Refuge_Belt_" in name})
 
     mall_levels = storeys[:mall_floors]
     upper_levels = storeys[mall_floors:]
@@ -159,27 +166,8 @@ def main():
     expected_room_levels = [z for z in upper_levels
                             if z not in refuge_levels
                             and z not in refuge_drops]
-    frost_alpha = None
-    frost = bpy.data.materials.get("Stack_Glass_Frost")
-    if frost and frost.use_nodes:
-        bsdf = frost.node_tree.nodes.get("Principled BSDF")
-        if bsdf and "Alpha" in bsdf.inputs:
-            frost_alpha = bsdf.inputs["Alpha"].default_value
-    spandrel = bpy.data.materials.get("Stack_Spandrel_Blue")
-    spandrel_color = None
-    if spandrel and spandrel.use_nodes:
-        bsdf = spandrel.node_tree.nodes.get("Principled BSDF")
-        if bsdf:
-            spandrel_color = tuple(bsdf.inputs["Base Color"].default_value)
-    apartment_frame = bpy.data.materials.get("Stack_Apartment_Frame")
-    frame_color = None
-    if apartment_frame and apartment_frame.use_nodes:
-        bsdf = apartment_frame.node_tree.nodes.get("Principled BSDF")
-        if bsdf:
-            frame_color = tuple(bsdf.inputs["Base Color"].default_value)
 
     mall_lights = objects("Stack_Mall_Ceiling_Lights")
-    base_glass = [obj for obj in bpy.data.objects if "Base_Glass" in obj.name]
     room_objs = objects("Stack_Room_Lights_")
     braces = objects("Stack_Core_Brace_")
     brace_centers = sorted({round(center_z(o), 2) for o in braces})
@@ -244,8 +232,7 @@ def main():
         "elevation pixel basis": scene.get("elevation_width_pixels") == 321
         and scene.get("elevation_depth_pixels") == 94
         and scene.get("elevation_height_pixels") == 992,
-        "band sequence recorded": scene.get("facade_bands") ==
-        "base,refuge,garden,refuge,fins,refuge,brick,refuge,brick",
+        "single glass envelope recorded": scene.get("facade_bands") == "glass",
         "storey program recorded": scene.get("floor_count") == 64
         and scene.get("mall_floors") == 10
         and scene.get("office_floors") == 22
@@ -344,19 +331,6 @@ def main():
         "escalators stay inside the envelope": all(
             abs(center(o)[0]) <= facade_half and center(o)[2] <= model_height + 0.5
             for o in escalators),
-        # The base is a frosted glass wall with a frame heavy enough to read.
-        "frosted base glazing": frost_alpha is not None
-        and 0.35 <= frost_alpha <= 0.85
-        and count("Base_Glass") >= 4 and count("Base_Mullion") >= 8
-        and max((max(o.dimensions.x, o.dimensions.y) for o in bpy.data.objects
-                 if "Base_Mullion" in o.name), default=0.0) >= 0.25,
-        "base glass grouped two storeys": (
-            len(base_glass)
-            == int((refuge_decks[0] - mall_ground_height) / (2 * 5.0))
-            * len(("N", "S", "E", "W"))
-            and all(abs(o.dimensions.z - 2 * 5.0) < 0.01 for o in base_glass)
-            and min(o.location.z - o.dimensions.z / 2 for o in base_glass)
-            >= mall_ground_height - 0.01),
         "dual cores": all(f"Stack_Core_{side}" in names
                           for side in ("West", "East")),
         "no inter-core transfer beams": count("Stack_Core_Transfer_") == 0,
@@ -375,36 +349,29 @@ def main():
                     for o in braces)),
         "outrigger trusses": count("Stack_Outrigger_Chord") == 32
         and count("Stack_Outrigger_Diag") == 32,
-        # Chunky full-height columns ring the interior of the curtain wall. The
-        # two long faces skip any bay that falls inside an apartment void and
-        # also skip their end bays — on the wide face those ends are the
-        # short-face columns seen edge-on — so the only columns at the extreme
-        # sides are those short-face columns, at the quarter and three-quarter
-        # points of the depth.
-        "perimeter column ring": (
-            count("Stack_Perimeter_Column") == 12
-            and all(abs(o.dimensions.x - 2.4) < 0.01
-                    and abs(o.dimensions.y - 2.4) < 0.01
-                    and abs(o.dimensions.z - level_roof) < 0.01
-                    for o in objects("Stack_Perimeter_Column"))),
-        "no perimeter columns in the voids": not any(
-            any(xa - 1.2 < center(o)[0] < xb + 1.2 for xa, xb in void_x)
-            for o in objects("Stack_Perimeter_Column")),
-        "short faces carry quarter-point columns": all(
-            sorted(round(center(o)[1], 1)
-                   for o in objects("Stack_Perimeter_Column")
-                   if abs(center(o)[0] - sx * 54.5) < 0.01)
-            == [-10.0, 10.0] for sx in (-1, 1)),
-        # One column at the middle of each long face, between the cores and on
-        # the long-face column line, running the full height from the ground to
-        # the top: it breaks the long span between the cores.
-        "midspan columns between the cores": (
-            count("Stack_Midspan_Column") == 2
-            and all(abs(center(o)[0]) < 0.01
-                    and abs(abs(center(o)[1]) - 17.0) < 0.01
-                    and abs(o.dimensions.z - level_roof) < 0.01
-                    and abs(bounds(o)[4]) < 0.01
-                    for o in objects("Stack_Midspan_Column"))),
+        # The facade cage: chunky square columns and beams on the ~20 m module,
+        # flush with the glass on all four faces, so the tower reads as a grid.
+        "facade cage columns": (
+            count("Stack_Facade_Column")
+            == 2 * (x_bays + 1)
+            + 2 * (max(1, round(depth / frame_span)) + 1)
+            and all(abs(o.dimensions.x - frame_square) < 0.01
+                    and abs(o.dimensions.y - frame_square) < 0.01
+                    and abs(o.dimensions.z
+                            - (model_height - 2 * frame_col_gap)) < 0.05
+                    for o in objects("Stack_Facade_Column"))),
+        "facade cage beams": (
+            count("Stack_Facade_Beam") == 4 * (z_rows + 1)
+            and all(abs(o.dimensions.z - frame_square) < 0.01
+                    and (abs(o.dimensions.x - frame_square) < 0.01
+                         or abs(o.dimensions.y - frame_square) < 0.01)
+                    for o in objects("Stack_Facade_Beam"))),
+        "facade cage is flush with the glass": all(
+            bounds(o)[3] <= depth / 2 + 0.33
+            and bounds(o)[2] >= -(depth / 2 + 0.33)
+            and bounds(o)[1] <= width / 2 + 0.33
+            and bounds(o)[0] >= -(width / 2 + 0.33)
+            for o in objects("Stack_Facade_")),
         "uniform X-braces": len({round(world_size(o)[2], 1)
                                  for o in braces}) == 1,
         "evenly spaced core braces": len(brace_centers) == 5
@@ -485,15 +452,16 @@ def main():
             if area.type == "VIEW_3D"),
         "model height recorded": scene.get("model_height_m") == model_height,
         "crown reaches top surface": abs(
-            (top_of("N_Brick") or 0.0) - model_height) < 0.05,
+            (top_of("N_Glass") or 0.0) - model_height) < 0.05,
         "cores flush with top": abs(
             (top_of("Stack_Core_") or 0.0) - model_height) < 0.05,
         "no core protrudes above top": (
             top_of("Stack_Core_") or 0.0) <= model_height + 0.01,
-        # Both storeys of each refuge are wrapped by the folded glass screen, so
-        # no refuge layer is left open. Every screen leaf and post runs the full
-        # two-storey volume.
-        "refuges wear a folded screen": (
+        # Each refuge is a garden deck; three of them carry the chunky chevron
+        # belt truss spanning both storeys above the deck (the office refuge
+        # keeps its garden but no truss). Every belt truss foot sits on a facade
+        # cage beam line, so the truss frames the grid rather than straddling it.
+        "refuge belt trusses": (
             scene.get("refuge_floors") == 2
             and scene.get("refuges") == 4
             and scene.get("refuge_layers") == "garden,truss"
@@ -501,140 +469,52 @@ def main():
             and scene.get("refuge_levels_m") == ", ".join(
                 f"{a:g}-{b:g}"
                 for a, b in zip(refuge_decks, refuge_ceilings))
-            and count("Refuge_Screen") > 0
-            and count("Refuge_Screen_Post") > 0
-            and all(any("Refuge_Screen" in o.name and "Post" not in o.name
-                        and bounds(o)[4] <= z0 + 0.01
-                        and bounds(o)[5] >= z1 - 0.01
-                        for o in bpy.data.objects)
-                    for z0, z1 in refuge_spans)),
-        # The folded screen is drawn inward from the envelope: its outer folds
-        # sit on the shared facade plane and nothing stands proud of it.
-        "folded screen stays inside the envelope": all(
-            (bounds(o)[3] <= depth / 2 + 0.301
-             if o.name.startswith("N_") else True)
-            and (bounds(o)[2] >= -(depth / 2 + 0.301)
-                 if o.name.startswith("S_") else True)
-            and (bounds(o)[1] <= width / 2 + 0.301
-                 if o.name.startswith("E_") else True)
-            and (bounds(o)[0] >= -(width / 2 + 0.301)
-                 if o.name.startswith("W_") else True)
-            for o in bpy.data.objects
-            if "Refuge_Screen" in o.name),
-        # Neither the folded screen nor the belt truss may overhang the corners:
-        # a round post left on the building corner would stick out past the
-        # envelope by its own radius.
+            and belt_decks == sorted(int(d) for d in refuge_truss_bottoms)
+            and all(min(abs(deck - g) for g in grid_z) < 1.6
+                    for deck in refuge_truss_bottoms)),
+        # The belt truss may not overhang the corners: a round post left on the
+        # building corner would stick out past the envelope by its own radius.
         "refuge structure stays inside the envelope": not any(
             max(bounds(o)[1] - (width / 2 + 0.301),
                 -(bounds(o)[0] + width / 2 + 0.301),
                 bounds(o)[3] - (depth / 2 + 0.301),
                 -(bounds(o)[2] + depth / 2 + 0.301)) > 0.01
             for o in bpy.data.objects
-            if "Refuge_Belt" in o.name or "Refuge_Screen" in o.name),
-        # No band curtain wall runs on into a refuge: the screen owns both
-        # storeys, so the band reads as stopping at the deck.
-        "bands stop at the refuges": not any(
-            any(style in o.name for style in ("Base_", "Diagrid", "Fin"))
-            or ("Brick_" in o.name)
-            for o in bpy.data.objects
-            if o.name[:2] in ("N_", "S_", "E_", "W_")
-            and any(z0 + 0.05 < center_z(o) < z1 - 0.05
-                    for z0, z1 in refuge_spans)),
-        "bands wrap four faces": all(
-            count(f"{face}_Diagrid") > 0 and count(f"{face}_Fin") > 0
-            and count(f"{face}_Brick_Mullion") > 0
-            for face in ("N", "S", "E", "W")),
+            if "Refuge_Belt" in o.name),
         "eye band replaced by vertical grid": count("_Louver") == 0
         and count("_Eye") == 0,
         "open glazed crown": count("Stack_Roof_Slab") == 0
         and count("Stack_Roof_Step_") == 0
-        and (top_of("N_Brick") or 0.0) - level_roof >= 2 * 4.0,
+        and (top_of("N_Glass") or 0.0) - level_roof >= 2 * 4.0,
         "slender slab proportion": 2.5 < (
             scene.get("estimated_width_m") / scene.get("estimated_depth_m")) < 3.9,
-        # The apartment band is pierced by two offset voids, not one big slot,
-        # and no bridge connects the halves.
-        "two offset apartment voids": scene.get("voids") == 2
-        and scene.get("void_x_spans_m") == "-20--2.5;2.5-20"
-        and count("N_Brick_Glass") > 2 and count("S_Brick_Glass") > 2,
-        # Each opening is now more than twice the original 15 x 20 m (300 m2).
-        "voids enlarged past twice the area": void_area >= 600.0
-        and abs(scene.get("void_area_m2", 0.0) - void_area) < 0.01,
-        "void openings are punched in the band": all(
+        # The envelope is one glass skin on all four faces; its only breaks are
+        # the two ventilation openings.
+        "glass envelope wraps four faces": all(
+            count(f"{face}_Glass") > 0 for face in ("N", "S", "E", "W")),
+        "two offset vents": scene.get("voids") == 2 and len(void_spans) == 2
+        and void_spans[0][1] <= void_spans[1][0],
+        # Each vent is a whole number of facade grid cells with its edges on grid
+        # lines: one long-face bay wide (the ~18.8 m cell) by three beam rows tall.
+        "vents are whole grid cells": all(
+            on_grid(x0, grid_x) and on_grid(x1, grid_x)
+            and on_grid(z0, grid_z) and on_grid(z1, grid_z)
+            and abs((x1 - x0) - (grid_x[3] - grid_x[2])) < 0.02
+            and abs((z1 - z0) - 3 * (grid_z[1] - grid_z[0])) < 0.02
+            for x0, x1, z0, z1 in void_spans),
+        "vents are punched in the glass": all(
             not any(x0 < center(obj)[0] < x1 and z0 < center(obj)[2] < z1
                     for obj in bpy.data.objects
-                    if obj.name.startswith(("N_Brick_Mullion", "N_Brick_Glass",
-                                            "S_Brick_Mullion", "S_Brick_Glass")))
+                    if obj.name.startswith(("N_Glass", "S_Glass")))
             for x0, x1, z0, z1 in void_spans),
-        # Every vent is centred on a core X-brace bay, so the brace reads in the
-        # vertical middle of the opening; the upper vent also sits on the
-        # mid-apartment refuge's ceiling, so it still connects to that garden.
-        "each vent is centred on a core brace bay": all(
-            any(abs((z0 + z1) / 2 - centre) < 1.5 for centre in brace_centres)
-            for x0, x1, z0, z1 in void_spans),
-        "upper vent sits on the mid refuge ceiling": abs(
-            void_spans[1][2] - refuge_ceilings[3]) < 0.01,
-        # Both X side walls of each opening are closed with the same curtain wall
-        # as the exterior apartment band (glass, spandrel, mullions, transoms):
-        # the outer face keeps the recess clad and the inner face lines the shaft,
-        # so the escalator climbs indoors. The long N/S faces stay fully open —
-        # those are the ventilation openings, so no glass may be added across them.
-        "void X-sides wear the apartment curtain wall": (
-            count("Stack_Void_CW_Mullion") >= 110
-            and count("Stack_Void_CW_Glass") >= 15
-            and count("Stack_Void_CW_Spandrel") >= 15
-            and count("Stack_Void_CW_Transom") >= 30
-            and any(x < -19.0 for x in void_cw_x)
-            and any(x > 19.0 for x in void_cw_x)
-            and any(-3.2 < x < -1.8 for x in void_cw_x)
-            and any(1.8 < x < 3.2 for x in void_cw_x)
-            and not any("Void_Infill" in o.name for o in bpy.data.objects)),
-        # The core-side lining runs the void's full height from its base, down to
-        # the layer that opens onto the refuge garden below.
-        "void X-lining reaches the void base": all(
-            any(abs(bounds(o)[4] - z0) < 0.05
-                for o in bpy.data.objects
-                if o.name.startswith("Stack_Void_CW_Mullion"))
-            for x0, x1, z0, z1 in void_spans),
-        # The lining sits inside the opening, clear of the core face behind it,
-        # so no member intersects the concrete (which is what read as z-fighting
-        # along the void edge).
-        "void lining clear of the cores": all(
-            not any(
-                bounds(o)[0] < cx1 and bounds(o)[1] > cx0
-                and bounds(o)[2] < cy1 and bounds(o)[3] > cy0
-                and bounds(o)[4] < cz1 and bounds(o)[5] > cz0
-                for o in bpy.data.objects
-                if o.name.startswith("Stack_Void_CW_"))
-            for cx0, cx1, cy0, cy1, cz0, cz1 in (
-                bounds(bpy.data.objects["Stack_Core_West"]),
-                bounds(bpy.data.objects["Stack_Core_East"]))),
-        # The mid-apartment refuge is its own volume, so no apartment-band
-        # mullion may run through it: each stays inside one of the brick bands.
-        "apartment mullions stay inside their band": all(
-            not (bounds(o)[4] < refuge_ceilings[3] - 0.05
-                 and bounds(o)[5] > refuge_decks[3] + 0.05)
-            for o in bpy.data.objects
-            if o.name.startswith(("N_Brick_Mullion", "S_Brick_Mullion",
-                                  "E_Brick_Mullion", "W_Brick_Mullion"))),
-        "void edges land on the mullion grid": all(
-            round(edge, 3) in {round(obj.location.x, 3)
-                               for obj in bpy.data.objects
-                               if obj.name.startswith("N_Brick_Mullion")}
-            for edge in (void_spans[0][0], void_spans[0][1],
-                         void_spans[1][0], void_spans[1][1])
-            if abs(edge) < width / 2),
-        "apartment band is vertical strips": (
-            len({round(obj.location.x, 3) for obj in bpy.data.objects
-                 if obj.name.startswith("N_Brick_Mullion")}) > 80),
-        "apartment band is glazed": count("Brick_Glass") > 0
-        and count("Brick_Back") == 0,
-        "apartment spandrel is light blue": count("Brick_Spandrel") > 0
-        and spandrel_color is not None
-        and spandrel_color[2] > spandrel_color[0] and spandrel_color[0] > 0.5,
-        "apartment frame is white": count("Brick_Mullion") > 0
-        and frame_color is not None
-        and min(frame_color[:3]) > 0.8
-        and max(frame_color[:3]) - min(frame_color[:3]) < 0.05,
+        # The two vents reach down to the mid-apartment refuge's deck and the
+        # upper one rises over it, so the refuge sits in the openings' band.
+        "vents span the mid refuge": (
+            void_spans[0][3] <= refuge_decks[3] + 0.1
+            and void_spans[1][2] <= refuge_decks[3] + 0.1
+            and void_spans[1][3] >= refuge_ceilings[3] - 0.1),
+        "voids enlarged past twice the area": void_area >= 600.0
+        and abs(scene.get("void_area_m2", 0.0) - void_area) < 1.0,
         "no bridge remains": count("Bridge") == 0,
     }
     for label, marker in BAND_MARKERS.items():

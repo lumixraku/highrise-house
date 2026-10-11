@@ -55,9 +55,7 @@ def main():
             buckets[(axis, sign, round(offset, 3))].append((base,) + bounds)
 
     total, facade = 0, 0
-    facade_marks = ("Brick_", "Void_CW_", "Base_Glass", "Base_Mullion",
-                    "Base_Transom", "Diagrid_", "Garden_Glass", "Fins_Glass",
-                    "_Fin", "_Mullion", "_Transom", "_Spandrel")
+    facade_marks = ("_Glass", "Stack_Facade_Column", "Stack_Facade_Beam")
     for faces in buckets.values():
         if len(faces) < 2:
             continue
