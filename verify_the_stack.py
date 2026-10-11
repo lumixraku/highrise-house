@@ -103,14 +103,12 @@ def main():
     # plate, with the chunky chevron belt truss spanning both storeys above it to
     # the ceiling plate. The storey line between the deck and the ceiling is
     # dropped, so the garden and the truss read as one volume. Four of them:
-    # mall, office, apartment base (aligned to a facade-cage beam) and
-    # mid-apartment. The office refuge carries a garden but no belt truss.
-    refuge_decks = (level_base - 10.0, level_base + 55.0,
+    # mall, office, apartment base and mid-apartment, every deck landing on a
+    # facade-cage beam so the truss frames the grid.
+    refuge_decks = (level_base - 10.0, level_base + 50.0,
                     level_apartment, level_apartment + 15 * 4.0)
     refuge_storey = (5.0, 5.0, 4.0, 4.0)
-    refuge_no_truss = {level_base + 55.0}
-    refuge_truss_bottoms = tuple(deck for deck in refuge_decks
-                                 if deck not in refuge_no_truss)
+    refuge_truss_bottoms = refuge_decks
     refuge_drops = tuple(deck + h
                          for deck, h in zip(refuge_decks, refuge_storey))
     refuge_ceilings = tuple(deck + 2 * h
@@ -457,10 +455,10 @@ def main():
             (top_of("Stack_Core_") or 0.0) - model_height) < 0.05,
         "no core protrudes above top": (
             top_of("Stack_Core_") or 0.0) <= model_height + 0.01,
-        # Each refuge is a garden deck; three of them carry the chunky chevron
-        # belt truss spanning both storeys above the deck (the office refuge
-        # keeps its garden but no truss). Every belt truss foot sits on a facade
-        # cage beam line, so the truss frames the grid rather than straddling it.
+        # Each refuge is a garden deck; every one carries the chunky chevron
+        # belt truss spanning both storeys above the deck. Every belt truss foot
+        # sits on a facade cage beam line, so the truss frames the grid rather
+        # than straddling it.
         "refuge belt trusses": (
             scene.get("refuge_floors") == 2
             and scene.get("refuges") == 4

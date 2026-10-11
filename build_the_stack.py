@@ -253,13 +253,12 @@ def storey_levels():
 #
 # Each refuge is two storeys tall; the deck is its bottom plate and the ceiling
 # its top plate, both of which stay, so the truss and the garden read through the
-# continuous glass as one tall planted room. The apartment refuge deck sits on
-# the apartment base (160 m), which lands it just above the facade-cage beam at
-# ~159.3 m like the mid-apartment refuge above (~220 m) — its garden and truss
-# frame the grid instead of straddling a beam. The office refuge keeps its garden
-# but carries no belt truss (that truss layer was removed).
+# continuous glass as one tall planted room. Every refuge deck starts on a
+# facade-cage beam so the garden and truss frame the grid instead of straddling
+# a beam: the office refuge on the ~100 m beam, the apartment refuge just above
+# the ~159.3 m beam, and the mid-apartment refuge just above the ~218.5 m beam.
 REFUGE_MALL = (LEVEL_BASE - 2 * MALL_H, LEVEL_BASE)                      # 40-50
-REFUGE_OFFICE = (LEVEL_BASE + 11 * OFFICE_H, LEVEL_BASE + 13 * OFFICE_H)  # 105-115
+REFUGE_OFFICE = (LEVEL_BASE + 10 * OFFICE_H, LEVEL_BASE + 12 * OFFICE_H)  # 100-110
 REFUGE_APARTMENT = (LEVEL_APARTMENT, LEVEL_APARTMENT + 2 * APARTMENT_H)  # 160-168
 REFUGE_APARTMENT_MID = REFUGE_MID_OPEN                                   # 220-228
 REFUGES = (REFUGE_MALL, REFUGE_OFFICE, REFUGE_APARTMENT,
@@ -278,8 +277,6 @@ REFUGE_FLOOR_LEVELS = REFUGE_DECK_LEVELS
 REFUGE_DROP_LEVELS = tuple(z0 + h
                            for (z0, _), h in zip(REFUGES, REFUGE_HEIGHTS))
 REFUGE_COMPONENT_SPANS = tuple(zip(REFUGE_DECK_LEVELS, REFUGE_CEILING_LEVELS))
-# Refuges that keep their garden but carry no belt truss.
-REFUGE_NO_TRUSS = (REFUGE_OFFICE[0],)
 
 # The envelope is one continuous glass skin from the ground hall to the top of
 # the crown, wrapped in the square-frame cage (built separately by
@@ -869,11 +866,8 @@ def refuge_belt_trusses(mats):
     """An Abeno Harukas-style chevron belt truss spanning a refuge's full two
     storeys, its feet on the garden deck and its apex on the ceiling, so each
     face reads as one chunky claw. Wrapped on all four faces and recessed behind
-    the glass, so the truss reads through it. A refuge in REFUGE_NO_TRUSS keeps
-    its garden but carries no belt truss."""
+    the glass, so the truss reads through it."""
     for deck, top in zip(REFUGE_DECK_LEVELS, REFUGE_CEILING_LEVELS):
-        if deck in REFUGE_NO_TRUSS:
-            continue
         for face in FACES:
             span = WIDTH if face in ("N", "S") else DEPTH
             chevron_face(face, -span / 2, span / 2, deck, top, mats,
