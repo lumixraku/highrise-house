@@ -181,11 +181,55 @@ Meshopt:             EXT_meshopt_compression
 
 The original editable scene remains `out/the_stack.blend`. The web asset is loaded by `web/index.html` through Three.js's `GLTFLoader` with `MeshoptDecoder`. The exporter supports `--profile static`, `--profile animated`, and `--profile architectural`; animated exports do not merge meshes. It also accepts `--compression draco`, `--compression meshopt`, `--compression none`, `--report`, `--no-merge-materials`, and `--preserve-materials`. LOD is intentionally not applied automatically because generic geometric decimation can damage glass, floors, instances, and animation semantics; runtime resolution and on-demand rendering are enabled in the viewer instead.
 
+## The Stack 2
+
+A second-generation rework of the same MVRDV *The Stack* study, built by
+`build_stack2.py` and kept alongside the first generation above. It shares the
+massing and the public escalator route but reworks the envelope and the program:
+
+- **One continuous curtain wall.** Every storey is the same 4 m, so all four
+  refuge belt trusses match, and the envelope reads floor by floor: a fine-mullion
+  apartment skin above, and a dense 270 Park Avenue-style office band (0.95 m
+  mullions, continuous glass with no blank spandrel, a slim transom 1 m above each
+  floor) below.
+- **Glazed void reveals.** The reveals of the two ventilation voids — both jambs
+  and the soffit — are dressed in the same apartment curtain-wall skin, so each
+  cut-out reads as a finished glazed recess and the exterior surface stays
+  unbroken. The long faces and the void deck stay open.
+- **Taller crown.** The upper void keeps its 220–280 m span, and the block above
+  it grows from two storeys to six, so the roof plate rises to 304 m and the tower
+  reaches 314.8 m over 76 floors.
+
+| Whole building | Apartment curtain wall |
+| --- | --- |
+| ![The Stack 2, whole building](docs/images/stack2-preview.png) | ![The Stack 2, apartment curtain wall](docs/images/stack2-facade.png) |
+
+| Apartment void (glazed reveal) | Refuge sky garden |
+| --- | --- |
+| ![The Stack 2, apartment void](docs/images/stack2-void.png) | ![The Stack 2, refuge sky garden](docs/images/stack2-refuge-garden.png) |
+
+| Retail base |
+| --- |
+| ![The Stack 2, retail base](docs/images/stack2-base.png) |
+
+Build, render the review views and validate it with:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python build_stack2.py
+blender --background --factory-startup --python-exit-code 1 --python build_stack2.py -- --views preview facade garden void base
+blender --background --factory-startup --python-exit-code 1 --python verify_stack2.py -- out/the_stack2.blend
+blender --background --factory-startup --python-exit-code 1 --python check_stack_zfight.py -- out/the_stack2.blend
+```
+
 ## Repository Structure
 
 ```text
 build_house.py       # Procedural generation of the residential towers and podium
 build_office.py      # Separate procedural office-tower study
+build_the_stack.py   # The Stack study, first generation
+build_stack2.py      # The Stack study, second generation
+verify_the_stack.py  # Validation for the first-generation Stack scene
+verify_stack2.py     # Validation for the Stack 2 scene
 materials.py         # Stone, glass, metal, lighting, and planting materials
 render_views.py      # Batch rendering of presentation views
 verify_house.py      # Geometry, facade-module, and scene validation
