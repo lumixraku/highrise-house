@@ -134,18 +134,26 @@ def main():
     width = scene.get("estimated_width_m", 115.0)
     depth = scene.get("estimated_depth_m", 40.0)
     facade_half = width / 2 + 0.30
-    # The facade cage grid, recomputed the way the generator lays it: square
-    # members on a ~FRAME_SPAN module, so the vents snap to whole cells.
-    frame_span, frame_square, frame_gap = 20.0, 2.4, 0.05
+    # The facade cage grid, recomputed the way the generator lays it: prongs on
+    # a ~FRAME_SPAN module across the face, rungs on the refuge truss lines plus
+    # one more group above the top truss, so every rung sits on a truss line and
+    # on a floor line.
+    frame_span, frame_square, frame_gap = 20.0, 1.5, 0.05
     frame_col_gap = frame_gap + 0.03
     x_bays = max(1, round(width / frame_span))
+    y_bays = max(1, round(depth / frame_span))
     grid_x = [-width / 2 + frame_square / 2
               + k * (width - frame_square) / x_bays
               for k in range(x_bays + 1)]
-    z_rows = max(1, round(model_height / frame_span))
-    grid_z = [frame_square / 2 + frame_gap
-              + k * (model_height - frame_square - 2 * frame_gap) / z_rows
-              for k in range(z_rows + 1)]
+    grid_z = [0.0] + [float(deck) for deck in refuge_decks]
+    grid_z.append(grid_z[-1] + 3 * frame_span)
+    facade_x_cells = [(z0, z1) for z0, z1 in zip(grid_z, grid_z[1:])
+                      if level_base <= (z0 + z1) / 2 <= level_apartment]
+    # Full-height edge columns, plus split interior columns (mall below, tower
+    # above) that leave the diamond bay clear.
+    column_lengths = (model_height - 2 * frame_col_gap,
+                      facade_x_cells[0][0] - frame_col_gap,
+                      model_height - facade_x_cells[-1][1] - frame_col_gap)
 
     def on_grid(line, lines):
         return any(abs(line - g) < 0.02 for g in lines)
@@ -347,29 +355,43 @@ def main():
                     for o in braces)),
         "outrigger trusses": count("Stack_Outrigger_Chord") == 32
         and count("Stack_Outrigger_Diag") == 32,
-        # The facade cage: chunky square columns and beams on the ~20 m module,
-        # flush with the glass on all four faces, so the tower reads as a grid.
+        # The facade cage: chunky square prongs and rungs, on the 40 m vertical
+        # module, flush with the glass on all four faces, so the tower reads as a
+        # grid of tall rectangles; every rung lands on a floor line. The office
+        # cells take diamonds instead, so only the edge columns run full height
+        # there; the interior ones are split out (mall below, tower above).
         "facade cage columns": (
-            count("Stack_Facade_Column")
-            == 2 * (x_bays + 1)
-            + 2 * (max(1, round(depth / frame_span)) + 1)
+            count("Stack_Facade_Column") == 4 * (x_bays + y_bays)
             and all(abs(o.dimensions.x - frame_square) < 0.01
                     and abs(o.dimensions.y - frame_square) < 0.01
-                    and abs(o.dimensions.z
-                            - (model_height - 2 * frame_col_gap)) < 0.05
+                    and any(abs(o.dimensions.z - z) < 0.15
+                            for z in column_lengths)
                     for o in objects("Stack_Facade_Column"))),
         "facade cage beams": (
-            count("Stack_Facade_Beam") == 4 * (z_rows + 1)
+            count("Stack_Facade_Beam") == 4 * len(grid_z)
             and all(abs(o.dimensions.z - frame_square) < 0.01
                     and (abs(o.dimensions.x - frame_square) < 0.01
                          or abs(o.dimensions.y - frame_square) < 0.01)
                     for o in objects("Stack_Facade_Beam"))),
+        "facade rungs land on floor lines": all(
+            abs(g) < 0.02 or any(abs(g - level) < 0.02 for level in storeys)
+            for g in grid_z),
         "facade cage is flush with the glass": all(
             bounds(o)[3] <= depth / 2 + 0.33
             and bounds(o)[2] >= -(depth / 2 + 0.33)
             and bounds(o)[1] <= width / 2 + 0.33
             and bounds(o)[0] >= -(width / 2 + 0.33)
             for o in objects("Stack_Facade_")),
+        # Each office cell carries a tall steel diamond (three across the long
+        # faces, one on the short), its vertices landing on the cell's trusses,
+        # so the two cells stack into one two-diamond band.
+        "facade office X-braces": (
+            count("_Facade_X")
+            == 8 * (x_bays // 2 + y_bays // 2) * len(facade_x_cells)
+            and all(min(z0 for z0, _ in facade_x_cells) - 0.6 < bounds(o)[4]
+                    and bounds(o)[5]
+                    < max(z1 for _, z1 in facade_x_cells) + 0.6
+                    for o in bpy.data.objects if "_Facade_X" in o.name)),
         "uniform X-braces": len({round(world_size(o)[2], 1)
                                  for o in braces}) == 1,
         "evenly spaced core braces": len(brace_centers) == 5
@@ -457,8 +479,7 @@ def main():
             top_of("Stack_Core_") or 0.0) <= model_height + 0.01,
         # Each refuge is a garden deck; every one carries the chunky chevron
         # belt truss spanning both storeys above the deck. Every belt truss foot
-        # sits on a facade cage beam line, so the truss frames the grid rather
-        # than straddling it.
+        # sits on a facade cage rung, so the trusses mark the cell boundaries.
         "refuge belt trusses": (
             scene.get("refuge_floors") == 2
             and scene.get("refuges") == 4
@@ -492,13 +513,13 @@ def main():
             count(f"{face}_Glass") > 0 for face in ("N", "S", "E", "W")),
         "two offset vents": scene.get("voids") == 2 and len(void_spans) == 2
         and void_spans[0][1] <= void_spans[1][0],
-        # Each vent is a whole number of facade grid cells with its edges on grid
-        # lines: one long-face bay wide (the ~18.8 m cell) by three beam rows tall.
+        # Each vent is one whole facade cell: one long-face bay wide (the ~19 m
+        # cell) by one 60 m truss group high, its edges on grid lines.
         "vents are whole grid cells": all(
             on_grid(x0, grid_x) and on_grid(x1, grid_x)
             and on_grid(z0, grid_z) and on_grid(z1, grid_z)
             and abs((x1 - x0) - (grid_x[3] - grid_x[2])) < 0.02
-            and abs((z1 - z0) - 3 * (grid_z[1] - grid_z[0])) < 0.02
+            and abs((z1 - z0) - (grid_z[2] - grid_z[1])) < 0.02
             for x0, x1, z0, z1 in void_spans),
         "vents are punched in the glass": all(
             not any(x0 < center(obj)[0] < x1 and z0 < center(obj)[2] < z1
