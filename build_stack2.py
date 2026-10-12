@@ -137,17 +137,15 @@ CORE_WIDTH = CORE_OUTER - CORE_INNER
 CORE_DEPTH, CORE_Y = 16.0, 0.0
 CORE_BRACE_W, CORE_BRACE_D = 3.0, 3.0              # chunky square steel members
 
-# Every X is identical and its height equals the gap to the next X, including
-# the gaps at the very bottom and top, so the points where the braces meet the
-# cores are evenly spaced down the core: five braces and six gaps make eleven
-# equal bands from the ground to the roof.
+# Every X is identical. Their height is the even band, but they are not spread
+# evenly: one sits on the vertical middle of each of the tower's five zones — the
+# mall, the two office zones and the two apartment zones — so the giant X reads
+# inside each belt-truss group instead of straddling the trusses. The zones are
+# the facade-cage cells, so CORE_BRACE_BAYS is built from the cage rungs below,
+# once the refuge constants are known.
 CORE_BRACE_COUNT = 5
 CORE_BRACE_BAND = LEVEL_ROOF / (2 * CORE_BRACE_COUNT + 1)
 CORE_BRACE_H = CORE_BRACE_BAND
-CORE_BRACE_BAYS = tuple(
-    (round((2 * i + 1) * CORE_BRACE_BAND, 3),
-     round((2 * i + 2) * CORE_BRACE_BAND, 3))
-    for i in range(CORE_BRACE_COUNT))
 
 # The public route climbs a central shaft between the cores. The shaft runs from
 # the top of the retail atrium to the roof, and every office and apartment plate
@@ -320,6 +318,14 @@ VIEW_NAMES = ("preview", "facade", "garden", "void", "base")
 FACADE_X_CELLS = tuple(
     (z0, z1) for z0, z1 in zip(facades_z_lines(), facades_z_lines()[1:])
     if LEVEL_BASE <= (z0 + z1) / 2 <= LEVEL_APARTMENT)
+
+# One giant core X per tower zone, each centred on its zone's vertical middle
+# (the zone is the height between two belt-truss rungs). The brace keeps the
+# even band height, so it reads inside the group rather than touching its edges.
+CORE_BRACE_BAYS = tuple(
+    (round((z0 + z1) / 2 - CORE_BRACE_H / 2, 3),
+     round((z0 + z1) / 2 + CORE_BRACE_H / 2, 3))
+    for z0, z1 in zip(facades_z_lines(), facades_z_lines()[1:]))
 
 
 # ---------------------------------------------------------------------------

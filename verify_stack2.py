@@ -394,11 +394,16 @@ def main():
                     for o in bpy.data.objects if "_Facade_X" in o.name)),
         "uniform X-braces": len({round(world_size(o)[2], 1)
                                  for o in braces}) == 1,
-        "evenly spaced core braces": len(brace_centers) == 5
-        and max(b - a for a, b in zip(brace_centers, brace_centers[1:]))
-        - min(b - a for a, b in zip(brace_centers, brace_centers[1:])) < 0.05
-        and brace_low > 5.0
-        and brace_high < model_height - 5.0,
+        # One giant X per tower zone, centred on each zone's vertical middle;
+        # a zone is the height between two belt-truss rungs (grid_z). The lowest
+        # (mall) brace dips toward the ground hall, so only a small margin is
+        # required at the base and the roof.
+        "core braces centred in the zones": len(brace_centers) == 5
+        and all(abs(c - (a + b) / 2) < 0.1
+                for c, (a, b) in zip(brace_centers,
+                                     zip(grid_z, grid_z[1:])))
+        and brace_low > 2.0
+        and brace_high < model_height - 2.0,
         # The mall ceiling is continuous bright rings; the offices and apartments
         # take the house panel grid; the open refuges take no ceiling lights at
         # all — their open-air gardens are lit by the track lamps instead.
