@@ -196,9 +196,10 @@ massing and the public escalator route but reworks the envelope and the program:
   and the soffit — are dressed in the same apartment curtain-wall skin, so each
   cut-out reads as a finished glazed recess and the exterior surface stays
   unbroken. The long faces and the void deck stay open.
-- **Taller crown.** The upper void keeps its 220–280 m span, and the block above
-  it grows from two storeys to six, so the roof plate rises to 304 m and the tower
-  reaches 314.8 m over 76 floors.
+- **Taller crown.** The two apartment groups run 15 storeys each, and the block
+  above the upper void grows from two storeys to six, so the roof plate sits at
+  288 m, the glass tops out at 298.8 m, and the 1.2 m frame cap brings the tower
+  to 300 m over 72 floors.
 
 | Whole building | Apartment curtain wall |
 | --- | --- |
