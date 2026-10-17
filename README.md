@@ -212,12 +212,11 @@ massing and the public escalator route but reworks the envelope and the program:
 | --- |
 | ![The Stack 2, retail base](docs/images/stack2-base.png) |
 
-Build, render the review views and validate it with:
+Build and render the review views with:
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 --python build_stack2.py
 blender --background --factory-startup --python-exit-code 1 --python build_stack2.py -- --views preview facade garden void base
-blender --background --factory-startup --python-exit-code 1 --python verify_stack2.py -- out/the_stack2.blend
 blender --background --factory-startup --python-exit-code 1 --python check_stack_zfight.py -- out/the_stack2.blend
 ```
 
@@ -229,7 +228,6 @@ build_office.py      # Separate procedural office-tower study
 build_the_stack.py   # The Stack study, first generation
 build_stack2.py      # The Stack study, second generation
 verify_the_stack.py  # Validation for the first-generation Stack scene
-verify_stack2.py     # Validation for the Stack 2 scene
 materials.py         # Stone, glass, metal, lighting, and planting materials
 render_views.py      # Batch rendering of presentation views
 verify_house.py      # Geometry, facade-module, and scene validation
