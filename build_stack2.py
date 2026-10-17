@@ -19,7 +19,8 @@ does not read too thin while both faces keep the 16 m clear group module
 height: every zone uses the same 4 m storey, so 12 mall floors, 24 office floors
 and 36 apartment floors put the top plate at 288 m; the glass tops out at
 298.8 m and the 1.2 m frame cap brings the tower to 300.0 m over 72 floors. The
-shared 4 m storey gives all four refuge plazas
+refuge truss bands separate the glazed floor groups and carry no facade frame,
+so every storey keeps its full 4 m. The shared 4 m storey gives all four refuge plazas
 the same two-storey = 8 m volume — a planted garden deck with a chunky
 Abeno-style chevron belt truss spanning both storeys above it.
 
@@ -84,23 +85,16 @@ LEVEL_APARTMENT = LEVEL_BASE + OFFICE_FLOORS * OFFICE_H
 LEVEL_ROOF = LEVEL_APARTMENT + APARTMENT_FLOORS * APARTMENT_H
 # The glazed crown runs on above the top plate; it is the one height that is not
 # a storey count, so the deck sits two-and-a-bit apartment storeys below the top.
-# The 1.2 m frame cap is extra height on top of the glass, not taken out of the
-# crown's storeys (client direction).
+# The 1.2 m frame cap is extra height on top of the glass (client direction).
 CROWN_H = 2.7 * APARTMENT_H
 GLASS_TOP = LEVEL_ROOF + CROWN_H
 HEIGHT = GLASS_TOP + FRAME_SQUARE
 
-# The facade cage module: chunky square members flush with the glass. They frame
-# every 16 m clear group, so the wide face reads as six groups and the short
-# face as 16 + 4 + 16. Vertically the rungs sit on the refuge truss lines and
-# the cage carries one more group above the top truss; a vertical group is the
-# belt-truss spacing (15 storeys = 60 m), which the storey program fixes, so it
-# does not follow the finer horizontal module. Every rung is a whole number of
-# storeys, so it lands on a floor line. Rungs and prongs share the same chunky
-# section; the frame is an independent overlay and takes no floor height.
-# The vertical group above the top refuge: the apartment zone runs in two
-# 15-storey (60 m) groups, so the cage's top cell spans 60 m.
-FRAME_GROUP_H = 15 * APARTMENT_H
+# The facade cage module: chunky square members flush with the glass, framing
+# every 16 m clear group. The horizontal frame exists only at the base and the
+# top cap; the refuge truss bands are their own horizontal separators and carry
+# no facade frame (client direction: the truss layer is the truss). The interior
+# columns run through the glazed floor groups only.
 FRAME_GAP = 0.05
 # Columns end a hair further off the top/bottom than the beams, so the two
 # families' end faces never share a plane at the building's ground or roof.
@@ -122,13 +116,12 @@ def facade_column_us(face):
 
 
 def facades_z_lines():
-    """Z positions of the facade beams: the ground line, a rung on each refuge's
-    truss line, and one more group above the top truss. Each cell therefore spans
-    the belt-truss group between two trusses, so the belt trusses sit exactly on
-    the rungs and every rung falls on a floor line."""
+    """Z positions of the vertical cell grid: the ground, the four refuge decks
+    and the crown base. These are the truss/group lines; they are not facade
+    frame beams."""
     lines = [0.0]
     lines.extend(float(deck) for deck in REFUGE_DECK_LEVELS)
-    lines.append(lines[-1] + FRAME_GROUP_H)
+    lines.append(float(LEVEL_APARTMENT + 30 * APARTMENT_H))
     return lines
 
 
@@ -281,10 +274,8 @@ def storey_levels():
 #
 # Each refuge is two storeys tall; the deck is its bottom plate and the ceiling
 # its top plate, both of which stay, so the truss and the garden read through the
-# continuous glass as one tall planted room. Every refuge deck starts on a
-# facade-cage beam so the garden and truss frame the grid instead of straddling
-# a beam: the office refuge on the 92 m beam, the apartment refuge on the 144 m
-# beam, and the mid-apartment refuge on the 204 m beam.
+# continuous glass as one tall planted room. The refuge truss band is the
+# horizontal separator of the facade; it carries no facade frame.
 REFUGE_MALL = (LEVEL_BASE - 2 * MALL_H, LEVEL_BASE)                      # 40-48
 REFUGE_OFFICE = (LEVEL_BASE + 11 * OFFICE_H, LEVEL_BASE + 13 * OFFICE_H)  # 92-100
 REFUGE_APARTMENT = (LEVEL_APARTMENT, LEVEL_APARTMENT + 2 * APARTMENT_H)  # 144-152
@@ -500,7 +491,7 @@ CORNER_EXT = FACADE - 0.03
 # by a thin transom, and fine vertical mullions on a ~2 m module so every pane
 # is a tall vertical rather than a square. The members sit just proud of the
 # shared glass and are clipped around the two vents.
-APARTMENT_SHORT_FRACTION = 0.25  # lower spandrel quarter of each storey
+APARTMENT_SHORT_FRACTION = 0.25  # spandrel blank per storey, split top/bottom
 APARTMENT_GLASS_MULLION = 1.9    # vertical mullion module
 APARTMENT_MEMBER_W = 0.14       # member width in the facade plane
 APARTMENT_MEMBER_T = 0.10       # panel depth (spandrels and sills)
@@ -884,14 +875,14 @@ def storey_curtain(mats, z_start, z_end, band, column_slots,
                    mullion=APARTMENT_GLASS_MULLION, spandrel=True,
                    low_bar=None):
     """One band of the envelope read floor by floor like the Abeno curtain
-    wall: a light spandrel across the upper quarter of every storey (the blank
-    at the ceiling), a thin dark sill along the floor line below the clear
-    vision glass, a transom at the spandrel's base and at the storey line, and
-    fine vertical mullions on a ~2 m module so every pane is a tall vertical of
-    the same width. With `column_slots` the panes keep clear of the cage
-    columns; without them the band is split in one even run. All of it sits just
-    proud of the shared glass and is clipped around the two vents; the refuge
-    gardens keep their own open glazing."""
+    wall: the light spandrel blank is split symmetrically between the top and
+    bottom of every storey (their heights add up to the same single blank), with
+    the clear vision glass between them, a transom at each spandrel edge and at
+    the storey line, and fine vertical mullions on a ~2 m module so every pane is
+    a tall vertical of the same width. With `column_slots` the panes keep clear
+    of the cage columns; without them the band is split in one even run. All of
+    it sits just proud of the shared glass and is clipped around the two vents;
+    the refuge gardens keep their own open glazing."""
     levels = [z_start] + [z for z in storey_levels()
                           if z_start < z <= z_end]
     zones = [span for span in OPEN_ZONES
@@ -915,19 +906,26 @@ def storey_curtain(mats, z_start, z_end, band, column_slots,
         clip = [(a - APARTMENT_HOLE_PAD, b + APARTMENT_HOLE_PAD,
                  c - APARTMENT_HOLE_PAD, d + APARTMENT_HOLE_PAD)
                 for a, b, c, d in holes]
-        # Spandrel at the ceiling, a dark sill on the floor, and the transoms
-        # that split them off the vision glass. Open zones are left bare.
+        # The spandrel blank is split evenly between the ceiling and the floor,
+        # so the two halves together are exactly the old single blank. Open
+        # zones are left bare.
         for a, b in zip(levels, levels[1:]):
             if any(a >= d and b <= c for d, c in zones):
                 continue
             parts = []
             if spandrel:
-                short = (b - a) * APARTMENT_SHORT_FRACTION
+                half = (b - a) * APARTMENT_SHORT_FRACTION / 2.0
                 parts.append(
-                    (b - short, b - 0.02, APARTMENT_SPANDREL_OUT,
+                    (b - half, b - 0.02, APARTMENT_SPANDREL_OUT,
                      APARTMENT_MEMBER_T, mats["spandrel"], "Spandrel", 0.02))
                 parts.append(
-                    (b - short - 0.05, b - short + 0.05, APARTMENT_GLASS_OUT,
+                    (a + 0.02, a + half, APARTMENT_SPANDREL_OUT,
+                     APARTMENT_MEMBER_T, mats["spandrel"], "Spandrel", 0.02))
+                parts.append(
+                    (b - half - 0.05, b - half + 0.05, APARTMENT_GLASS_OUT,
+                     APARTMENT_FRAME_D, mats["frame"], "Transom", 0.0))
+                parts.append(
+                    (a + half - 0.05, a + half + 0.05, APARTMENT_GLASS_OUT,
                      APARTMENT_FRAME_D, mats["frame"], "Transom", 0.0))
             parts.append((b - 0.05, b + 0.05, APARTMENT_GLASS_OUT,
                           APARTMENT_FRAME_D, mats["frame"], "Transom", 0.0))
@@ -935,8 +933,9 @@ def storey_curtain(mats, z_start, z_end, band, column_slots,
                 parts.append((a + low_bar - 0.05, a + low_bar + 0.05,
                               APARTMENT_GLASS_OUT, APARTMENT_FRAME_D,
                               mats["frame"], "Transom", 0.0))
-            parts.append((a + 0.02, a + 0.14, APARTMENT_SILL_OUT,
-                          APARTMENT_MEMBER_T, mats["dark"], "Sill", 0.02))
+            if not spandrel:
+                parts.append((a + 0.02, a + 0.14, APARTMENT_SILL_OUT,
+                              APARTMENT_MEMBER_T, mats["dark"], "Sill", 0.02))
             for z0, z1, outer, thick, mat, tag, pad in parts:
                 for x0, x1, c, d in rects_outside(u0, u1, z0, z1, clip):
                     panel(f"{face}_{band}_{tag}", face, x0, x1, c, d,
@@ -1196,16 +1195,27 @@ def facade_grid_columns(mats):
     faces, flush with the glass, one every ~FRAME_SPAN. The end columns are
     pulled in by half a section so no member overhangs the envelope. The long
     faces' office cells carry diagonals instead, so their interior columns are
-    left out; the mall below and the apartment band above keep their full
-    verticals (the apartments need clear glass for the views). The short faces
-    are the exception: their two middle prongs flank the 4 m glazed slot and run
-    unbroken from ground to crown, so each 16 m office diamond stays in its own
-    bay."""
+    left out; the apartment band above keeps its verticals only over the glazed
+    floor groups, stopping at the open refuge/truss bands so the white cage never
+    runs through the truss or garden. The short faces are the exception: their
+    two middle prongs flank the 4 m glazed slot and run unbroken from ground to
+    crown, so each 16 m office diamond stays in its own bay."""
     office_z0 = FACADE_X_CELLS[0][0]
     office_z1 = FACADE_X_CELLS[-1][1]
     # The cut ends sit a hair inside the cell lines, so the caps hide inside the
     # rungs instead of landing on the glass void edge at z1 (a coplanar plane).
     gap = 0.05
+    # The apartment/crown columns exist only between the open refuge bands.
+    upper_open = [(z0, z1) for z0, z1 in sorted(OPEN_ZONES)
+                  if z1 > office_z1 + FRAME_SQUARE]
+    upper_segments = []
+    start = None
+    for z0, z1 in upper_open:
+        if start is not None:
+            upper_segments.append((start, z0 - gap))
+        start = z1 + gap
+    if start is not None:
+        upper_segments.append((start, HEIGHT - FRAME_COL_GAP))
     for face in FACES:
         cols = facade_column_us(face)
         for u in cols:
@@ -1214,20 +1224,20 @@ def facade_grid_columns(mats):
                               HEIGHT - FRAME_COL_GAP, FRAME_SQUARE,
                               mats["steel"])
                 continue
-            for a, b in ((FRAME_COL_GAP, office_z0 - gap),
-                         (office_z1 + gap, HEIGHT - FRAME_COL_GAP)):
+            segments = [(FRAME_COL_GAP, office_z0 - gap)]
+            segments.extend(upper_segments)
+            for a, b in segments:
                 facade_column(face, u, a, b, FRAME_SQUARE, mats["steel"])
 
 
 def facade_grid_beams(mats):
-    """The horizontal rungs of the facade cage: on the 40 m module
-    (facades_z_lines), the same chunky section as the columns, so the cells
-    read as tall rectangles."""
+    """The only horizontal facade rung is the ground-line beam. The refuge truss
+    bands are their own horizontal separators and carry no facade beam; the top
+    ring closes the cage above the glass."""
     for face in FACES:
         span = WIDTH if face in ("N", "S") else DEPTH
-        for z in facades_z_lines():
-            facade_beam(face, z, -span / 2 + FRAME_GAP,
-                        span / 2 - FRAME_GAP, FRAME_SQUARE, mats["steel"])
+        facade_beam(face, FRAME_SQUARE / 2, -span / 2 + FRAME_GAP,
+                    span / 2 - FRAME_GAP, FRAME_SQUARE, mats["steel"])
 
 
 def facade_top_ring(mats):
@@ -1405,7 +1415,7 @@ def void_lining(mats):
     # edge. Every family gets its own pair, so crossing members never share a
     # face plane and the longest one still stays off the concrete.
     glass, spandrel = (0.065, glass_t), (0.075, APARTMENT_MEMBER_T)
-    sill, mullion = (0.055, APARTMENT_MEMBER_T), (0.045, 0.16)
+    mullion = (0.045, 0.16)
     transom = (0.035, 0.16)
 
     def put(name, loc, dims, mat):
@@ -1428,21 +1438,19 @@ def void_lining(mats):
                 put("Jamb_Mullion", (face(b + t / 2), u, mid),
                     (t, member_w, h - 0.08), mats["frame"])
             for a, b in zip(levels, levels[1:]):
-                split = b - (b - a) * APARTMENT_SHORT_FRACTION
-                lo, hi = max(split, jlo), min(b - 0.02, jhi)
-                if lo < hi:
-                    sb, st = spandrel
-                    put("Jamb_Spandrel", (face(sb + st / 2), 0, (lo + hi) / 2),
-                        (st, 2 * hy - 0.06, hi - lo), mats["spandrel"])
+                half = (b - a) * APARTMENT_SHORT_FRACTION / 2.0
+                sb, st = spandrel
+                for lo, hi in ((b - half, b - 0.02), (a + 0.02, a + half)):
+                    lo, hi = max(lo, jlo), min(hi, jhi)
+                    if lo < hi:
+                        put("Jamb_Spandrel",
+                            (face(sb + st / 2), 0, (lo + hi) / 2),
+                            (st, 2 * hy - 0.06, hi - lo), mats["spandrel"])
                 tb, tt = transom
-                for zb in (split, b):
+                for zb in (b - half, a + half, b):
                     if jlo <= zb <= jhi and zb not in (z0, z1):
                         put("Jamb_Transom", (face(tb + tt / 2), 0, zb),
                             (tt, 2 * hy - 0.03, 0.10), mats["frame"])
-                if jlo <= a + 0.08 <= jhi and a not in (z0, z1):
-                    lb, lt = sill
-                    put("Jamb_Sill", (face(lb + lt / 2), 0, a + 0.08),
-                        (lt, 2 * hy - 0.06, 0.12), mats["dark"])
         # Soffit glazing over the opening, on the same ~1.9 m grid. Its members
         # are inset from the jamb walls and offset half a bay, so no head face
         # lands on a jamb face plane where the two overlap.

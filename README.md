@@ -199,7 +199,8 @@ massing and the public escalator route but reworks the envelope and the program:
 - **Taller crown.** The two apartment groups run 15 storeys each, and the block
   above the upper void grows from two storeys to six, so the roof plate sits at
   288 m, the glass tops out at 298.8 m, and the 1.2 m frame cap brings the tower
-  to 300 m over 72 floors.
+  to 300 m over 72 floors. The refuge truss bands are the horizontal separators:
+  they carry no facade frame, so every 4 m storey stays clear.
 
 | Whole building | Apartment curtain wall |
 | --- | --- |
