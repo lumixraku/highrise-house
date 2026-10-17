@@ -3,18 +3,22 @@
 The first-generation generator is kept alongside it in build_the_stack.py. This
 generation reworks the envelope into one continuous curtain wall (a fine-mullion
 apartment skin, a 270 Park Avenue-style dense office band), glazes the reveals of
-the two ventilation voids, and carries four more apartment storeys above the
-upper void. The massing constants and the identity are otherwise shared.
+the two ventilation voids, carries four more apartment storeys above the upper
+void, and sets the wide face at six 16 m blocks plus the 1.2 m outer frame, so
+each core takes one block. The public escalator route and the identity are
+otherwise shared.
 
 The competition entry has no as-built drawings. The massing follows the
 orthographic elevation sheet in the MVRDV gallery: measured 321 px wide, 94 px
 deep and 992 px tall against the published 356.8 m height, giving a slender
-slab of about 115 x 34 m. The depth is deliberately widened to 40 m: the
-drawing's 34 m slab is implausibly thin for a 314.8 m tower's gravity and wind
-loads, and the client asked for a 40 m short side. The storey program sets the
+slab of about 115 x 34 m. The wide face is set to 97.2 m — six 16 m blocks
+plus the 1.2 m outer frame — so it reads as six bays and each core takes one of
+them. The short face is set to 37.2 m — two 16 m blocks with a 4 m glazed slot
+between them, plus the frame — so the slab does not read too thin while both
+faces keep the 16 m cage module (client direction). The storey program sets the
 height: every zone uses the same 4 m storey, so 12 mall floors, 28 office floors
-and 36 apartment floors put the top plate at 304 m and the glass runs on to the
-314.8 m top over 76 floors; the shared 4 m storey gives all four refuge plazas
+and 42 apartment floors put the top plate at 328 m and the glass runs on to the
+338.8 m top over 82 floors; the shared 4 m storey gives all four refuge plazas
 the same two-storey = 8 m volume — a planted garden deck with a chunky
 Abeno-style chevron belt truss spanning both storeys above it.
 
@@ -22,12 +26,12 @@ The identity of the building is the public route up its middle: two service
 cores run along the long axis and, between them, one continuous chain of
 escalators climbs the full height from the ground hall to the planted roof,
 stopping at four two-storey sky-garden plazas. The envelope is one continuous
-glass skin wrapped in a chunky square-section frame cage: prongs about 20 m
-apart, rungs 40 m apart so every rung lands on a floor line, flush with the
-glass, so at distance the tower reads as a stack of big frames. The only breaks
-in the glass are the two ventilation holes, one long-face bay wide with their
-edges on floor lines, so the interior reads as a vertical mall wrapped in a
-vertical forest rather than a tower-and-podium.
+glass skin wrapped in a chunky square-section frame cage: prongs about 16 m
+apart, rungs on the refuge truss lines so every rung lands on a floor line,
+flush with the glass, so at distance the tower reads as a stack of big frames.
+The only breaks in the glass are the two ventilation holes, one long-face bay
+wide with their edges on floor lines, so the interior reads as a vertical mall
+wrapped in a vertical forest rather than a tower-and-podium.
 """
 
 import argparse
@@ -49,9 +53,10 @@ BLEND_PATH = os.path.join(OUT_DIR, "the_stack2.blend")
 
 # Image-scaled envelope (see module docstring). The elevation sheet gives a
 # front width of 321 px and a side width of 94 px against a 992 px = 356.8 m
-# height, i.e. 115.5 x 33.8 m, so the width is 115 m; the depth is widened from
-# that reading to 40 m for load plausibility (client direction).
-WIDTH, DEPTH = 115.0, 40.0
+# height, i.e. 115.5 x 33.8 m. The wide face carries six 16 m blocks plus one
+# 1.2 m outer frame (97.2 m) and the short face two 16 m blocks with a 4 m
+# glazed slot between them plus the frame (37.2 m, client direction).
+WIDTH, DEPTH = 6 * 16.0 + 1.2, 2 * 16.0 + 4.0 + 1.2
 
 # Program and storey heights. Retail/mall at the base, offices through the
 # middle, apartments at the top. Every zone uses the same 4 m storey so every
@@ -63,7 +68,10 @@ WIDTH, DEPTH = 115.0, 40.0
 # storeys above it), so removing its former open storey drops the stack by one
 # storey per refuge.
 MALL_H, OFFICE_H, APARTMENT_H = 4.0, 4.0, 4.0
-MALL_FLOORS, OFFICE_FLOORS, APARTMENT_FLOORS = 12, 28, 36
+# The apartment zone runs in two 18-storey (72 m) groups above the office line,
+# then a six-storey crown zone to the top plate (client direction: widen each
+# apartment group from 60 m to 72 m).
+MALL_FLOORS, OFFICE_FLOORS, APARTMENT_FLOORS = 12, 28, 42
 LEVEL_BASE = MALL_FLOORS * MALL_H
 LEVEL_APARTMENT = LEVEL_BASE + OFFICE_FLOORS * OFFICE_H
 LEVEL_ROOF = LEVEL_APARTMENT + APARTMENT_FLOORS * APARTMENT_H
@@ -73,15 +81,22 @@ CROWN_H = 2.7 * APARTMENT_H
 HEIGHT = LEVEL_ROOF + CROWN_H
 
 # The facade cage module: chunky square members flush with the glass. Across
-# every face the prongs sit about FRAME_SPAN (~20 m) apart. Vertically the rungs
-# sit on the refuge truss lines, so each cell spans the three ~20 m squares
-# between two trusses: merging the original three-square groups into one tall
-# cell keeps the trusses on the rungs. Every rung is a whole number of storeys
-# (a whole 60 m group, or 40 m at the base), so it lands on a floor line. Rungs
-# and prongs share the same chunky section; the frame is an independent overlay
-# and takes no floor height.
-FRAME_SPAN = 20.0
-FRAME_SQUARE = 1.5
+# every face the prongs sit about FRAME_SPAN (~16 m) apart, so the wide face
+# splits into six blocks and the short face into two. Vertically the rungs sit
+# on the refuge truss lines and the cage carries one more group above the top
+# truss; a vertical group is the belt-truss spacing (15 storeys = 60 m), which the
+# storey program fixes, so it does not follow the finer horizontal module. Every
+# rung is a whole number of storeys, so it lands on a floor line. Rungs and prongs
+# share the same chunky section; the frame is an independent overlay and takes no
+# floor height.
+FRAME_SPAN = 16.0
+# The short faces put their two 16 m blocks either side of one narrow 4 m
+# glazed slot, so the slab keeps a usable depth without losing the module.
+SHORT_SLOT = 4.0
+# The vertical group above the top refuge: the apartment zone runs in two
+# 18-storey (72 m) groups, so the cage's top cell spans 72 m.
+FRAME_GROUP_H = 18 * APARTMENT_H
+FRAME_SQUARE = 1.2
 FRAME_GAP = 0.05
 # Columns end a hair further off the top/bottom than the beams, so the two
 # families' end faces never share a plane at the building's ground or roof.
@@ -91,9 +106,13 @@ FRAME_COL_GAP = FRAME_GAP + 0.03
 def facade_column_us(face):
     """u positions of the facade cage columns on a face: one every ~FRAME_SPAN,
     the end columns pulled in by half a section so no member overhangs the
-    envelope."""
+    envelope. The short faces are fixed by their two 16 m blocks and the 4 m
+    glazed slot between them, so its narrow bay keeps its own two columns."""
     span = WIDTH if face in ("N", "S") else DEPTH
     half = FRAME_SQUARE / 2
+    if face in ("E", "W"):
+        u0, u1 = -span / 2 + half, span / 2 - half
+        return [u0, -SHORT_SLOT / 2, SHORT_SLOT / 2, u1]
     bays = max(1, round(span / FRAME_SPAN))
     u0, u1 = -span / 2 + half, span / 2 - half
     step = (u1 - u0) / bays
@@ -107,31 +126,23 @@ def facades_x_lines():
 
 def facades_z_lines():
     """Z positions of the facade beams: the ground line, a rung on each refuge's
-    truss line, and one more 60 m group above the top truss. Each cell therefore
-    spans the three ~20 m squares between two trusses, so the belt trusses sit
-    exactly on the rungs and every rung falls on a floor line."""
+    truss line, and one more group above the top truss. Each cell therefore spans
+    the belt-truss group between two trusses, so the belt trusses sit exactly on
+    the rungs and every rung falls on a floor line."""
     lines = [0.0]
     lines.extend(float(deck) for deck in REFUGE_DECK_LEVELS)
-    lines.append(lines[-1] + 3 * FRAME_SPAN)
+    lines.append(lines[-1] + FRAME_GROUP_H)
     return lines
 
 
-# The fine vertical mullion module shared by the apartment band and the two
-# apartment voids, so every frame line in the upper band lines up.
-APARTMENT_MULLION_SPACING = 1.25
-
-# The apartment band's vertical mullion grid; each void snaps to it. The bay is
-# a whole number of mullion modules, so the void edges land on mullions and the
-# windows beside each opening stay whole rather than being cut in half.
-BAND_BAY = 12 * APARTMENT_MULLION_SPACING                    # 15.0 m
-
-# The two service cores run along the long axis. Each core keeps its outer face
-# where it is; only the two adjacent (inner) faces are thickened inward, stopped
-# a clear margin back from the apartment voids so the public route keeps its
-# full width.
-CORE_VOID_CLEAR = 5.0
-CORE_INNER = BAND_BAY + CORE_VOID_CLEAR
-CORE_OUTER = 43.5
+# The two service cores run along the long axis, one on each side of the public
+# shaft. Each core is one wide-face block long and occupies the second block in
+# from each end, so its inner face sits one block (16 m) off the centreline, the
+# clear span between the cores stays two blocks (32 m), and one block of ring is
+# left outside each core for the end halls and plant.
+CORE_BLOCK = (WIDTH - FRAME_SQUARE) / 6   # one wide-face block = 16.0 m
+CORE_INNER = CORE_BLOCK
+CORE_OUTER = 2 * CORE_BLOCK
 CORE_X = (CORE_INNER + CORE_OUTER) / 2
 CORE_WIDTH = CORE_OUTER - CORE_INNER
 CORE_DEPTH, CORE_Y = 16.0, 0.0
@@ -163,14 +174,16 @@ SPINE_CROSS_X, SPINE_CROSS_Y = 6.0, 3.4   # crisscross rectangle half-extents
 # apartment refuge deck to the mid refuge and on up toward the crown, with its
 # edges on floor lines. The lower vent brackets the apartment refuge, the upper
 # rises over the mid refuge.
-REFUGE_MID_OPEN = (LEVEL_APARTMENT + 15 * APARTMENT_H,
-                   LEVEL_APARTMENT + 17 * APARTMENT_H)          # 220-228
+REFUGE_MID_OPEN = (LEVEL_APARTMENT + 18 * APARTMENT_H,
+                   LEVEL_APARTMENT + 20 * APARTMENT_H)          # 232-240
 
 _GRID_X = facades_x_lines()
+_GRID_C = len(_GRID_X) // 2              # index of the centre column
 VOIDS = (
-    (_GRID_X[2], _GRID_X[3], LEVEL_APARTMENT, REFUGE_MID_OPEN[0]),
-    (_GRID_X[3], _GRID_X[4], REFUGE_MID_OPEN[0],
-     LEVEL_APARTMENT + 30 * APARTMENT_H),                       # 160-220-280
+    (_GRID_X[_GRID_C - 1], _GRID_X[_GRID_C], LEVEL_APARTMENT,
+     REFUGE_MID_OPEN[0]),
+    (_GRID_X[_GRID_C], _GRID_X[_GRID_C + 1], REFUGE_MID_OPEN[0],
+     LEVEL_APARTMENT + 36 * APARTMENT_H),                       # 160-232-304
 )
 
 # Abeno Harukas-style perimeter chevron trusses, used for the belt band of every
@@ -209,13 +222,13 @@ LEVEL_MALL_FIRST = MALL_GROUND_STOREYS * MALL_H
 
 # Escalator entries from the ground hall up to the suspended first mall plate:
 # each is a switchback of two one-storey flights at the real ~30-degree pitch
-# (each run about 9 m, one storey's worth), placed in the end halls so the hall
-# is reached from both sides without any run spanning the space.
+# (each run about 9 m, one storey's worth), placed in the end halls beyond the
+# cores so the hall is reached from both sides without any run spanning the space.
 ESCALATOR_ENTRIES = (
-    ((46.0, -9.0), (0.0, 1.0)),
-    ((50.0, 9.0), (0.0, -1.0)),
-    ((-46.0, 9.0), (0.0, -1.0)),
-    ((-50.0, -9.0), (0.0, 1.0)),
+    ((CORE_OUTER + 2.5, -9.0), (0.0, 1.0)),
+    ((CORE_OUTER + 6.5, 9.0), (0.0, -1.0)),
+    ((-CORE_OUTER - 2.5, 9.0), (0.0, -1.0)),
+    ((-CORE_OUTER - 6.5, -9.0), (0.0, 1.0)),
 )
 
 # Office and apartment ceiling lighting, following the house reference: a grid
@@ -279,7 +292,7 @@ def storey_levels():
 REFUGE_MALL = (LEVEL_BASE - 2 * MALL_H, LEVEL_BASE)                      # 40-48
 REFUGE_OFFICE = (LEVEL_BASE + 13 * OFFICE_H, LEVEL_BASE + 15 * OFFICE_H)  # 100-108
 REFUGE_APARTMENT = (LEVEL_APARTMENT, LEVEL_APARTMENT + 2 * APARTMENT_H)  # 160-168
-REFUGE_APARTMENT_MID = REFUGE_MID_OPEN                                   # 220-228
+REFUGE_APARTMENT_MID = REFUGE_MID_OPEN                                   # 232-240
 REFUGES = (REFUGE_MALL, REFUGE_OFFICE, REFUGE_APARTMENT,
            REFUGE_APARTMENT_MID)
 # One storey height per refuge, and two storeys per refuge.
@@ -944,7 +957,7 @@ def storey_curtain(mats, z_start, z_end, band, column_slots,
         for za, zb in glazed:
             za, zb = za + 0.1, zb - 0.1
             for lo, hi in runs:
-                n = max(1, round((hi - lo) / mullion))
+                n = max(1, math.ceil((hi - lo) / mullion))
                 for k in range(1, n):
                     u = lo + k * (hi - lo) / n
                     for a, b, c, d in rects_outside(
@@ -1191,10 +1204,13 @@ def facade_beam(face, z, u0, u1, side, mat, out=FRAME_BEAM_OUT):
 def facade_grid_columns(mats):
     """The vertical prongs of the facade cage: chunky square columns on all four
     faces, flush with the glass, one every ~FRAME_SPAN. The end columns are
-    pulled in by half a section so no member overhangs the envelope. The office
-    cells carry diagonals instead, so their columns are left out; the mall below
-    and the apartment band above keep their full verticals (the apartments need
-    clear glass for the views)."""
+    pulled in by half a section so no member overhangs the envelope. The long
+    faces' office cells carry diagonals instead, so their interior columns are
+    left out; the mall below and the apartment band above keep their full
+    verticals (the apartments need clear glass for the views). The short faces
+    are the exception: their two middle prongs flank the 4 m glazed slot and run
+    unbroken from ground to crown, so each 16 m office diamond stays in its own
+    bay."""
     office_z0 = FACADE_X_CELLS[0][0]
     office_z1 = FACADE_X_CELLS[-1][1]
     # The cut ends sit a hair inside the cell lines, so the caps hide inside the
@@ -1203,7 +1219,7 @@ def facade_grid_columns(mats):
     for face in FACES:
         cols = facade_column_us(face)
         for u in cols:
-            if u in (cols[0], cols[-1]):
+            if face in ("E", "W") or u in (cols[0], cols[-1]):
                 facade_column(face, u, FRAME_COL_GAP,
                               HEIGHT - FRAME_COL_GAP, FRAME_SQUARE,
                               mats["steel"])
@@ -1237,15 +1253,37 @@ def facade_top_ring(mats):
 
 def facade_x_braces(mats):
     """A tall steel diamond filling each office cell: three across on the long
-    faces (one on the short), each spanning two ~20 m bays wide and its cell's
-    full height so the top and bottom vertices land on the refuge trusses. The
-    two cells stack into one two-diamond band with no gaps. Adjacent diamonds
-    share their side vertices at the columns."""
+    faces, each spanning its cell's full height so the top and bottom vertices
+    land on the refuge trusses. The two cells stack into one two-diamond band
+    with no gaps. Adjacent diamonds share their side vertices at the columns.
+    On a short face the diamond reads as one full-face diamond cut open by the
+    two unbroken middle prongs: the 4 m glazed slot between them keeps no
+    brace, and each 16 m block keeps only its outer half — two diagonals
+    meeting at the end column's mid-height."""
     depth = X_BRACE_OUT - X_BRACE_W / 2
     for face in FACES:
         cols = facade_column_us(face)
         for z0, z1 in FACADE_X_CELLS:
             zc = (z0 + z1) / 2
+            if face in ("E", "W"):
+                # One full-face diamond, cut open by the two unbroken middle
+                # prongs: the 4 m slot keeps no brace, and each 16 m block
+                # keeps half a diamond. Its two diagonals run from the end
+                # column's mid-height to the middle prong at the cell's top
+                # and bottom lines, so the half fills the full cell height and
+                # matches the long-face diamonds' height.
+                left, right = cols[0], cols[-1]
+                cut = SHORT_SLOT / 2
+                for (ua, za), (ub, zb) in (
+                        ((left, zc), (-cut, z1)),
+                        ((left, zc), (-cut, z0)),
+                        ((right, zc), (cut, z1)),
+                        ((right, zc), (cut, z0))):
+                    brace(f"{face}_Facade_X",
+                          face_point(face, ua, za, depth),
+                          face_point(face, ub, zb, depth),
+                          X_BRACE_W, X_BRACE_W, mats["steel"])
+                continue
             for i in range(0, len(cols) - 2, 2):
                 bottom = face_point(face, cols[i + 1], z0, depth)
                 left = face_point(face, cols[i], zc, depth)
@@ -1366,13 +1404,13 @@ def void_lining(mats):
     """Dress the reveal of each apartment vent void — both X-facing jamb walls
     and the soffit over the opening — in the same residential curtain wall as the
     exterior apartment band: vision glass behind a light spandrel on the shared
-    ~1.3 m mullion module, with a mullion at every module, a transom at each
+    ~1.9 m mullion module, with a mullion at every module, a transom at each
     storey line and at the spandrel base, and a dark sill on the floor line. The
     lining sits just inside the opening, its back edge clear of the plate edges,
     so no member reaches into the concrete. The long N/S faces stay open as the
     ventilation openings, and the void floor stays the deck."""
     hy = DEPTH / 2 + FACADE - GLASS_BACK - GLASS_T
-    module, member_w, glass_t = 4.0 / 3.0, APARTMENT_MEMBER_W, GLASS_D
+    module, member_w, glass_t = APARTMENT_GLASS_MULLION, APARTMENT_MEMBER_W, GLASS_D
     # (back, depth) per member family, measured into the void from the plate
     # edge. Every family gets its own pair, so crossing members never share a
     # face plane and the longest one still stays off the concrete.
@@ -1415,7 +1453,7 @@ def void_lining(mats):
                     lb, lt = sill
                     put("Jamb_Sill", (face(lb + lt / 2), 0, a + 0.08),
                         (lt, 2 * hy - 0.06, 0.12), mats["dark"])
-        # Soffit glazing over the opening, on the same ~1.3 m grid. Its members
+        # Soffit glazing over the opening, on the same ~1.9 m grid. Its members
         # are inset from the jamb walls and offset half a bay, so no head face
         # lands on a jamb face plane where the two overlap.
         bay = x1 - x0 - 0.06
@@ -1612,8 +1650,8 @@ def setup_scene(args, mats):
     scene["refuge_open_heights_m"] = ""
     scene["depth_override_m"] = DEPTH
     scene["depth_override_note"] = (
-        "Elevation sheet reads 34 m; depth widened to 40 m for load "
-        "plausibility (client direction).")
+        "Elevation sheet reads 34 m; depth set to two 16 m blocks with a 4 m "
+        "glazed slot plus the 1.2 m frame (37.2 m, client direction).")
     scene["voids"] = len(VOIDS)
     scene["void_width_m"] = VOIDS[0][1] - VOIDS[0][0]
     scene["void_heights_m"] = ",".join(
@@ -1711,8 +1749,7 @@ def build(args):
     storey_curtain(mats, 0.0, LEVEL_BASE, "Mall", True)
     storey_curtain(mats, LEVEL_BASE, LEVEL_APARTMENT, "Office", False,
                    mullion=0.95, spandrel=False, low_bar=1.0)
-    storey_curtain(mats, LEVEL_APARTMENT, LEVEL_ROOF, "Apartment", True,
-                   mullion=4.0 / 3.0)
+    storey_curtain(mats, LEVEL_APARTMENT, LEVEL_ROOF, "Apartment", True)
     refuge_belt_trusses(mats)
     refuge_gardens(mats)
     band_roof(mats)
