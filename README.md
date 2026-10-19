@@ -222,6 +222,76 @@ blender --background --factory-startup --python-exit-code 1 --python build_stack
 blender --background --factory-startup --python-exit-code 1 --python check_stack_zfight.py -- out/the_stack2.blend
 ```
 
+## The Stack 3
+
+A third-generation study of the same MVRDV *The Stack* proposal, built by
+`build_stack3.py`. Where the first two generations read the tower as a glass
+slab in a chunky frame cage, this one goes back to the published elevation and
+section sheets and models what gives the building its identity: a vertical
+stack of neighbourhoods, each with its own facade language.
+
+The envelope follows the client direction for this generation: a little over
+100 m wide and only 36 m deep, i.e. a very flat slab. The model uses a 108 x 36 m
+plan; the crown was then dropped at the client's request, so the stack stops at
+the apartment band and the roof is completely flat at 334 m (335.6 m to the
+parapet). That is a 3.09 : 1 wide elevation - exactly the ratio of the published
+orthographic elevation sheet (321 : 992 px) - while keeping the 36 m depth.
+
+Three bands, bottom to top, each a different facade system, with metal cornices
+as the "stack" lines between them. Below the apartments the storey is 5 m, so the
+lower block carries 38 floors in that height; the apartments keep their 4 m
+module and run 28 floors.
+
+- **Lattice, 0-190 m.** The whole lower block is one facade: a bold external frame
+  three bays wide by three tiers tall, with an X brace in every cell and glass
+  behind it - three crosses per row, three rows, after the reference tower the
+  client pointed at. A warm lit hall sits behind the lower part, cool floors
+  above; one ceiling strip per 5 m storey.
+- **Plaza, 190-220 m.** A planted arcade of branching tree columns.
+- **Apartments, 220-334 m.** A semi-transparent glazed skin drawn as a staggered
+  block grid: every bay is one 4 m storey of glass, laid in a half-bond running
+  course, and the external frame around the bays is the window pattern itself -
+  there are no punched openings. Three near-identical glass tints and a lit
+  ceiling in every bay keep it reading as apartments at dusk - no wall behind the
+  glass. A two-metre metal fascia closes the grid at the roof.
+- **Flat roof, 334 m.** The tower stops at the apartment band: one deck slab and
+  a 1.2 m parapet, nothing above it.
+
+The shallow plan is what makes the strata legible: with only 36 m of depth the
+long faces stay almost flat and the bands read as continuous horizontal ribbons,
+while the short faces show the same sequence compressed into a narrow slice. Two
+service cores stand on the long axis, so the glazed bands read as occupied floors
+rather than a hollow box. The review renders use a dusk sky and a low sun: the
+published model photography is shot on a dark ground, and a dark sky is also what
+keeps the glazing reading as glass instead of as a mirror of a bright overcast
+dome.
+
+| Whole building | Elevation |
+| --- | --- |
+| ![The Stack 3, whole building](docs/images/stack3-preview.png) | ![The Stack 3, elevation](docs/images/stack3-elevation.png) |
+
+| Retail base | Glazed apartment bays |
+| --- | --- |
+| ![The Stack 3, retail base](docs/images/stack3-base.png) | ![The Stack 3, brick apartments](docs/images/stack3-detail.png) |
+
+| Narrow face |
+| --- |
+| ![The Stack 3, narrow face](docs/images/stack3-side.png) |
+
+Build, render and verify with:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python build_stack3.py
+blender --background --factory-startup --python-exit-code 1 --python build_stack3.py -- --views preview elevation base detail side
+blender --background --factory-startup --python-exit-code 1 --python verify_stack3.py -- out/the_stack3.blend
+```
+
+The saved `.blend` opens with an exterior viewport view baked in: about 200 m
+out from the slab, 3/4 angle, Material Preview, with the viewport lens left at
+its normal 50 mm (no wide-angle distortion). From 200 m a 350 m tower does not
+fit in frame; `Home` frames the whole model, and `Numpad 0` shows the separate
+whole-building render camera.
+
 ## Repository Structure
 
 ```text
@@ -229,7 +299,9 @@ build_house.py       # Procedural generation of the residential towers and podiu
 build_office.py      # Separate procedural office-tower study
 build_the_stack.py   # The Stack study, first generation
 build_stack2.py      # The Stack study, second generation
+build_stack3.py      # The Stack study, third generation (stacked bands)
 verify_the_stack.py  # Validation for the first-generation Stack scene
+verify_stack3.py     # Envelope, band and mesh checks for the third generation
 materials.py         # Stone, glass, metal, lighting, and planting materials
 render_views.py      # Batch rendering of presentation views
 verify_house.py      # Geometry, facade-module, and scene validation
