@@ -324,6 +324,8 @@ def build_materials(night=False):
         "slab": materials.make_concrete("Stack3_Slab", color=(0.34, 0.35, 0.35)),
         "slab_dark": materials.make_concrete("Stack3_Slab_Dark",
                                              color=(0.040, 0.042, 0.045)),
+        "panel_dark": materials.make_wall("Stack3_Panel_Dark",
+                                          color=(0.085, 0.088, 0.092)),
         "core": materials.make_concrete("Stack3_Core", color=(0.10, 0.11, 0.12)),
         "ground": make_unlit("Stack3_Ground", (0.055, 0.055, 0.058)),
         "plaza": make_unlit("Stack3_Plaza", (0.085, 0.085, 0.082)),
@@ -473,7 +475,7 @@ def build_lattice(mats, cols):
         du = 2 * hw / n
         dz = ((z1 - z0) - 2 * inset) / tiers
         for i in range(n):
-            for j in range(tiers):
+            for j in range(2, tiers):
                 u0 = -hw + i * du
                 u1 = u0 + du
                 za = z0 + inset + j * dz
@@ -483,6 +485,18 @@ def build_lattice(mats, cols):
                 brace.bar(fp(face, u0, zb, -0.05), fp(face, u1, za, -0.05),
                           0.66, 0.95)
     brace.finish()
+
+    # The bottom two tiers carry no X: each cell becomes a big thick-framed
+    # square/rectangle of glass, two rows of six, closing the base.
+    rails = Part("Lattice_Base_Rails", mats["silver"], col)
+    for face in FACES:
+        half = face_half(face)
+        rail_h = 0.62
+        for j in (0, 1, 2):
+            z = z0 + inset + j * ((z1 - z0) - 2 * inset) / tiers
+            rails.face_box(face, -half, half, z - rail_h, z + rail_h,
+                           -0.34, 0.60)
+    rails.finish()
 
     # Warm hall below, cool floors above; one strip per 5 m storey.
     warm = Part("Lattice_Lights_Warm", mats["light_glow"], col)

@@ -243,8 +243,9 @@ lower block carries 38 floors in that height; the apartments keep their 4 m
 module and run 28 floors.
 
 - **Lattice, 0-190 m.** The whole lower block is one facade: an external frame six
-  bays wide by six tiers tall, with an X brace in every cell - six crosses per
-  row, six rows. The frame carries vertical posts only: no added horizontal
+  bays wide by six tiers tall. The bottom two tiers are framed cells - six big
+  glazed squares per row, closed by thick members, no X - and the upper four
+  tiers carry an X brace in every cell. The frame carries vertical posts only: no added horizontal
   band, the floor line is the dark slab edge itself; every floor plate in the
   model is near-black. Behind it is one dark glass skin with no visible pane
   joints at all - no mullions between the panes - and a soft warm ceiling strip

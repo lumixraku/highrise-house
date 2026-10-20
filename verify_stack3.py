@@ -93,9 +93,13 @@ def main():
         and abs(z_span("Lattice_Glass")[1] - 189.8) < 0.05,
         "lattice carries a frame and X braces": (
             present("Lattice_Frame") and present("Lattice_Braces")),
-        "lattice braces span the full band": (
-            0.20 <= z_span("Lattice_Braces")[0] <= 0.60
+        "lattice braces start above the solid base panels": (
+            63.0 <= z_span("Lattice_Braces")[0] <= 64.0
             and 189.3 <= z_span("Lattice_Braces")[1] <= 189.8),
+        "bottom two tiers are framed cells, not X": (
+            present("Lattice_Base_Rails")
+            and abs(z_span("Lattice_Base_Rails")[0] - 0.0) < 0.05
+            and abs(z_span("Lattice_Base_Rails")[1] - 64.2) < 0.6),
         "no parking band remains": not any(
             n.startswith("Stack3_Parking") for n in names),
         "no fin band or old base remains": not any(
