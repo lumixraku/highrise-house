@@ -59,7 +59,7 @@ PREFIX = "Stack3_"
 # ---------------------------------------------------------------------------
 # Frozen envelope and program
 # ---------------------------------------------------------------------------
-ROOF = 302.0              # flat roof deck; the stepped crown is gone
+ROOF = 294.0              # flat roof deck; the stepped crown is gone
 PARAPET_H = 1.2
 HEIGHT = ROOF + 0.4 + PARAPET_H    # 335.6 to the top of the parapet
 WIDTH = 108.0
@@ -72,14 +72,14 @@ STOREY_LOW = 5.0        # base / diagrid / plaza storey: 5 m, fewer floors
 
 def floor_levels():
     """Floor plates: 5 m storeys below the apartments, 4 m within them."""
-    return ([z for z in range(5, 186, 5)]
-            + [z for z in range(188, 301, 4)])
+    return ([z for z in range(5, 168, 5)]
+            + [z for z in range(168, 293, 4)])
 BAY = 3.6               # facade mullion module on the glazed bands
 
 BANDS = (
-    ("Lattice", 0.0, 158.0),
-    ("Plaza", 158.0, 188.0),
-    ("Apartments", 188.0, 302.0),
+    ("Lattice", 0.0, 138.0),
+    ("Plaza", 138.0, 168.0),
+    ("Apartments", 168.0, 294.0),
 )
 BAND = {name: (z0, z1) for name, z0, z1 in BANDS}
 
@@ -435,19 +435,45 @@ def build_cornices(mats, cols):
 # ---------------------------------------------------------------------------
 # Band 1: one big X lattice over the whole lower block
 # ---------------------------------------------------------------------------
-def build_lattice(mats, cols, rng):
-    """The lower 190 m is one facade: a bold external frame three bays wide by
-    three tiers tall, with an X brace in every cell and glass behind it.
+def office_frames(mats, col, prefix, z0, z1):
+    """Stack 2's office curtain wall: 140 x 600 mullions on a 0.95 m module, a
+    transom on every floor and a second one a metre above, plus the dark sill."""
+    mull = Part(prefix + "_Mullions", mats["silver"], col)
+    trans = Part(prefix + "_Transoms", mats["silver"], col)
+    sill = Part(prefix + "_Sills", mats["slate"], col)
+    for face in FACES:
+        half = face_half(face)
+        n = max(8, int(round(2 * half / 0.95)))
+        step = 2 * half / n
+        for i in range(n + 1):
+            u = -half + i * step
+            mull.face_box(face, u - 0.07, u + 0.07, z0, z1, -0.60, 0.60)
+        floors = [lev for lev in floor_levels() if z0 - 0.5 <= lev <= z1]
+        if not floors or floors[0] > z0 + 0.5:
+            floors = [z0] + floors
+        for a, b in zip(floors, floors[1:]):
+            trans.face_box(face, -half, half, b - 0.05, b + 0.05, -0.60, 0.60)
+            if a + 1.05 < b:
+                trans.face_box(face, -half, half, a + 0.95, a + 1.05,
+                               -0.60, 0.60)
+            sill.face_box(face, -half, half, a + 0.02, a + 0.14, -0.10, 0.10)
+    mull.finish()
+    trans.finish()
+    sill.finish()
 
-    This follows the reference tower the client pointed at - three crosses per
-    row, three rows - and replaces the earlier glazed base plus diagrid split.
-    """
+
+def build_lattice(mats, cols, rng):
+    """The lower block: a big external frame, two mall tiers of very large glass
+    at the foot and three tiers of X bracing above, with Stack 2's office
+    curtain wall behind the braced part."""
     z0, z1 = BAND["Lattice"]
     col = cols["Lattice"]
-    bays, tiers = 6, 5
+    bays, tiers, base_tiers = 6, 5, 2
     inset = 0.62
-    tier_h = (z1 - z0) / tiers
-    base_top = z0 + inset + 2 * ((z1 - z0) - 2 * inset) / tiers
+    base_tier = 21.35                     # mall tiers: two floors shorter
+    base_top = z0 + inset + base_tiers * base_tier
+    x_tier = ((z1 - z0) - 2 * inset - base_tiers * base_tier) / (
+        tiers - base_tiers)
 
     glass = Part("Lattice_Glass", mats["glass_deep"], col)
     for face in FACES:
@@ -455,51 +481,14 @@ def build_lattice(mats, cols, rng):
         glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.12, 0.12)
     glass.finish()
 
-    # The window frame, straight from Stack 2's office curtain wall: mullions
-    # 140 mm on the face by 600 mm deep on a 0.95 m module, a 100 mm transom at
-    # every floor and a second one 1 m above it, plus a dark sill at the floor.
-    mull = Part("Lattice_Mullions", mats["silver"], col)
-    for face in FACES:
-        half = face_half(face)
-        n = max(8, int(round(2 * half / 0.95)))
-        step = 2 * half / n
-        for i in range(n + 1):
-            u = -half + i * step
-            mull.face_box(face, u - 0.07, u + 0.07, base_top, z1, -0.60, 0.60)
-    mull.finish()
+    # Office window frame above the mall only.
+    office_frames(mats, col, "Lattice", base_top, z1)
 
-    trans = Part("Lattice_Transoms", mats["silver"], col)
-    sill = Part("Lattice_Sills", mats["slate"], col)
-    for face in FACES:
-        half = face_half(face)
-        floors = [lev for lev in floor_levels()
-                  if base_top - 0.5 <= lev <= z1]
-        if not floors or floors[0] > base_top + 0.5:
-            floors = [base_top] + floors
-        for a, b in zip(floors, floors[1:]):
-            # storey-line transom, straddling the floor plate at its top
-            trans.face_box(face, -half, half, b - 0.05, b + 0.05,
-                           -0.60, 0.60)
-            # the low bar a metre above the floor
-            if a + 1.05 < b:
-                trans.face_box(face, -half, half, a + 0.95, a + 1.05,
-                               -0.60, 0.60)
-            # dark sill at the foot of the storey
-            sill.face_box(face, -half, half, a + 0.02, a + 0.14,
-                          -0.10, 0.10)
-    trans.finish()
-    sill.finish()
-
-    # A real curtain wall behind the big frame: narrow vertical panes between
-    # thin mullions, with a white spandrel band on every floor - the office
-    # glazing in the reference the client sent.
-    # The floor line is the slab edge itself - no added white band.
     band = Part("Lattice_Slab_Edges", mats["slate"], col)
     for face in FACES:
         half = face_half(face)
-        base_top = z0 + inset + 2 * ((z1 - z0) - 2 * inset) / tiers
         for z in [0.0] + [lev for lev in floor_levels()
-                          if lev < base_top - 0.5]:
+                          if 0.0 < lev < base_top - 0.5]:
             lo = 0.0 if z <= 0.0 else z - 0.32
             hi = 0.40 if z <= 0.0 else z + 0.08
             band.face_box(face, -half, half, lo, hi, -0.56, 0.26)
@@ -510,11 +499,14 @@ def build_lattice(mats, cols, rng):
         half = face_half(face)
         hw = half - inset
         n = bays if face in LONG_FACES else 2
-        base_top = z0 + inset + 2 * ((z1 - z0) - 2 * inset) / tiers
         for i in range(n + 1):
             u = -hw + i * 2 * hw / n
             top = z1 if i in (0, n) else base_top
             frame.face_box(face, u - inset, u + inset, z0, top, -0.34, 0.60)
+        for j in range(base_tiers + 1):
+            z = z0 + inset + j * base_tier
+            frame.face_box(face, -half, half, z - inset, z + inset,
+                           -0.34, 0.60)
     frame.finish()
 
     brace = Part("Lattice_Braces", mats["silver"], col)
@@ -523,27 +515,26 @@ def build_lattice(mats, cols, rng):
         hw = half - inset
         n = bays if face in LONG_FACES else 2
         du = 2 * hw / n
-        dz = ((z1 - z0) - 2 * inset) / tiers
         for i in range(n):
-            for j in range(2, tiers):
+            for j in range(tiers - base_tiers):
                 u0 = -hw + i * du
                 u1 = u0 + du
-                za = z0 + inset + j * dz
-                zb = za + dz
+                za = base_top + j * x_tier
+                zb = za + x_tier
                 brace.bar(fp(face, u0, za, -0.05), fp(face, u1, zb, -0.05),
                           0.66, 0.95)
                 brace.bar(fp(face, u0, zb, -0.05), fp(face, u1, za, -0.05),
                           0.66, 0.95)
     brace.finish()
 
-    # The bottom two tiers carry no X: each cell becomes a big thick-framed
-    # square/rectangle of glass, two rows of six, closing the base.
+    # The bottom two tiers carry no X: each cell is a big thick-framed pane of
+    # glass, two rows of six, closing the mall.
     rails = Part("Lattice_Base_Rails", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
         rail_h = 0.62
-        for j in (0, 1, 2):
-            z = z0 + inset + j * ((z1 - z0) - 2 * inset) / tiers
+        for j in range(base_tiers + 1):
+            z = z0 + inset + j * base_tier
             rails.face_box(face, -half, half, z - rail_h, z + rail_h,
                            -0.34, 0.60)
     rails.finish()
@@ -730,7 +721,9 @@ def build_apartments(mats, cols, rng):
     col = cols["Apartments"]
     attic = 2.0
     top = z1 - attic
-    courses = int(round((top - z0) / BLOCK_H))
+    # The top three floors are glazed like the office band, not the block grid.
+    office_top = top - 3 * BLOCK_H
+    courses = int(round((office_top - z0) / BLOCK_H))
     tones = ("pane_a", "pane_b", "pane_c")
 
     for face in FACES:
@@ -771,6 +764,15 @@ def build_apartments(mats, cols, rng):
         frame.finish()
         cool.finish()
         warm.finish()
+
+    # The top three floors: continuous glass with the office window frame.
+    cap_glass = Part("Apartment_Office_Glass", mats["glass"], col)
+    for face in FACES:
+        half = face_half(face)
+        cap_glass.face_box(face, -half, half, office_top + 0.1, top - 0.1,
+                           -0.12, 0.12)
+    cap_glass.finish()
+    office_frames(mats, col, "Apartment_Office", office_top, top)
 
     # A two-metre metal fascia closes the grid at the roof.
     cap = Part("Apartment_Topband", mats["mesh"], col)
