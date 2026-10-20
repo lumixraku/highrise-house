@@ -245,9 +245,9 @@ module and run 28 floors.
 - **Lattice, 0-190 m.** The whole lower block is one facade: an external frame six
   bays wide by six tiers tall, with an X brace in every cell - six crosses per
   row, six rows. The frame carries vertical posts only: no added horizontal
-  band, the floor line is the slab edge itself. Behind it sits a vertical curtain
-  wall of narrow panes between 1.6 m mullions, a warm lit hall behind the lower
-  floors and cool floors above.
+  band, the floor line is the slab edge itself. Behind it is one dark glass skin
+  with no visible pane joints at all - no mullions between the panes - and a warm
+  lit hall behind the lower floors, cool floors above.
 - **Plaza, 190-220 m.** A planted arcade of branching tree columns.
 - **Apartments, 220-334 m.** A semi-transparent glazed skin drawn as a staggered
   block grid: every bay is one 4 m storey of glass, laid in a half-bond running

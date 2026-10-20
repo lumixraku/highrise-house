@@ -297,6 +297,8 @@ def build_materials(night=False):
     return {
         "glass": materials.make_glass(
             "Stack3_Glass", engine="BLENDER_EEVEE", tint=(0.26, 0.33, 0.36)),
+        "glass_deep": materials.make_glass(
+            "Stack3_Glass_Deep", engine="BLENDER_EEVEE", tint=(0.085, 0.100, 0.110)),
         "glass_warm": materials.make_glass(
             "Stack3_Glass_Warm", engine="BLENDER_EEVEE",
             tint=(0.34, 0.34, 0.30)),
@@ -429,7 +431,7 @@ def build_lattice(mats, cols):
     bays, tiers = 6, 6
     tier_h = (z1 - z0) / tiers
 
-    glass = Part("Lattice_Glass", mats["glass"], col)
+    glass = Part("Lattice_Glass", mats["glass_deep"], col)
     for face in FACES:
         half = face_half(face)
         glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.55, 0.14)
@@ -438,18 +440,8 @@ def build_lattice(mats, cols):
     # A real curtain wall behind the big frame: narrow vertical panes between
     # thin mullions, with a white spandrel band on every floor - the office
     # glazing in the reference the client sent.
-    mull = Part("Lattice_Mullions", mats["silver"], col)
-    for face in FACES:
-        half = face_half(face)
-        n = max(8, int(round(2 * half / 1.6)))
-        step = 2 * half / n
-        for i in range(n + 1):
-            u = -half + i * step
-            mull.face_box(face, u - 0.055, u + 0.055, z0, z1, -0.40, 0.13)
-    mull.finish()
-
     # The floor line is the slab edge itself - no added white band.
-    band = Part("Lattice_Slab_Edges", mats["slab"], col)
+    band = Part("Lattice_Slab_Edges", mats["slate"], col)
     for face in FACES:
         half = face_half(face)
         for z in [0.0] + [lev for lev in floor_levels() if lev < z1 - 0.5]:
