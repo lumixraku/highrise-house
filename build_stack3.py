@@ -59,7 +59,7 @@ PREFIX = "Stack3_"
 # ---------------------------------------------------------------------------
 # Frozen envelope and program
 # ---------------------------------------------------------------------------
-ROOF = 334.0              # flat roof deck; the stepped crown is gone
+ROOF = 302.0              # flat roof deck; the stepped crown is gone
 PARAPET_H = 1.2
 HEIGHT = ROOF + 0.4 + PARAPET_H    # 335.6 to the top of the parapet
 WIDTH = 108.0
@@ -72,14 +72,14 @@ STOREY_LOW = 5.0        # base / diagrid / plaza storey: 5 m, fewer floors
 
 def floor_levels():
     """Floor plates: 5 m storeys below the apartments, 4 m within them."""
-    return ([z for z in range(5, 221, 5)]
-            + [z for z in range(224, 333, 4)])
+    return ([z for z in range(5, 186, 5)]
+            + [z for z in range(188, 301, 4)])
 BAY = 3.6               # facade mullion module on the glazed bands
 
 BANDS = (
-    ("Lattice", 0.0, 190.0),
-    ("Plaza", 190.0, 220.0),
-    ("Apartments", 220.0, 334.0),
+    ("Lattice", 0.0, 158.0),
+    ("Plaza", 158.0, 188.0),
+    ("Apartments", 188.0, 302.0),
 )
 BAND = {name: (z0, z1) for name, z0, z1 in BANDS}
 
@@ -400,7 +400,7 @@ def build_floors(mats, cols):
 
     p = Part("Structure_Cores", mats["core"], cols["Structure"])
     for sx in (-1, 1):
-        p.box((sx * 26.0, 0, 167.0), (16.0, 14.0, 334.0))
+        p.box((sx * 26.0, 0, ROOF / 2), (16.0, 14.0, ROOF))
     p.finish()
 
 
@@ -417,8 +417,8 @@ def build_cornices(mats, cols):
     p = Part("Envelope_Corners", mats["silver"], cols["Structure"])
     for sx in (-1, 1):
         for sy in (-1, 1):
-            p.box((sx * (HALF_W - 0.45), sy * (HALF_D - 0.45), 167.0),
-                  (1.1, 1.1, 334.0))
+            p.box((sx * (HALF_W - 0.45), sy * (HALF_D - 0.45), ROOF / 2),
+                  (1.1, 1.1, ROOF))
     p.finish()
 
 

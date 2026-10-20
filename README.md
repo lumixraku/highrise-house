@@ -233,16 +233,17 @@ stack of neighbourhoods, each with its own facade language.
 The envelope follows the client direction for this generation: a little over
 100 m wide and only 36 m deep, i.e. a very flat slab. The model uses a 108 x 36 m
 plan; the crown was then dropped at the client's request, so the stack stops at
-the apartment band and the roof is completely flat at 334 m (335.6 m to the
-parapet). That is a 3.09 : 1 wide elevation - exactly the ratio of the published
-orthographic elevation sheet (321 : 992 px) - while keeping the 36 m depth.
+the apartment band and the roof is completely flat at 302 m (303.6 m to the
+parapet). That is a 2.80 : 1 wide elevation, squatter than the published sheet
+(3.09 : 1) because the lower block lost one lattice tier at the client's
+direction, but it keeps the 36 m depth.
 
 Three bands, bottom to top, each a different facade system, with metal cornices
 as the "stack" lines between them. Below the apartments the storey is 5 m, so the
-lower block carries 38 floors in that height; the apartments keep their 4 m
+lower block carries 37 floors in that height; the apartments keep their 4 m
 module and run 28 floors.
 
-- **Lattice, 0-190 m.** The whole lower block is one facade: an external frame six
+- **Lattice, 0-158 m.** The whole lower block is one facade: an external frame six
   bays wide by five tiers tall. The bottom two tiers are framed cells - six big
   glazed squares per row, closed by thick members, no X - and the upper three
   tiers carry an X brace in every cell. The frame carries vertical posts only: no added horizontal
@@ -251,15 +252,15 @@ module and run 28 floors.
   joints at all - no mullions between the panes. Every floor, here and in the
   planted level, is lit the same way as the apartments: one long cool-or-warm
   ceiling strip per room.
-- **Plaza, 190-220 m.** A planted arcade of branching tree columns and planting,
+- **Plaza, 158-188 m.** A planted arcade of branching tree columns and planting,
   open through - no interior wall - with the same room strips on its floors.
-- **Apartments, 220-334 m.** A semi-transparent glazed skin drawn as a staggered
+- **Apartments, 188-302 m.** A semi-transparent glazed skin drawn as a staggered
   block grid: every bay is one 4 m storey of glass, laid in a half-bond running
   course, and the external frame around the bays is the window pattern itself -
   there are no punched openings. Three near-identical glass tints and a lit
   ceiling in every bay keep it reading as apartments at dusk - no wall behind the
   glass. A two-metre metal fascia closes the grid at the roof.
-- **Flat roof, 334 m.** The tower stops at the apartment band: one deck slab and
+- **Flat roof, 302 m.** The tower stops at the apartment band: one deck slab and
   a 1.2 m parapet, nothing above it.
 
 The shallow plan is what makes the strata legible: with only 36 m of depth the

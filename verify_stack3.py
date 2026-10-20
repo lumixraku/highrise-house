@@ -85,32 +85,32 @@ def main():
             "Lattice", "Plaza", "Apartment")),
         "plan is 108 m wide": abs((x1 - x0) - WIDTH) <= 2 * FACADE_RELIEF,
         "plan is 36 m deep": abs((y1 - y0) - DEPTH) <= 2 * FACADE_RELIEF,
-        "flat roof deck at 334 m": abs(z_span("Roof_Deck")[1] - 334.4) < 0.05,
-        "parapet tops at 335.6 m": abs(z1 - (334.0 + 0.4 + 1.2)) < 0.05,
+        "flat roof deck at 302 m": abs(z_span("Roof_Deck")[1] - 302.4) < 0.05,
+        "parapet tops at 303.6 m": abs(z1 - (302.0 + 0.4 + 1.2)) < 0.05,
         "slab sits on the ground": abs(z0) <= 0.02,
         "facade stays within its relief band": overhang <= FACADE_RELIEF,
-        "lattice glass 0-190 m": abs(z_span("Lattice_Glass")[0] - 0.2) < 0.05
-        and abs(z_span("Lattice_Glass")[1] - 189.8) < 0.05,
+        "lattice glass 0-158 m": abs(z_span("Lattice_Glass")[0] - 0.2) < 0.05
+        and abs(z_span("Lattice_Glass")[1] - 157.8) < 0.05,
         "lattice carries a frame and X braces": (
             present("Lattice_Frame") and present("Lattice_Braces")),
         "lattice braces start above the solid base panels": (
-            75.0 <= z_span("Lattice_Braces")[0] <= 77.0
-            and 189.3 <= z_span("Lattice_Braces")[1] <= 189.8),
+            63.0 <= z_span("Lattice_Braces")[0] <= 64.0
+            and 157.0 <= z_span("Lattice_Braces")[1] <= 157.9),
         "bottom two tiers are framed cells, not X": (
             present("Lattice_Base_Rails")
             and abs(z_span("Lattice_Base_Rails")[0] - 0.0) < 0.05
-            and abs(z_span("Lattice_Base_Rails")[1] - 76.7) < 0.8),
+            and abs(z_span("Lattice_Base_Rails")[1] - 63.9) < 0.8),
         "no parking band remains": not any(
             n.startswith("Stack3_Parking") for n in names),
         "no fin band or old base remains": not any(
             n.startswith("Stack3_Office") or n.startswith("Stack3_Hotel")
             or n.startswith("Stack3_Base") for n in names),
-        "plaza arcade 190-220 m": abs(z_span("Plaza_Trees")[0] - 190.35) < 0.1,
-        "glazed apartment bays 220-332 m": (
-            220.0 <= z_span("Apartment_Glass_S")[0] <= 220.4
-            and 331.6 <= z_span("Apartment_Glass_S")[1] <= 332.0),
-        "masonry attic closes the band at 334 m":
-        z_span("Apartment_Topband")[1] == 334.0,
+        "plaza arcade 158-188 m": abs(z_span("Plaza_Trees")[0] - 158.35) < 0.1,
+        "glazed apartment bays 188-300 m": (
+            188.0 <= z_span("Apartment_Glass_S")[0] <= 188.4
+            and 299.6 <= z_span("Apartment_Glass_S")[1] <= 300.0),
+        "attic closes the band at 302 m":
+        z_span("Apartment_Topband")[1] == 302.0,
         "nothing stands above the roof": not any(
             n.startswith("Stack3_Crown") for n in names),
         "two long-axis cores": (
@@ -118,7 +118,7 @@ def main():
             and abs(bbox([bpy.data.objects["Stack3_Structure_Cores"]])[1] - 34.0) < 0.1),
         "floor plates: 5 m below, 4 m in the apartments": (
             abs(z_span("Structure_Floors")[0] - 4.65) < 0.05
-            and abs(z_span("Structure_Floors")[1] - 332.0) < 0.05),
+            and abs(z_span("Structure_Floors")[1] - 300.0) < 0.05),
         "shallow slab reads as a slab": (WIDTH / DEPTH) > 2.6,
         "every mesh has a material": all(o.data.materials for o in meshes),
         "closed meshes": boundary_edges == 0,
