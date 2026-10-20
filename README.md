@@ -260,6 +260,10 @@ module and run 28 floors.
   there are no punched openings. Three near-identical glass tints and a lit
   ceiling in every bay keep it reading as apartments at dusk - no wall behind the
   glass. A two-metre metal fascia closes the grid at the roof.
+- **Night lighting.** Six studio area lights outside, plus simulated interior
+  point lights every few floors (north and south) standing in for the thousands
+  of fixtures. Floor plates neither take light nor cast shadow, so the interior
+  glow carries up and down the shaft instead of pooling on one plate.
 - **Flat roof, 302 m.** The tower stops at the apartment band: one deck slab and
   a 1.2 m parapet, nothing above it.
 

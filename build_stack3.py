@@ -389,14 +389,22 @@ def build_floors(mats, cols):
     for z in floor_levels():
         if z <= ROOF - 0.6:
             p.box((0, 0, z - 0.175), (WIDTH - 1.4, DEPTH - 1.4, 0.35))
-    p.finish()
+    floors = p.finish()
+    if floors is not None:
+        # Floors neither take light nor block it, so the interior lights carry
+        # up and down the whole shaft instead of pooling on one plate.
+        floors.visible_shadow = False
+        floors.visible_diffuse = False
 
     # Transfer slabs on the band lines read through the glazed bands as the
     # same thick floor the truss-less bands sit on.
     p = Part("Structure_Transfer_Slabs", mats["slab_dark"], cols["Structure"])
     for name, z0, z1 in BANDS[1:-1]:
         p.box((0, 0, z0 - 0.35), (WIDTH - 0.8, DEPTH - 0.8, 0.7))
-    p.finish()
+    transfers = p.finish()
+    if transfers is not None:
+        transfers.visible_shadow = False
+        transfers.visible_diffuse = False
 
     p = Part("Structure_Cores", mats["core"], cols["Structure"])
     for sx in (-1, 1):
@@ -901,6 +909,21 @@ def setup_scene(args):
         ("Low_Fill", (-430, -150, 45), (0, 0, 95), 90, 1000000,
          (1.00, 0.95, 0.88)),
     )
+    # Simulated interior lighting: a handful of point lights stand in for the
+    # thousands of fixtures, one every few floors, so the tower reads as lit at
+    # night. The floor plates do not block them.
+    for z in (20.0, 55.0, 90.0, 125.0, 150.0, 173.0,
+              205.0, 235.0, 265.0, 292.0):
+        for side, y in (("S", -9.0), ("N", 9.0)):
+            data = bpy.data.lights.new(f"Stack3_Interior_{int(z)}_{side}", "POINT")
+            data.energy = 110000.0
+            data.shadow_soft_size = 7.0
+            data.use_shadow = False       # glow only; keeps EEVEE's shadow budget
+            data.color = (1.0, 0.82, 0.62) if z < 158.0 else (0.9, 0.94, 1.0)
+            obj = bpy.data.objects.new(f"Stack3_Interior_{int(z)}_{side}", data)
+            obj.location = (0.0, y, z)
+            scene.collection.objects.link(obj)
+
     for name, loc, target, size, energy, color in studio:
         data = bpy.data.lights.new(f"Stack3_{name}", "AREA")
         data.shape = "DISK"
