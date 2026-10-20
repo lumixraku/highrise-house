@@ -461,7 +461,7 @@ def build_lattice(mats, cols, rng):
         step = 2 * half / n
         for i in range(n + 1):
             u = -half + i * step
-            mull.face_box(face, u - 0.028, u + 0.028, z0, z1, -0.58, 0.09)
+            mull.face_box(face, u - 0.035, u + 0.035, z0, z1, -0.58, 0.20)
     mull.finish()
 
     # A real curtain wall behind the big frame: narrow vertical panes between

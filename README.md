@@ -251,8 +251,8 @@ module and run 28 floors.
   band, the floor line is the dark slab edge itself; every floor plate in the
   model is near-black. Behind it is one dark glass skin with no visible pane
   joints at all: a fine vertical curtain wall of 1.25 m panes - 4:1 with the
-  5 m storey - set 200 mm back inside the frame, so the frame stands proud of
-  the glass. Every floor, here and in the planted level, is
+  5 m storey - on 70 x 200 mm mullions set 200 mm into the frame, so each pane
+  sits at the back of a deep reveal. Every floor, here and in the planted level, is
   lit the same way as the apartments: one cool-or-warm ceiling strip per room.
 - **Plaza, 158-188 m.** A planted arcade of branching tree columns and planting,
   open through - no interior wall - with the same room strips on its floors.
