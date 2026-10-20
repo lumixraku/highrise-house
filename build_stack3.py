@@ -434,7 +434,7 @@ def build_lattice(mats, cols, rng):
     """
     z0, z1 = BAND["Lattice"]
     col = cols["Lattice"]
-    bays, tiers = 6, 6
+    bays, tiers = 6, 5
     tier_h = (z1 - z0) / tiers
 
     glass = Part("Lattice_Glass", mats["glass_deep"], col)
