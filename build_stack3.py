@@ -452,17 +452,27 @@ def build_lattice(mats, cols, rng):
         glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.75, 0.14)
     glass.finish()
 
-    # Fine vertical curtain wall: 1.25 m panes, 4:1 with the 5 m storey, so the
-    # glazing reads as the narrow strips in the reference.
-    mull = Part("Lattice_Mullions", mats["mesh"], col)
+    # The pane frame: 200 mm wide flat bars, one full storey tall between the
+    # horizontals, so every pane sits inside a 200 mm border - the flat strip
+    # frame the client asked for, after Stack 2.
+    mull = Part("Lattice_Mullions", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
-        n = max(8, int(round(2 * half / 1.25)))
+        n = max(8, int(round(2 * half / 1.45)))
         step = 2 * half / n
         for i in range(n + 1):
             u = -half + i * step
-            mull.face_box(face, u - 0.035, u + 0.035, z0, z1, -0.58, 0.20)
+            mull.face_box(face, u - 0.10, u + 0.10, z0, z1, -0.50, 0.08)
     mull.finish()
+
+    trans = Part("Lattice_Transoms", mats["silver"], col)
+    for face in FACES:
+        half = face_half(face)
+        for z in [z0] + [lev for lev in floor_levels() if z0 < lev <= z1]:
+            lo = 0.0 if z <= z0 else z - 0.10
+            hi = 0.20 if z <= z0 else z + 0.10
+            trans.face_box(face, -half, half, lo, hi, -0.50, 0.08)
+    trans.finish()
 
     # A real curtain wall behind the big frame: narrow vertical panes between
     # thin mullions, with a white spandrel band on every floor - the office
