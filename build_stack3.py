@@ -458,20 +458,27 @@ def build_lattice(mats, cols, rng):
     mull = Part("Lattice_Mullions", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
-        n = max(8, int(round(2 * half / 1.45)))
+        n = max(8, int(round(2 * half / 1.9)))
         step = 2 * half / n
         for i in range(n + 1):
             u = -half + i * step
-            mull.face_box(face, u - 0.10, u + 0.10, z0, z1, -0.50, 0.08)
+            # Flat bar section: 50 mm on the face, 200 mm deep into the reveal.
+            mull.face_box(face, u - 0.025, u + 0.025, z0, z1, -0.62, 0.20)
     mull.finish()
 
     trans = Part("Lattice_Transoms", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
         for z in [z0] + [lev for lev in floor_levels() if z0 < lev <= z1]:
-            lo = 0.0 if z <= z0 else z - 0.10
-            hi = 0.20 if z <= z0 else z + 0.10
-            trans.face_box(face, -half, half, lo, hi, -0.50, 0.08)
+            # floor line
+            lo = 0.0 if z <= z0 else z - 0.025
+            hi = 0.05 if z <= z0 else z + 0.025
+            trans.face_box(face, -half, half, lo, hi, -0.62, 0.20)
+            # and a second transom about a metre above every floor, so each
+            # window reads as two panes like the Stack 2 apartment wall
+            if z + 1.15 < z1:
+                trans.face_box(face, -half, half, z + 1.05, z + 1.10,
+                               -0.62, 0.20)
     trans.finish()
 
     # A real curtain wall behind the big frame: narrow vertical panes between
