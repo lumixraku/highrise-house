@@ -322,6 +322,8 @@ def build_materials(night=False):
         "slate": materials.make_concrete("Stack3_Slate", color=(0.022, 0.024, 0.027)),
         "black": materials.make_concrete("Stack3_Black", color=(0.020, 0.021, 0.024)),
         "slab": materials.make_concrete("Stack3_Slab", color=(0.34, 0.35, 0.35)),
+        "slab_dark": materials.make_concrete("Stack3_Slab_Dark",
+                                             color=(0.040, 0.042, 0.045)),
         "core": materials.make_concrete("Stack3_Core", color=(0.10, 0.11, 0.12)),
         "ground": make_unlit("Stack3_Ground", (0.055, 0.055, 0.058)),
         "plaza": make_unlit("Stack3_Plaza", (0.085, 0.085, 0.082)),
@@ -338,6 +340,8 @@ def build_materials(night=False):
             "Stack3_Light_Daylight", materials.CEILING_LIGHT_DAYLIGHT, 9.0),
         "light_dim": materials.make_ceiling_light(
             "Stack3_Light_Dim", (0.72, 0.82, 0.95), 3.2),
+        "light_glow": materials.make_ceiling_light(
+            "Stack3_Light_Glow", (1.0, 0.66, 0.38), 2.2),
         "light_warm": materials.make_ceiling_light(
             "Stack3_Light_Warm", (1.0, 0.55, 0.25), 7.5),
         "glow_cool": materials.make_ceiling_light(
@@ -379,7 +383,7 @@ def build_site(mats, cols, rng):
 
 
 def build_floors(mats, cols):
-    p = Part("Structure_Floors", mats["slab"], cols["Structure"])
+    p = Part("Structure_Floors", mats["slab_dark"], cols["Structure"])
     for z in floor_levels():
         if z <= ROOF - 0.6:
             p.box((0, 0, z - 0.175), (WIDTH - 1.4, DEPTH - 1.4, 0.35))
@@ -387,7 +391,7 @@ def build_floors(mats, cols):
 
     # Transfer slabs on the band lines read through the glazed bands as the
     # same thick floor the truss-less bands sit on.
-    p = Part("Structure_Transfer_Slabs", mats["concrete"], cols["Structure"])
+    p = Part("Structure_Transfer_Slabs", mats["slab_dark"], cols["Structure"])
     for name, z0, z1 in BANDS[1:-1]:
         p.box((0, 0, z0 - 0.35), (WIDTH - 0.8, DEPTH - 0.8, 0.7))
     p.finish()
@@ -481,15 +485,15 @@ def build_lattice(mats, cols):
     brace.finish()
 
     # Warm hall below, cool floors above; one strip per 5 m storey.
-    warm = Part("Lattice_Lights_Warm", mats["light_dim"], col)
-    cool = Part("Lattice_Lights_Cool", mats["light_dim"], col)
+    warm = Part("Lattice_Lights_Warm", mats["light_glow"], col)
+    cool = Part("Lattice_Lights_Cool", mats["light_glow"], col)
     for face in FACES:
         half = face_half(face)
         for z in floor_levels():
             if 1.0 < z <= z1:
                 part = warm if z < 86.0 else cool
-                storey_lights(part, face, half, z - 0.50, inset=2.0,
-                              depths=(1.5,))
+                storey_lights(part, face, half, z - 0.52, inset=2.0,
+                              depths=(2.9,), width=0.30)
     warm.finish()
     cool.finish()
 
@@ -620,15 +624,15 @@ BLOCK_L = 10.8
 BLOCK_JOINT = 0.25
 
 
-def storey_lights(part, face, half, z, inset=2.0, depths=(1.5, 3.0)):
-    """Two continuous ceiling strips across one storey, seen through the glass."""
+def storey_lights(part, face, half, z, inset=2.0, depths=(1.5,), width=0.50):
+    """Continuous ceiling strips across one storey, seen through the glass."""
     span = 2 * half - 2 * inset
     for depth in depths:
         p = fp(face, 0.0, z, -depth)
         if face in LONG_FACES:
-            part.box((p.x, p.y, z), (span, 0.50, 0.07))
+            part.box((p.x, p.y, z), (span, width, 0.07))
         else:
-            part.box((p.x, p.y, z), (0.50, span, 0.07))
+            part.box((p.x, p.y, z), (width, span, 0.07))
 
 
 def ceiling_strip(part, face, u0, u1, z, depth, rng):
