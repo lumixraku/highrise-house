@@ -449,7 +449,7 @@ def build_lattice(mats, cols, rng):
     glass = Part("Lattice_Glass", mats["glass_deep"], col)
     for face in FACES:
         half = face_half(face)
-        glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.55, 0.14)
+        glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.75, 0.14)
     glass.finish()
 
     # Fine vertical curtain wall: 1.25 m panes, 4:1 with the 5 m storey, so the
@@ -461,7 +461,7 @@ def build_lattice(mats, cols, rng):
         step = 2 * half / n
         for i in range(n + 1):
             u = -half + i * step
-            mull.face_box(face, u - 0.028, u + 0.028, z0, z1, -0.38, 0.09)
+            mull.face_box(face, u - 0.028, u + 0.028, z0, z1, -0.58, 0.09)
     mull.finish()
 
     # A real curtain wall behind the big frame: narrow vertical panes between
@@ -476,7 +476,7 @@ def build_lattice(mats, cols, rng):
                           if lev < base_top - 0.5]:
             lo = 0.0 if z <= 0.0 else z - 0.32
             hi = 0.40 if z <= 0.0 else z + 0.08
-            band.face_box(face, -half, half, lo, hi, -0.34, 0.26)
+            band.face_box(face, -half, half, lo, hi, -0.56, 0.26)
     band.finish()
 
     frame = Part("Lattice_Frame", mats["silver"], col)
