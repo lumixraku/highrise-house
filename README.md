@@ -246,7 +246,8 @@ module and run 28 floors.
 - **Lattice, 0-158 m.** The whole lower block is one facade: an external frame six
   bays wide by five tiers tall. The bottom two tiers are framed cells - six big
   glazed squares per row, closed by thick members, no X - and the upper three
-  tiers carry an X brace in every cell. The frame carries vertical posts only: no added horizontal
+  tiers are diagonal only: an X in every cell, no intermediate verticals and no
+  horizontal bands, just the corner posts and the diamond grid. The frame carries vertical posts only: no added horizontal
   band, the floor line is the dark slab edge itself; every floor plate in the
   model is near-black. Behind it is one dark glass skin with no visible pane
   joints at all - no mullions between the panes. Every floor, here and in the

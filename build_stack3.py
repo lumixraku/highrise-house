@@ -323,7 +323,7 @@ def build_materials(night=False):
         "black": materials.make_concrete("Stack3_Black", color=(0.020, 0.021, 0.024)),
         "slab": materials.make_concrete("Stack3_Slab", color=(0.34, 0.35, 0.35)),
         "slab_dark": materials.make_concrete("Stack3_Slab_Dark",
-                                             color=(0.040, 0.042, 0.045)),
+                                             color=(0.008, 0.008, 0.009)),
         "panel_dark": materials.make_wall("Stack3_Panel_Dark",
                                           color=(0.085, 0.088, 0.092)),
         "core": materials.make_concrete("Stack3_Core", color=(0.10, 0.11, 0.12)),
@@ -388,7 +388,7 @@ def build_floors(mats, cols):
     p = Part("Structure_Floors", mats["slab_dark"], cols["Structure"])
     for z in floor_levels():
         if z <= ROOF - 0.6:
-            p.box((0, 0, z - 0.175), (WIDTH - 1.4, DEPTH - 1.4, 0.35))
+            p.box((0, 0, z - 0.175), (WIDTH - 4.8, DEPTH - 4.8, 0.35))
     floors = p.finish()
     if floors is not None:
         # Floors neither take light nor block it, so the interior lights carry
@@ -443,6 +443,7 @@ def build_lattice(mats, cols, rng):
     z0, z1 = BAND["Lattice"]
     col = cols["Lattice"]
     bays, tiers = 6, 5
+    inset = 0.62
     tier_h = (z1 - z0) / tiers
 
     glass = Part("Lattice_Glass", mats["glass_deep"], col)
@@ -458,21 +459,24 @@ def build_lattice(mats, cols, rng):
     band = Part("Lattice_Slab_Edges", mats["slate"], col)
     for face in FACES:
         half = face_half(face)
-        for z in [0.0] + [lev for lev in floor_levels() if lev < z1 - 0.5]:
+        base_top = z0 + inset + 2 * ((z1 - z0) - 2 * inset) / tiers
+        for z in [0.0] + [lev for lev in floor_levels()
+                          if lev < base_top - 0.5]:
             lo = 0.0 if z <= 0.0 else z - 0.32
             hi = 0.40 if z <= 0.0 else z + 0.08
             band.face_box(face, -half, half, lo, hi, -0.34, 0.26)
     band.finish()
 
-    inset = 0.62
     frame = Part("Lattice_Frame", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
         hw = half - inset
         n = bays if face in LONG_FACES else 2
+        base_top = z0 + inset + 2 * ((z1 - z0) - 2 * inset) / tiers
         for i in range(n + 1):
             u = -hw + i * 2 * hw / n
-            frame.face_box(face, u - inset, u + inset, z0, z1, -0.34, 0.60)
+            top = z1 if i in (0, n) else base_top
+            frame.face_box(face, u - inset, u + inset, z0, top, -0.34, 0.60)
     frame.finish()
 
     brace = Part("Lattice_Braces", mats["silver"], col)
@@ -519,11 +523,13 @@ def build_lattice(mats, cols, rng):
         for z in floor_levels():
             if 1.0 < z <= z1:
                 for i in range(n):
+                    if rng.random() < 0.35:      # dark rooms keep it from
+                        continue                 # reading as a line of light
                     u0 = -hw + i * du
                     part = cool if rng.random() < 0.5 else warm
                     for depth in (1.2, 2.8):
                         ceiling_strip(part, face, u0 + 0.8, u0 + du - 0.8,
-                                      z - 0.52, depth, rng)
+                                      z - 0.52, depth, rng, frac=(0.22, 0.45))
     cool.finish()
     warm.finish()
 
@@ -663,9 +669,9 @@ def storey_lights(part, face, half, z, inset=2.0, depths=(1.5,), width=0.50):
             part.box((p.x, p.y, z), (width, span, 0.07))
 
 
-def ceiling_strip(part, face, u0, u1, z, depth, rng):
+def ceiling_strip(part, face, u0, u1, z, depth, rng, frac=(0.5, 0.85)):
     """A thin ceiling fixture inside one room, seen through the glazing."""
-    length = (u1 - u0) * rng.uniform(0.5, 0.85)
+    length = (u1 - u0) * rng.uniform(*frac)
     cu = (u0 + u1) / 2 + rng.uniform(-0.4, 0.4)
     p = fp(face, cu, z, -depth)
     if face in LONG_FACES:
