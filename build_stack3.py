@@ -425,7 +425,7 @@ def build_cornices(mats, cols):
 # ---------------------------------------------------------------------------
 # Band 1: one big X lattice over the whole lower block
 # ---------------------------------------------------------------------------
-def build_lattice(mats, cols):
+def build_lattice(mats, cols, rng):
     """The lower 190 m is one facade: a bold external frame three bays wide by
     three tiers tall, with an X brace in every cell and glass behind it.
 
@@ -499,17 +499,25 @@ def build_lattice(mats, cols):
     rails.finish()
 
     # Warm hall below, cool floors above; one strip per 5 m storey.
-    warm = Part("Lattice_Lights_Warm", mats["light_glow"], col)
-    cool = Part("Lattice_Lights_Cool", mats["light_glow"], col)
+    # The same room lights as the apartments: one long strip per room, cool or
+    # warm, on every floor - the house language for all interior lighting.
+    cool = Part("Lattice_Lights_Cool", mats["light_day"], col)
+    warm = Part("Lattice_Lights_Warm", mats["light_warm"], col)
     for face in FACES:
         half = face_half(face)
+        hw = half - inset
+        n = bays if face in LONG_FACES else 2
+        du = 2 * hw / n
         for z in floor_levels():
             if 1.0 < z <= z1:
-                part = warm if z < 86.0 else cool
-                storey_lights(part, face, half, z - 0.52, inset=2.0,
-                              depths=(2.9,), width=0.30)
-    warm.finish()
+                for i in range(n):
+                    u0 = -hw + i * du
+                    part = cool if rng.random() < 0.5 else warm
+                    for depth in (1.2, 2.8):
+                        ceiling_strip(part, face, u0 + 0.8, u0 + du - 0.8,
+                                      z - 0.52, depth, rng)
     cool.finish()
+    warm.finish()
 
 
 # ---------------------------------------------------------------------------
@@ -602,11 +610,22 @@ def build_garden_band(name, mats, cols, tree_pitch, rng):
         rail.face_box(face, -half, half, z0 + 1.15, z0 + 1.25, -0.02, 0.14)
     rail.finish()
 
-    glow = Part(f"{name}_Ceiling_Light", mats["glow"], col)
+    cool = Part(f"{name}_Light_Cool", mats["light_day"], col)
+    warm = Part(f"{name}_Light_Warm", mats["light_warm"], col)
     for face in FACES:
         half = face_half(face)
-        glow.face_box(face, -half, half, z1 - 1.6, z1 - 1.2, -1.4, 0.30)
-    glow.finish()
+        n = 4
+        du = 2 * half / n
+        for z in floor_levels():
+            if z0 + 1.0 < z <= z1:
+                for i in range(n):
+                    u0 = -half + i * du
+                    part = cool if rng.random() < 0.5 else warm
+                    for depth in (1.4, 3.0):
+                        ceiling_strip(part, face, u0 + 0.8, u0 + du - 0.8,
+                                      z - 0.52, depth, rng)
+    cool.finish()
+    warm.finish()
 
 
 # ---------------------------------------------------------------------------
@@ -747,18 +766,6 @@ def build_roof(mats, cols):
 
 # ---------------------------------------------------------------------------
 # Interior glow behind the glazed bands
-# ---------------------------------------------------------------------------
-def build_interior_glow(mats, cols):
-    p = Part("Interior_Ceiling_Glow", mats["glow"], cols["Lighting"])
-    for name, z0, z1 in BANDS:
-        if name in ("Plaza",):
-            for face in FACES:
-                half = face_half(face)
-                p.face_box(face, -half + 1.0, half - 1.0,
-                           z1 - 1.9, z1 - 1.5, -1.6, 0.35)
-    p.finish()
-
-
 # ---------------------------------------------------------------------------
 # Cameras, lighting, render
 # ---------------------------------------------------------------------------
@@ -994,11 +1001,10 @@ def build(args):
     build_site(mats, cols, rng)
     build_floors(mats, cols)
     build_cornices(mats, cols)
-    build_lattice(mats, cols)
+    build_lattice(mats, cols, rng)
     build_garden_band("Plaza", mats, cols, 11.8, rng)
     build_apartments(mats, cols, rng)
     build_roof(mats, cols)
-    build_interior_glow(mats, cols)
 
     cams = setup_scene(args)
 

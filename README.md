@@ -248,9 +248,11 @@ module and run 28 floors.
   tiers carry an X brace in every cell. The frame carries vertical posts only: no added horizontal
   band, the floor line is the dark slab edge itself; every floor plate in the
   model is near-black. Behind it is one dark glass skin with no visible pane
-  joints at all - no mullions between the panes - and a soft warm ceiling strip
-  on every floor.
-- **Plaza, 190-220 m.** A planted arcade of branching tree columns.
+  joints at all - no mullions between the panes. Every floor, here and in the
+  planted level, is lit the same way as the apartments: one long cool-or-warm
+  ceiling strip per room.
+- **Plaza, 190-220 m.** A planted arcade of branching tree columns and planting,
+  open through - no interior wall - with the same room strips on its floors.
 - **Apartments, 220-334 m.** A semi-transparent glazed skin drawn as a staggered
   block grid: every bay is one 4 m storey of glass, laid in a half-bond running
   course, and the external frame around the bays is the window pattern itself -
