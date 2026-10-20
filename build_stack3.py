@@ -909,20 +909,24 @@ def setup_scene(args):
         ("Low_Fill", (-430, -150, 45), (0, 0, 95), 90, 1000000,
          (1.00, 0.95, 0.88)),
     )
-    # Simulated interior lighting: a handful of point lights stand in for the
-    # thousands of fixtures, one every few floors, so the tower reads as lit at
-    # night. The floor plates do not block them.
-    for z in (20.0, 55.0, 90.0, 125.0, 150.0, 173.0,
-              205.0, 235.0, 265.0, 292.0):
-        for side, y in (("S", -9.0), ("N", 9.0)):
-            data = bpy.data.lights.new(f"Stack3_Interior_{int(z)}_{side}", "POINT")
-            data.energy = 110000.0
-            data.shadow_soft_size = 7.0
-            data.use_shadow = False       # glow only; keeps EEVEE's shadow budget
-            data.color = (1.0, 0.82, 0.62) if z < 158.0 else (0.9, 0.94, 1.0)
-            obj = bpy.data.objects.new(f"Stack3_Interior_{int(z)}_{side}", data)
-            obj.location = (0.0, y, z)
-            scene.collection.objects.link(obj)
+    # Simulated interior lighting: a few dozen point lights scattered through
+    # the volume stand in for the thousands of fixtures, at random plan
+    # positions and heights, so the tower reads like a real building at night
+    # rather than a lit column.
+    rng_lights = random.Random(20261020)
+    for i in range(48):
+        z = rng_lights.uniform(6.0, ROOF - 8.0)
+        x = rng_lights.uniform(-46.0, 46.0)
+        y = rng_lights.uniform(-14.0, 14.0)
+        data = bpy.data.lights.new(f"Stack3_Interior_{i:02d}", "POINT")
+        data.energy = rng_lights.uniform(35000.0, 95000.0)
+        data.shadow_soft_size = rng_lights.uniform(3.5, 7.0)
+        data.use_shadow = False       # glow only; keeps EEVEE's shadow budget
+        data.color = ((1.0, 0.80, 0.58) if rng_lights.random() < 0.55
+                      else (0.88, 0.93, 1.0))
+        obj = bpy.data.objects.new(f"Stack3_Interior_{i:02d}", data)
+        obj.location = (x, y, z)
+        scene.collection.objects.link(obj)
 
     for name, loc, target, size, energy, color in studio:
         data = bpy.data.lights.new(f"Stack3_{name}", "AREA")
