@@ -447,6 +447,7 @@ def build_lattice(mats, cols, rng):
     bays, tiers = 6, 5
     inset = 0.62
     tier_h = (z1 - z0) / tiers
+    base_top = z0 + inset + 2 * ((z1 - z0) - 2 * inset) / tiers
 
     glass = Part("Lattice_Glass", mats["glass_deep"], col)
     for face in FACES:
@@ -464,14 +465,17 @@ def build_lattice(mats, cols, rng):
         step = 2 * half / n
         for i in range(n + 1):
             u = -half + i * step
-            mull.face_box(face, u - 0.07, u + 0.07, z0, z1, -0.60, 0.60)
+            mull.face_box(face, u - 0.07, u + 0.07, base_top, z1, -0.60, 0.60)
     mull.finish()
 
     trans = Part("Lattice_Transoms", mats["silver"], col)
     sill = Part("Lattice_Sills", mats["slate"], col)
     for face in FACES:
         half = face_half(face)
-        floors = [z0] + [lev for lev in floor_levels() if z0 < lev <= z1]
+        floors = [lev for lev in floor_levels()
+                  if base_top - 0.5 <= lev <= z1]
+        if not floors or floors[0] > base_top + 0.5:
+            floors = [base_top] + floors
         for a, b in zip(floors, floors[1:]):
             # storey-line transom, straddling the floor plate at its top
             trans.face_box(face, -half, half, b - 0.05, b + 0.05,

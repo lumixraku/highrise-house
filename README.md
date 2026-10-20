@@ -245,13 +245,15 @@ module and run 28 floors.
 
 - **Lattice, 0-158 m.** The whole lower block is one facade: an external frame six
   bays wide by five tiers tall. The bottom two tiers are framed cells - six big
-  glazed squares per row, closed by thick members, no X - and the upper three
-  tiers are diagonal only: an X in every cell, no intermediate verticals and no
+  glazed squares per row, closed by thick members, no X, and left as very large
+  bare glass (a mall, no window grid) - while the upper three tiers are diagonal
+  only: an X in every cell, no intermediate verticals and no
   horizontal bands, just the corner posts and the diamond grid. The frame carries vertical posts only: no added horizontal
   band, the floor line is the dark slab edge itself; every floor plate in the
   model is near-black. Behind it is one dark glass skin with no visible pane
   joints at all: a fine vertical curtain wall of 1.25 m panes - 4:1 with the
-  5 m storey. The window frame is Stack 2's office curtain wall: 140 mm mullions
+  5 m storey. Above the mall base the window frame is Stack 2's office curtain
+  wall: 140 mm mullions
   by 600 mm deep on a 0.95 m module, a 100 mm transom on every floor and a
   second one a metre above it, and the dark 100 mm sill at the foot of every
   storey - Stack 2's office band item for item. Every floor, here and in the planted level, is
