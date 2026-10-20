@@ -426,7 +426,7 @@ def build_lattice(mats, cols):
     """
     z0, z1 = BAND["Lattice"]
     col = cols["Lattice"]
-    bays, tiers = 3, 3
+    bays, tiers = 6, 6
     tier_h = (z1 - z0) / tiers
 
     glass = Part("Lattice_Glass", mats["glass"], col)
@@ -448,12 +448,14 @@ def build_lattice(mats, cols):
             mull.face_box(face, u - 0.055, u + 0.055, z0, z1, -0.40, 0.13)
     mull.finish()
 
-    band = Part("Lattice_Spandrels", mats["silver"], col)
+    # The floor line is the slab edge itself - no added white band.
+    band = Part("Lattice_Slab_Edges", mats["slab"], col)
     for face in FACES:
         half = face_half(face)
         for z in [0.0] + [lev for lev in floor_levels() if lev < z1 - 0.5]:
-            band.face_box(face, -half, half, z + 0.02, z + 0.92,
-                          -0.38, 0.30)
+            lo = 0.0 if z <= 0.0 else z - 0.32
+            hi = 0.40 if z <= 0.0 else z + 0.08
+            band.face_box(face, -half, half, lo, hi, -0.34, 0.26)
     band.finish()
 
     inset = 0.62
@@ -461,21 +463,17 @@ def build_lattice(mats, cols):
     for face in FACES:
         half = face_half(face)
         hw = half - inset
-        n = bays if face in LONG_FACES else 1
+        n = bays if face in LONG_FACES else 2
         for i in range(n + 1):
             u = -hw + i * 2 * hw / n
             frame.face_box(face, u - inset, u + inset, z0, z1, -0.34, 0.60)
-        for j in range(tiers + 1):
-            z = z0 + inset + j * ((z1 - z0) - 2 * inset) / tiers
-            frame.face_box(face, -half, half, z - inset, z + inset,
-                           -0.34, 0.60)
     frame.finish()
 
     brace = Part("Lattice_Braces", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
         hw = half - inset
-        n = bays if face in LONG_FACES else 1
+        n = bays if face in LONG_FACES else 2
         du = 2 * hw / n
         dz = ((z1 - z0) - 2 * inset) / tiers
         for i in range(n):

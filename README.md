@@ -242,12 +242,12 @@ as the "stack" lines between them. Below the apartments the storey is 5 m, so th
 lower block carries 38 floors in that height; the apartments keep their 4 m
 module and run 28 floors.
 
-- **Lattice, 0-190 m.** The whole lower block is one facade: a bold external frame
-  three bays wide by three tiers tall, with an X brace in every cell and glass
-  behind it - three crosses per row, three rows, after the reference tower the
-  client pointed at. Behind the frame sits a real vertical curtain wall: narrow
-  panes between 1.6 m mullions with a white spandrel band on every 5 m floor, a
-  warm lit hall behind the lower floors and cool floors above.
+- **Lattice, 0-190 m.** The whole lower block is one facade: an external frame six
+  bays wide by six tiers tall, with an X brace in every cell - six crosses per
+  row, six rows. The frame carries vertical posts only: no added horizontal
+  band, the floor line is the slab edge itself. Behind it sits a vertical curtain
+  wall of narrow panes between 1.6 m mullions, a warm lit hall behind the lower
+  floors and cool floors above.
 - **Plaza, 190-220 m.** A planted arcade of branching tree columns.
 - **Apartments, 220-334 m.** A semi-transparent glazed skin drawn as a staggered
   block grid: every bay is one 4 m storey of glass, laid in a half-bond running
