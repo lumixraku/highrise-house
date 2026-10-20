@@ -388,7 +388,9 @@ def build_floors(mats, cols):
     p = Part("Structure_Floors", mats["slab_dark"], cols["Structure"])
     for z in floor_levels():
         if z <= ROOF - 0.6:
-            p.box((0, 0, z - 0.175), (WIDTH - 4.8, DEPTH - 4.8, 0.35))
+            # The plate edge sits just behind the recessed glass, so every
+            # floor transom lands on a real floor plate.
+            p.box((0, 0, z - 0.175), (WIDTH - 1.6, DEPTH - 1.6, 0.35))
     floors = p.finish()
     if floors is not None:
         # Floors neither take light nor block it, so the interior lights carry
@@ -449,7 +451,7 @@ def build_lattice(mats, cols, rng):
     glass = Part("Lattice_Glass", mats["glass_deep"], col)
     for face in FACES:
         half = face_half(face)
-        glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.75, 0.14)
+        glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.12, 0.12)
     glass.finish()
 
     # The window frame, straight from Stack 2's office curtain wall: mullions
@@ -469,22 +471,12 @@ def build_lattice(mats, cols, rng):
     for face in FACES:
         half = face_half(face)
         for z in [z0] + [lev for lev in floor_levels() if z0 < lev <= z1]:
-            lo = 0.0 if z <= z0 else z - 0.05
-            hi = 0.10 if z <= z0 else z + 0.05
-            trans.face_box(face, -half, half, lo, hi, -0.60, 0.60)
+            # The transom sits on top of the floor plate: z to z + 100 mm.
+            trans.face_box(face, -half, half, z, z + 0.10, -0.60, 0.60)
             if z + 1.10 < z1:
-                trans.face_box(face, -half, half, z + 0.95, z + 1.05,
+                trans.face_box(face, -half, half, z + 1.00, z + 1.10,
                                -0.60, 0.60)
     trans.finish()
-
-    sill = Part("Lattice_Sills", mats["slate"], col)
-    for face in FACES:
-        half = face_half(face)
-        for z in floor_levels():
-            if z0 < z < z1:
-                sill.face_box(face, -half, half, z + 0.02, z + 0.14,
-                              -0.56, 0.10)
-    sill.finish()
 
     # A real curtain wall behind the big frame: narrow vertical panes between
     # thin mullions, with a white spandrel band on every floor - the office
