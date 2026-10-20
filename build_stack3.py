@@ -452,6 +452,18 @@ def build_lattice(mats, cols, rng):
         glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.55, 0.14)
     glass.finish()
 
+    # Fine vertical curtain wall: 1.25 m panes, 4:1 with the 5 m storey, so the
+    # glazing reads as the narrow strips in the reference.
+    mull = Part("Lattice_Mullions", mats["mesh"], col)
+    for face in FACES:
+        half = face_half(face)
+        n = max(8, int(round(2 * half / 1.25)))
+        step = 2 * half / n
+        for i in range(n + 1):
+            u = -half + i * step
+            mull.face_box(face, u - 0.028, u + 0.028, z0, z1, -0.38, 0.09)
+    mull.finish()
+
     # A real curtain wall behind the big frame: narrow vertical panes between
     # thin mullions, with a white spandrel band on every floor - the office
     # glazing in the reference the client sent.

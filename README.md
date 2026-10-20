@@ -250,9 +250,9 @@ module and run 28 floors.
   horizontal bands, just the corner posts and the diamond grid. The frame carries vertical posts only: no added horizontal
   band, the floor line is the dark slab edge itself; every floor plate in the
   model is near-black. Behind it is one dark glass skin with no visible pane
-  joints at all - no mullions between the panes. Every floor, here and in the
-  planted level, is lit the same way as the apartments: one long cool-or-warm
-  ceiling strip per room.
+  joints at all: a fine vertical curtain wall of 1.25 m panes - 4:1 with the
+  5 m storey - behind the frame. Every floor, here and in the planted level, is
+  lit the same way as the apartments: one cool-or-warm ceiling strip per room.
 - **Plaza, 158-188 m.** A planted arcade of branching tree columns and planting,
   open through - no interior wall - with the same room strips on its floors.
 - **Apartments, 188-302 m.** A semi-transparent glazed skin drawn as a staggered
