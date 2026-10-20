@@ -435,6 +435,27 @@ def build_lattice(mats, cols):
         glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.55, 0.14)
     glass.finish()
 
+    # A real curtain wall behind the big frame: narrow vertical panes between
+    # thin mullions, with a white spandrel band on every floor - the office
+    # glazing in the reference the client sent.
+    mull = Part("Lattice_Mullions", mats["silver"], col)
+    for face in FACES:
+        half = face_half(face)
+        n = max(8, int(round(2 * half / 1.6)))
+        step = 2 * half / n
+        for i in range(n + 1):
+            u = -half + i * step
+            mull.face_box(face, u - 0.055, u + 0.055, z0, z1, -0.40, 0.13)
+    mull.finish()
+
+    band = Part("Lattice_Spandrels", mats["silver"], col)
+    for face in FACES:
+        half = face_half(face)
+        for z in [0.0] + [lev for lev in floor_levels() if lev < z1 - 0.5]:
+            band.face_box(face, -half, half, z + 0.02, z + 0.92,
+                          -0.38, 0.30)
+    band.finish()
+
     inset = 0.62
     frame = Part("Lattice_Frame", mats["silver"], col)
     for face in FACES:
