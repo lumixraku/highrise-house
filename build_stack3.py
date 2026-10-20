@@ -590,19 +590,6 @@ def build_garden_band(name, mats, cols, tree_pitch, rng):
                 leaves.sphere((p.x, p.y, p.z), rng.uniform(1.9, 2.3))
     leaves.finish()
 
-    back = Part(f"{name}_Interior", mats["stone"], col)
-    for face in FACES:
-        half = face_half(face)
-        back.face_box(face, -half, half, z0 + 0.9, z1 - 1.7, -5.0, 0.40)
-    back.finish()
-
-    backglow = Part(f"{name}_Interior_Glow", mats["glow"], col)
-    for face in FACES:
-        half = face_half(face)
-        backglow.face_box(face, -half + 2.0, half - 2.0, z0 + 2.4, z0 + 3.2,
-                          -4.55, 0.22)
-    backglow.finish()
-
     hedge = Part(f"{name}_Hedge", mats["foliage"], col)
     for face in FACES:
         half = face_half(face)
