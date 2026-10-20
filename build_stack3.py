@@ -468,15 +468,23 @@ def build_lattice(mats, cols, rng):
     mull.finish()
 
     trans = Part("Lattice_Transoms", mats["silver"], col)
+    sill = Part("Lattice_Sills", mats["slate"], col)
     for face in FACES:
         half = face_half(face)
-        for z in [z0] + [lev for lev in floor_levels() if z0 < lev <= z1]:
-            # The transom sits on top of the floor plate: z to z + 100 mm.
-            trans.face_box(face, -half, half, z, z + 0.10, -0.60, 0.60)
-            if z + 1.10 < z1:
-                trans.face_box(face, -half, half, z + 1.00, z + 1.10,
+        floors = [z0] + [lev for lev in floor_levels() if z0 < lev <= z1]
+        for a, b in zip(floors, floors[1:]):
+            # storey-line transom, straddling the floor plate at its top
+            trans.face_box(face, -half, half, b - 0.05, b + 0.05,
+                           -0.60, 0.60)
+            # the low bar a metre above the floor
+            if a + 1.05 < b:
+                trans.face_box(face, -half, half, a + 0.95, a + 1.05,
                                -0.60, 0.60)
+            # dark sill at the foot of the storey
+            sill.face_box(face, -half, half, a + 0.02, a + 0.14,
+                          -0.10, 0.10)
     trans.finish()
+    sill.finish()
 
     # A real curtain wall behind the big frame: narrow vertical panes between
     # thin mullions, with a white spandrel band on every floor - the office
