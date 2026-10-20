@@ -251,9 +251,9 @@ module and run 28 floors.
   band, the floor line is the dark slab edge itself; every floor plate in the
   model is near-black. Behind it is one dark glass skin with no visible pane
   joints at all: a fine vertical curtain wall of 1.25 m panes - 4:1 with the
-  5 m storey - each window framed by flat bars of 50 x 200 mm: verticals on a
-  1.9 m pitch, a transom on every floor and a second one about a metre above it,
-  so each window is two panes like the Stack 2 apartment wall. Every floor, here and in the planted level, is
+  5 m storey. The window frame is Stack 2's office curtain wall: 140 mm mullions
+  by 600 mm deep on a 0.95 m module, a 100 mm transom on every floor and a
+  second one a metre above it, with a dark sill at the floor. Every floor, here and in the planted level, is
   lit the same way as the apartments: one cool-or-warm ceiling strip per room.
 - **Plaza, 158-188 m.** A planted arcade of branching tree columns and planting,
   open through - no interior wall - with the same room strips on its floors.

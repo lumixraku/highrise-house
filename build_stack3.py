@@ -452,34 +452,39 @@ def build_lattice(mats, cols, rng):
         glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.75, 0.14)
     glass.finish()
 
-    # The pane frame: 200 mm wide flat bars, one full storey tall between the
-    # horizontals, so every pane sits inside a 200 mm border - the flat strip
-    # frame the client asked for, after Stack 2.
+    # The window frame, straight from Stack 2's office curtain wall: mullions
+    # 140 mm on the face by 600 mm deep on a 0.95 m module, a 100 mm transom at
+    # every floor and a second one 1 m above it, plus a dark sill at the floor.
     mull = Part("Lattice_Mullions", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
-        n = max(8, int(round(2 * half / 1.9)))
+        n = max(8, int(round(2 * half / 0.95)))
         step = 2 * half / n
         for i in range(n + 1):
             u = -half + i * step
-            # Flat bar section: 50 mm on the face, 200 mm deep into the reveal.
-            mull.face_box(face, u - 0.025, u + 0.025, z0, z1, -0.62, 0.20)
+            mull.face_box(face, u - 0.07, u + 0.07, z0, z1, -0.60, 0.60)
     mull.finish()
 
     trans = Part("Lattice_Transoms", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
         for z in [z0] + [lev for lev in floor_levels() if z0 < lev <= z1]:
-            # floor line
-            lo = 0.0 if z <= z0 else z - 0.025
-            hi = 0.05 if z <= z0 else z + 0.025
-            trans.face_box(face, -half, half, lo, hi, -0.62, 0.20)
-            # and a second transom about a metre above every floor, so each
-            # window reads as two panes like the Stack 2 apartment wall
-            if z + 1.15 < z1:
-                trans.face_box(face, -half, half, z + 1.05, z + 1.10,
-                               -0.62, 0.20)
+            lo = 0.0 if z <= z0 else z - 0.05
+            hi = 0.10 if z <= z0 else z + 0.05
+            trans.face_box(face, -half, half, lo, hi, -0.60, 0.60)
+            if z + 1.10 < z1:
+                trans.face_box(face, -half, half, z + 0.95, z + 1.05,
+                               -0.60, 0.60)
     trans.finish()
+
+    sill = Part("Lattice_Sills", mats["slate"], col)
+    for face in FACES:
+        half = face_half(face)
+        for z in floor_levels():
+            if z0 < z < z1:
+                sill.face_box(face, -half, half, z + 0.02, z + 0.14,
+                              -0.56, 0.10)
+    sill.finish()
 
     # A real curtain wall behind the big frame: narrow vertical panes between
     # thin mullions, with a white spandrel band on every floor - the office
