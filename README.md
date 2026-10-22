@@ -238,34 +238,30 @@ parapet). That is a 2.80 : 1 wide elevation, squatter than the published sheet
 (3.09 : 1) because the lower block lost one lattice tier at the client's
 direction, but it keeps the 36 m depth.
 
-Three bands, bottom to top, each a different facade system, with metal cornices
-as the "stack" lines between them. Below the apartments the storey is 5 m, so the
-lower block carries 37 floors in that height; the apartments keep their 4 m
-module and run 28 floors.
+Bands, bottom to top, each a different facade system, with metal cornices as the
+"stack" lines between them. Below the apartments the storey is 5 m; the
+apartments keep their 4 m module and run 31 floors.
 
-- **Lattice, 0-138 m.** The whole lower block is one facade: an external frame six
-  bays wide by five tiers tall. The bottom two tiers are framed cells - six big
-  glazed squares per row, closed by thick members, no X, and left as very large
-  bare glass (a mall, no window grid) - while the upper three tiers are diagonal
-  only: an X in every cell, no intermediate verticals and no
-  horizontal bands, just the corner posts and the diamond grid. The frame carries vertical posts only: no added horizontal
-  band, the floor line is the dark slab edge itself; every floor plate in the
-  model is near-black. Behind it is one dark glass skin with no visible pane
-  joints at all: a fine vertical curtain wall of 1.25 m panes - 4:1 with the
-  5 m storey. Above the mall base the window frame is Stack 2's office curtain
-  wall: 140 mm mullions
-  by 600 mm deep on a 0.95 m module, a 100 mm transom on every floor and a
-  second one a metre above it, and the dark 100 mm sill at the foot of every
-  storey - Stack 2's office band item for item. Every floor, here and in the planted level, is
-  lit the same way as the apartments: one cool-or-warm ceiling strip per room.
-- **Plaza, 138-168 m.** A planted arcade of branching tree columns and planting,
-  open through - no interior wall - with the same room strips on its floors.
-- **Apartments, 168-294 m.** A semi-transparent glazed skin drawn as a staggered
+- **Mall, 0-43.3 m.** The two lowest tiers of the big external frame, six bays of
+  very large bare glass per row (about 18 x 21 m), no window grid - the shopping
+  floors.
+- **Refuge, 43.3-48.3 m.** One empty 5 m floor between the mall and the office:
+  the frame and its columns carry straight through, there is no glazing at all.
+- **Office, 48.3-142 m.** The upper three tiers of the same frame, diagonal only -
+  an X in every cell, no intermediate verticals and no horizontal bands - with
+  Stack 2's office curtain wall behind it: 140 x 600 mm mullions on a 0.95 m
+  module, a 100 mm transom on every floor and a second one a metre above, plus
+  the dark sill. Every floor is lit with one cool-or-warm ceiling strip per room.
+- **Refuge, 142-147 m.** A second empty floor, frame only.
+- **Plaza, 147-177 m.** A planted arcade of branching tree columns, open through -
+  no interior wall - with the same room strips on its floors.
+- **Refuge, 177-182 m.** A third empty floor, frame only.
+- **Apartments, 182-308 m.** A semi-transparent glazed skin drawn as a staggered
   block grid: every bay is one 4 m storey of glass, laid in a half-bond running
-  course, and the external frame around the bays is the window pattern itself -
-  there are no punched openings. Three near-identical glass tints and a lit
-  ceiling in every bay keep it reading as apartments at dusk - no wall behind the
-  glass. A two-metre metal fascia closes the grid at the roof.
+  course, and the external frame around the bays is the window pattern itself.
+  The top three floors switch to the office curtain wall. A two-metre metal
+  fascia closes the grid at the roof.
+- **Flat roof, 308 m.** One deck slab and a 1.2 m parapet (309.6 m).
 - **Night lighting.** Six studio area lights outside, plus 48 simulated interior
   point lights scattered at random plan positions and heights standing in for
   the thousands of fixtures, warm and cool. Floor plates neither take light nor cast shadow, so the interior

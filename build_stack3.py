@@ -59,7 +59,7 @@ PREFIX = "Stack3_"
 # ---------------------------------------------------------------------------
 # Frozen envelope and program
 # ---------------------------------------------------------------------------
-ROOF = 294.0              # flat roof deck; the stepped crown is gone
+ROOF = 308.0              # flat roof deck; the stepped crown is gone
 PARAPET_H = 1.2
 HEIGHT = ROOF + 0.4 + PARAPET_H    # 335.6 to the top of the parapet
 WIDTH = 108.0
@@ -68,18 +68,21 @@ HALF_W, HALF_D = WIDTH / 2.0, DEPTH / 2.0
 
 STOREY = 4.0            # apartment storey (and the block module)
 STOREY_LOW = 5.0        # base / diagrid / plaza storey: 5 m, fewer floors
+REFUGE_H = 5.0          # one empty floor between two zones, frame only
 
 
 def floor_levels():
     """Floor plates: 5 m storeys below the apartments, 4 m within them."""
-    return ([z for z in range(5, 168, 5)]
-            + [z for z in range(168, 293, 4)])
+    return ([z for z in range(5, 178, 5)]
+            + [z for z in range(182, 307, 4)])
 BAY = 3.6               # facade mullion module on the glazed bands
 
 BANDS = (
-    ("Lattice", 0.0, 138.0),
-    ("Plaza", 138.0, 168.0),
-    ("Apartments", 168.0, 294.0),
+    ("Lattice", 0.0, 142.0),
+    ("Refuge B", 142.0, 147.0),
+    ("Plaza", 147.0, 177.0),
+    ("Refuge C", 177.0, 182.0),
+    ("Apartments", 182.0, 308.0),
 )
 BAND = {name: (z0, z1) for name, z0, z1 in BANDS}
 
@@ -462,33 +465,64 @@ def office_frames(mats, col, prefix, z0, z1):
     sill.finish()
 
 
+def build_refuge(mats, cols, name):
+    """A five-metre refuge floor between two zones: the frame and its columns
+    carry straight through, but there is no glazing at all."""
+    z0, z1 = BAND[name]
+    col = cols["Refuge"]
+    inset, bays = 0.62, 6
+    tag = name.replace(" ", "_")
+
+    frame = Part(tag + "_Frame", mats["silver"], col)
+    for face in FACES:
+        half = face_half(face)
+        hw = half - inset
+        n = bays if face in LONG_FACES else 2
+        for i in range(n + 1):
+            u = -hw + i * 2 * hw / n
+            frame.face_box(face, u - inset, u + inset, z0, z1, -0.34, 0.60)
+        for z in (z0, z1):
+            frame.face_box(face, -half, half, z - 0.35, z + 0.35,
+                           -0.34, 0.60)
+    frame.finish()
+
+    slab = Part(tag + "_Slab", mats["slate"], col)
+    for face in FACES:
+        half = face_half(face)
+        slab.face_box(face, -half, half, z0 - 0.30, z0 + 0.10, -0.56, 0.26)
+    slab.finish()
+
+
 def build_lattice(mats, cols, rng):
-    """The lower block: a big external frame, two mall tiers of very large glass
-    at the foot and three tiers of X bracing above, with Stack 2's office
-    curtain wall behind the braced part."""
+    """The lower block: two mall tiers of very large glass, a five-metre refuge
+    floor that keeps the frame but has no glass, then three tiers of X bracing
+    with Stack 2's office curtain wall behind them."""
     z0, z1 = BAND["Lattice"]
     col = cols["Lattice"]
-    bays, tiers, base_tiers = 6, 5, 2
+    bays, base_tiers = 6, 2
     inset = 0.62
-    base_tier = 21.35                     # mall tiers: two floors shorter
-    base_top = z0 + inset + base_tiers * base_tier
-    x_tier = ((z1 - z0) - 2 * inset - base_tiers * base_tier) / (
-        tiers - base_tiers)
+    mall_tier = 21.35
+    mall_top = z0 + inset + base_tiers * mall_tier
+    refuge_top = mall_top + REFUGE_H
+    x_tier = (z1 - refuge_top) / 3.0
 
     glass = Part("Lattice_Glass", mats["glass_deep"], col)
     for face in FACES:
         half = face_half(face)
-        glass.face_box(face, -half, half, z0 + 0.2, z1 - 0.2, -0.12, 0.12)
+        glass.face_box(face, -half, half, z0 + 0.2, mall_top - 0.1,
+                       -0.12, 0.12)
+        glass.face_box(face, -half, half, refuge_top + 0.1, z1 - 0.2,
+                       -0.12, 0.12)
     glass.finish()
 
-    # Office window frame above the mall only.
-    office_frames(mats, col, "Lattice", base_top, z1)
+    # Office window frame above the refuge only.
+    office_frames(mats, col, "Lattice", refuge_top, z1)
 
     band = Part("Lattice_Slab_Edges", mats["slate"], col)
     for face in FACES:
         half = face_half(face)
         for z in [0.0] + [lev for lev in floor_levels()
-                          if 0.0 < lev < base_top - 0.5]:
+                          if 0.0 < lev < mall_top - 0.5]:
             lo = 0.0 if z <= 0.0 else z - 0.32
             hi = 0.40 if z <= 0.0 else z + 0.08
             band.face_box(face, -half, half, lo, hi, -0.56, 0.26)
@@ -501,10 +535,10 @@ def build_lattice(mats, cols, rng):
         n = bays if face in LONG_FACES else 2
         for i in range(n + 1):
             u = -hw + i * 2 * hw / n
-            top = z1 if i in (0, n) else base_top
+            top = z1 if i in (0, n) else refuge_top
             frame.face_box(face, u - inset, u + inset, z0, top, -0.34, 0.60)
-        for j in range(base_tiers + 1):
-            z = z0 + inset + j * base_tier
+        for z in ([z0 + inset + j * mall_tier for j in range(base_tiers + 1)]
+                  + [refuge_top]):
             frame.face_box(face, -half, half, z - inset, z + inset,
                            -0.34, 0.60)
     frame.finish()
@@ -516,10 +550,10 @@ def build_lattice(mats, cols, rng):
         n = bays if face in LONG_FACES else 2
         du = 2 * hw / n
         for i in range(n):
-            for j in range(tiers - base_tiers):
+            for j in range(3):
                 u0 = -hw + i * du
                 u1 = u0 + du
-                za = base_top + j * x_tier
+                za = refuge_top + j * x_tier
                 zb = za + x_tier
                 brace.bar(fp(face, u0, za, -0.05), fp(face, u1, zb, -0.05),
                           0.66, 0.95)
@@ -532,10 +566,9 @@ def build_lattice(mats, cols, rng):
     rails = Part("Lattice_Base_Rails", mats["silver"], col)
     for face in FACES:
         half = face_half(face)
-        rail_h = 0.62
         for j in range(base_tiers + 1):
-            z = z0 + inset + j * base_tier
-            rails.face_box(face, -half, half, z - rail_h, z + rail_h,
+            z = z0 + inset + j * mall_tier
+            rails.face_box(face, -half, half, z - 0.62, z + 0.62,
                            -0.34, 0.60)
     rails.finish()
 
@@ -1065,8 +1098,8 @@ def build(args):
 
     root = bpy.data.collections.new("STACK3")
     scene.collection.children.link(root)
-    names = ("Site", "Structure", "Lattice", "Plaza", "Apartments",
-             "Roof", "Lighting")
+    names = ("Site", "Structure", "Lattice", "Refuge", "Plaza",
+             "Apartments", "Roof", "Lighting")
     cols = {name: sub_collection(root, "STACK3_" + name) for name in names}
 
     mats = build_materials(args.night)
@@ -1075,7 +1108,9 @@ def build(args):
     build_floors(mats, cols)
     build_cornices(mats, cols)
     build_lattice(mats, cols, rng)
+    build_refuge(mats, cols, "Refuge B")
     build_garden_band("Plaza", mats, cols, 11.8, rng)
+    build_refuge(mats, cols, "Refuge C")
     build_apartments(mats, cols, rng)
     build_roof(mats, cols)
 

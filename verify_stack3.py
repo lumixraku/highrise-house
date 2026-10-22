@@ -85,17 +85,17 @@ def main():
             "Lattice", "Plaza", "Apartment")),
         "plan is 108 m wide": abs((x1 - x0) - WIDTH) <= 2 * FACADE_RELIEF,
         "plan is 36 m deep": abs((y1 - y0) - DEPTH) <= 2 * FACADE_RELIEF,
-        "flat roof deck at 294 m": abs(z_span("Roof_Deck")[1] - 294.4) < 0.05,
-        "parapet tops at 295.6 m": abs(z1 - (294.0 + 0.4 + 1.2)) < 0.05,
+        "flat roof deck at 308 m": abs(z_span("Roof_Deck")[1] - 308.4) < 0.05,
+        "parapet tops at 309.6 m": abs(z1 - (308.0 + 0.4 + 1.2)) < 0.05,
         "slab sits on the ground": abs(z0) <= 0.02,
         "facade stays within its relief band": overhang <= FACADE_RELIEF,
-        "lattice glass 0-138 m": abs(z_span("Lattice_Glass")[0] - 0.2) < 0.05
-        and abs(z_span("Lattice_Glass")[1] - 137.8) < 0.05,
+        "lattice glass 0-142 m": abs(z_span("Lattice_Glass")[0] - 0.2) < 0.05
+        and abs(z_span("Lattice_Glass")[1] - 141.8) < 0.05,
         "lattice carries a frame and X braces": (
             present("Lattice_Frame") and present("Lattice_Braces")),
-        "lattice braces start above the mall glass": (
-            42.5 <= z_span("Lattice_Braces")[0] <= 43.8
-            and 137.0 <= z_span("Lattice_Braces")[1] <= 137.9),
+        "lattice braces start above the refuge": (
+            47.8 <= z_span("Lattice_Braces")[0] <= 49.0
+            and 141.0 <= z_span("Lattice_Braces")[1] <= 142.6),
         "bottom two tiers are framed cells, not X": (
             present("Lattice_Base_Rails")
             and abs(z_span("Lattice_Base_Rails")[0] - 0.0) < 0.05
@@ -105,12 +105,12 @@ def main():
         "no fin band or old base remains": not any(
             n.startswith("Stack3_Office") or n.startswith("Stack3_Hotel")
             or n.startswith("Stack3_Base") for n in names),
-        "plaza arcade 138-168 m": abs(z_span("Plaza_Trees")[0] - 138.35) < 0.1,
-        "glazed apartment bays 168-280 m": (
-            168.0 <= z_span("Apartment_Glass_S")[0] <= 168.4
-            and 279.6 <= z_span("Apartment_Glass_S")[1] <= 280.0),
-        "attic closes the band at 294 m":
-        z_span("Apartment_Topband")[1] == 294.0,
+        "plaza arcade 147-177 m": abs(z_span("Plaza_Trees")[0] - 147.35) < 0.1,
+        "glazed apartment bays 182-294 m": (
+            182.0 <= z_span("Apartment_Glass_S")[0] <= 182.4
+            and 293.6 <= z_span("Apartment_Glass_S")[1] <= 294.0),
+        "attic closes the band at 308 m":
+        z_span("Apartment_Topband")[1] == 308.0,
         "nothing stands above the roof": not any(
             n.startswith("Stack3_Crown") for n in names),
         "two long-axis cores": (
@@ -118,7 +118,7 @@ def main():
             and abs(bbox([bpy.data.objects["Stack3_Structure_Cores"]])[1] - 34.0) < 0.1),
         "floor plates: 5 m below, 4 m in the apartments": (
             abs(z_span("Structure_Floors")[0] - 4.65) < 0.05
-            and abs(z_span("Structure_Floors")[1] - 292.0) < 0.05),
+            and abs(z_span("Structure_Floors")[1] - 306.0) < 0.05),
         "shallow slab reads as a slab": (WIDTH / DEPTH) > 2.6,
         "every mesh has a material": all(o.data.materials for o in meshes),
         "closed meshes": boundary_edges == 0,
@@ -132,7 +132,7 @@ def main():
         "portrait review frames": scene.render.resolution_x == 900
         and scene.render.resolution_y == 1200,
         "reference recorded": "mvrdv.com" in scene.get("reference_urls", ""),
-        "band program recorded": len(scene.get("bands", "").split(",")) == 3,
+        "band program recorded": len(scene.get("bands", "").split(",")) == 5,
         "object count in range": 40 <= len(meshes) <= 110,
     }
 
