@@ -27,6 +27,7 @@ import math
 import os
 import sys
 
+import bmesh
 import bpy
 import numpy as np
 from mathutils import Vector
@@ -110,6 +111,12 @@ FRAME_MULLION = (0.08, 0.10)  # thinner depth than edges: no coplanar joints
 FRAME_END_GAP = 0.015    # bar ends pulled in off the surfaces panes meet
 FRAMED_GLASS = ("Window_Glass", "Glass_Frosted", "Glass_Ribbed",
                 "Glass_Ribbed_Back")
+# SKP paints the whole porthole storey as Window_Glass / Frosted / Ribbed.
+# Only the ~1.8 m circular ports are glass; the rest of that storey is hull.
+PORTHOLE_Z0, PORTHOLE_Z1 = 17.5, 22.5
+PORTHOLE_DISK_AREA = 0.35   # one 22-gon port fan triangle is ~0.2 m2
+HULL_FROM_GLASS = 6         # Superstructure_White
+GLASS_MATS = (8, 9, 11, 16, 17, 18, 27, 29, 34)
 
 
 def srgb_to_linear(c: float) -> float:
@@ -165,6 +172,32 @@ def _load_ship_triangles():
         uvs.append(uv[idx])
         mats.append(np.full(len(idx), part["mat"], dtype=np.int32))
     return np.concatenate(tris), np.concatenate(uvs), np.concatenate(mats)
+
+
+def _hull_porthole_band(T, UV, M):
+    """Keep only the circular ports as glass on the porthole storey.
+
+    SketchUp tagged the whole 18-24 m band Window_Glass / Glass_Frosted /
+    Glass_Ribbed.  Keep only the circular ports (tiny fan triangles) as
+    glass; every other vertical pane on that storey is hull plating.
+    """
+    n = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0])
+    ln = np.linalg.norm(n, axis=1)
+    area = 0.5 * ln
+    z0 = T[:, :, 2].min(1)
+    z1 = T[:, :, 2].max(1)
+    vertical = ln > 1e-5
+    vertical[vertical] = np.abs(n[vertical, 2]) < 0.4 * ln[vertical]
+    glass = np.isin(M, GLASS_MATS)
+    on_storey = (vertical & glass & (z0 >= PORTHOLE_Z0) & (z1 <= PORTHOLE_Z1)
+                 & (np.abs(T[:, :, 1] - SHIP_CENTER[1]).min(1) > 30.0))
+    disk = area < PORTHOLE_DISK_AREA
+    hull = on_storey & ~disk
+    M = M.copy()
+    M[hull] = HULL_FROM_GLASS
+    print(f"[ship] porthole band: {int(hull.sum())} wall tris -> hull, "
+          f"{int((on_storey & disk).sum())} circular ports kept as glass")
+    return T, UV, M
 
 
 def _fix_coplanar(T, UV, M, step=0.03):
@@ -373,8 +406,14 @@ def _add_decks(coll, root):
         # single cut would leak through; the short reach below closes the
         # SKP's open-topped bow wedge (its walls stop at z=15).
         above = DECK_LEVELS[li + 1] if li + 1 < len(DECK_LEVELS) else level + 3.0
+        # Porthole storey: slice below the circular ports so the cabin
+        # floor is bounded by hull plating, not leaked through the disks.
+        if abs(level - 18.0) < 0.01:
+            cuts = np.arange(level + 0.15, min(level + 1.9, above) - 0.05, 0.3)
+        else:
+            cuts = np.arange(level - 0.6, above - 0.1, 0.4)
         wall = np.zeros((ny, nx), bool)
-        for cut in np.arange(level - 0.6, above - 0.1, 0.4):
+        for cut in cuts:
             cross = ((z > cut).sum(1) % 3) != 0
             for t in T[cross]:
                 pts = []
@@ -397,7 +436,11 @@ def _add_decks(coll, root):
         # grow back to the wall line, never past the dilated wall band
         deck = _dilate(inside & ~closed, DECK_GAP) & inside
         existing = horiz & (np.abs(z.mean(1) - level) < 0.3)
-        deck &= ~_raster_tris(T[existing], x0, y0, nx, ny)
+        # Porthole storey: SKP only has a thin outer walkway at 18 m, so
+        # subtracting those faces would leave the cabin floor empty. Keep
+        # the interior fill; skip the existing-deck subtraction here only.
+        if abs(level - 18.0) > 0.01:
+            deck &= ~_raster_tris(T[existing], x0, y0, nx, ny)
         if pool_cells is not None and pool_z[0] - 0.5 < level < pool_z[1] + 3.0:
             deck &= ~_dilate(pool_cells, 1)
         # morphological opening drops sub-metre speckles left in balcony bays
@@ -414,6 +457,142 @@ def _add_decks(coll, root):
     for p in ob.data.polygons:
         p.use_smooth = False
     print(f"[ship] interior decks: {total:.0f} m2 over {len(DECK_LEVELS)} levels")
+
+
+# Porthole storey (z 18-22.45): the SKP overhang out to |y|=32 only has the
+# 22.45 m deck above it and the loose port disks; no side plating, no floor.
+PORT_Z0, PORT_Z1, PORT_TOP = 17.95, 22.45, 19.45
+PORT_ZC, PORT_R, PORT_PITCH = 20.95, 0.9, 3.0
+PORT_RUNS = ((-127.0, 16), (104.5, 13))   # first centre x, count (SKP)
+PORT_Y, PORT_WALL_T = 31.99, 0.15
+PORT_SEG = 32
+# Bridge front (22.45 m deck outline), port side half, from the side wall
+# round to the centreline; mirrored for starboard.
+BRIDGE_OUTLINE = ((-141.23, 0.0), (-141.23, 13.82), (-138.36, 17.91),
+                  (-135.5, 22.0), (-132.0, 27.0), (-128.5, 32.0))
+
+
+def _wall_quad(verts, faces, a, b, z0, z1, y_in):
+    """Slab of plating between plan points a, b (outer face) z0..z1."""
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    d = b - a
+    n = np.array([d[1], -d[0]]) / np.linalg.norm(d)
+    if np.dot(n, (a + b) / 2) < 0:
+        n = -n
+    ia, ib = a - n * y_in, b - n * y_in
+    if z1 - z0 < 0.01:
+        return
+    k = len(verts)
+    for p in (a, b, ib, ia):
+        verts.append((p[0], p[1], z0))
+    for p in (a, b, ib, ia):
+        verts.append((p[0], p[1], z1))
+    faces += [(k, k + 1, k + 5, k + 4), (k + 3, k + 7, k + 6, k + 2),
+              (k, k + 4, k + 7, k + 3), (k + 1, k + 2, k + 6, k + 5),
+              (k, k + 3, k + 2, k + 1), (k + 4, k + 5, k + 6, k + 7)]
+
+
+def _port_tile(verts, faces, cx, s):
+    """3x3 m plating tile with a round hole, outer face at y=s*PORT_Y."""
+    h = PORT_PITCH / 2
+    rings = []
+    for y in (PORT_Y, PORT_Y - PORT_WALL_T):
+        sq, ci = [], []
+        for i in range(PORT_SEG):
+            t = 2 * math.pi * i / PORT_SEG
+            c, sn = math.cos(t), math.sin(t)
+            m = h / max(abs(c), abs(sn))
+            sq.append(len(verts))
+            verts.append((cx + c * m, s * y, PORT_ZC + sn * m))
+            ci.append(len(verts))
+            verts.append((cx + c * PORT_R, s * y, PORT_ZC + sn * PORT_R))
+        rings.append((sq, ci))
+    (so, co), (si, cin) = rings
+    for i in range(PORT_SEG):
+        j = (i + 1) % PORT_SEG
+        faces.append((so[i], so[j], co[j], co[i]))      # outer face
+        faces.append((si[i], cin[i], cin[j], si[j]))     # inner face
+        faces.append((co[i], co[j], cin[j], cin[i]))    # hole reveal
+
+
+def _add_porthole_storey(coll, root):
+    """Side plating with round holes and a floor for the porthole storey."""
+    verts, faces = [], []
+    w = PORT_WALL_T
+    for s in (1, -1):
+        for x0, cnt in PORT_RUNS:
+            xa = x0 - PORT_PITCH / 2
+            xb = x0 + PORT_PITCH * (cnt - 1) + PORT_PITCH / 2
+            for k in range(cnt):
+                _port_tile(verts, faces, x0 + k * PORT_PITCH, s)
+            # plating below and above the 3 m port tiles
+            _wall_quad(verts, faces, (xa, s * PORT_Y), (xb, s * PORT_Y),
+                       PORT_Z0, PORT_ZC - PORT_PITCH / 2, w)
+            _wall_quad(verts, faces, (xa, s * PORT_Y), (xb, s * PORT_Y),
+                       PORT_ZC + PORT_PITCH / 2, PORT_Z1, w)
+            # close each cabin run from the open lifeboat bay
+            for xe in (xa, xb):
+                if -128.0 < xe < 141.0:
+                    _wall_quad(verts, faces, (xe, s * 22.0),
+                               (xe, s * PORT_Y), PORT_Z0, PORT_Z1, w)
+        # bow: below the SKP glazing (it starts at z 19.45)
+        for a, b in zip(BRIDGE_OUTLINE[:-1], BRIDGE_OUTLINE[1:]):
+            _wall_quad(verts, faces, (a[0], s * a[1]), (b[0], s * b[1]),
+                       PORT_Z0, PORT_TOP - 0.01, w)
+        # stern: the diagonal back to the hull is open in the SKP
+        _wall_quad(verts, faces, (142.0, s * PORT_Y), (149.0, s * 22.0),
+                   PORT_Z0, PORT_Z1, w)
+        # floor of the overhang, following the 22.45 m deck outline
+        outline = [(-135.5, 22.0), (-132.0, 27.0), (-128.5, 32.0),
+                   (142.0, 32.0), (149.0, 22.0)]
+        top, bot = PORT_Z0 - 0.07, PORT_Z0 - 0.37
+        k = len(verts)
+        for x, y in outline:
+            verts.append((x, s * y, bot))
+        for x, y in outline:
+            verts.append((x, s * y, top))
+        n = len(outline)
+        faces.append(tuple(range(k, k + n)))
+        faces.append(tuple(range(k + n, k + 2 * n)))
+        for i in range(n):
+            j = (i + 1) % n
+            faces.append((k + i, k + j, k + n + j, k + n + i))
+    # close the gap between the foredeck (z 14.95) and the bridge floor:
+    # front wall under the bridge front, side walls along the hull rim
+    rim = ((-141.23, 22.0 * (-141.23 + 172.5) / 44.0), (-128.5, 22.0),
+           (-125.5, 22.0))
+    gz0, gz1 = 14.95, PORT_Z0 - 0.37
+    _wall_quad(verts, faces, (rim[0][0], -rim[0][1]), rim[0], gz0, gz1, w)
+    for s in (1, -1):
+        for a, b in zip(rim[:-1], rim[1:]):
+            _wall_quad(verts, faces, (a[0], s * a[1]), (b[0], s * b[1]),
+                       gz0, gz1, w)
+    # floor of the bridge overhang over the foredeck (SKP has none)
+    outline = ([(x, -y) for x, y in BRIDGE_OUTLINE[::-1]][:-1]
+               + list(BRIDGE_OUTLINE[1:]) + [(-125.5, 22.0), (-125.5, -22.0)])
+    outline = [(x, y) for x, y in outline if abs(y) <= 22.0]
+    top, bot = PORT_Z0 - 0.07, PORT_Z0 - 0.37
+    k = len(verts)
+    for x, y in outline:
+        verts.append((x, y, bot))
+    for x, y in outline:
+        verts.append((x, y, top))
+    n = len(outline)
+    faces.append(tuple(range(k, k + n)))
+    faces.append(tuple(range(k + n, k + 2 * n)))
+    for i in range(n):
+        j = (i + 1) % n
+        faces.append((k + i, k + j, k + n + j, k + n + i))
+    mat = bpy.data.materials["Superstructure_White"]
+    ob = _add_object(coll, root, "Porthole_Storey", verts, faces, mat)
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(ob.data)
+    bm.free()
+    for p in ob.data.polygons:
+        p.use_smooth = False
+    print(f"[ship] porthole storey: {len(faces)} faces of side plating + floor")
 
 
 def _bar(verts, faces, p, q, side, normal, width, depth):
@@ -466,6 +645,9 @@ def _add_glass_frames(coll, root):
         for i, w in enumerate(weld):
             first.setdefault(w, i)
         for poly in me.polygons:
+            if poly.area < 1.0:
+                # circular portholes are a fan of tiny tris; do not mullion them
+                continue
             n = np.array(poly.normal[:])
             vs = [weld[i] for i in poly.vertices]
             P = [co[first[w]] for w in vs]
@@ -507,6 +689,7 @@ def _add_glass_frames(coll, root):
 
 def build_ship() -> dict:
     T, UV, M = _load_ship_triangles()
+    T, UV, M = _hull_porthole_band(T, UV, M)
     T, UV, M = _fix_coplanar(T, UV, M)
     T = T - np.array(
         [SHIP_CENTER[0], SHIP_CENTER[1], SHIP_WATERLINE], dtype=np.float64
@@ -557,6 +740,7 @@ def build_ship() -> dict:
             ob.parent = root
 
     _add_decks(coll, root)
+    _add_porthole_storey(coll, root)
     _add_glass_frames(coll, root)
 
     return {"verts": total_v, "tris": total_t, "objects": len(set(M.tolist()))}
