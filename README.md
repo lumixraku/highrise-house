@@ -2,7 +2,7 @@
 
 A procedural Blender model of a high-rise residential complex composed of two independently configured apartment towers, a continuous curved glass podium, open pilotis levels, sky gardens, and landscaped roofs. The project explores facade rhythm, public space, structure, and lighting at the scale of a dense vertical development.
 
-![Current Blender view](docs/images/highrise-current-view.png)
+![Current Blender view](highrise_house/images/highrise-current-view.png)
 
 The image above captures the current Blender working view. The images below are rendered from the same saved `.blend` scene.
 
@@ -34,17 +34,17 @@ The image above captures the current Blender working view. The images below are 
 
 | Ground-Up Twin-Tower View | Ground-Up Podium Corner |
 | --- | --- |
-| ![Ground-up view between the illuminated towers](out/view_ground_up.png) | ![Ground-up view across the illuminated podium](out/view_ground_up_wide.png) |
+| ![Ground-up view between the illuminated towers](highrise_house/out/view_ground_up.png) | ![Ground-up view across the illuminated podium](highrise_house/out/view_ground_up_wide.png) |
 | The camera sits at ground level and looks steeply upward between both towers, emphasizing their height and scattered interior lights. | A second ground-level camera looks upward from the podium corner, placing the illuminated soffit, pilotis, and both towers in the same frame. |
 
 | Podium and Pilotis | Sky Garden |
 | --- | --- |
-| ![Podium and pilotis](docs/images/highrise-podium.png) | ![Sky garden](docs/images/highrise-sky-garden.png) |
+| ![Podium and pilotis](highrise_house/images/highrise-podium.png) | ![Sky garden](highrise_house/images/highrise-sky-garden.png) |
 | A close view of the open base, columns, public galleries, guardrails, and illuminated podium underside. | The double-height planted refuge level, vertical screen, glazing, and structural frame. |
 
 | Facade Detail |
 | --- |
-| ![Facade detail](docs/images/highrise-facade-detail.png) |
+| ![Facade detail](highrise_house/images/highrise-facade-detail.png) |
 | Clear glazing, ventilation strips, horizontal spandrels, mullions, and the varied interior-light modules seen at close range. |
 
 ## The Stack
@@ -55,15 +55,15 @@ Generated and iterated procedurally with **DeepSeek 4.1**.
 
 | Whole building | Apartment curtain wall |
 | --- | --- |
-| ![The Stack, whole building](docs/images/stack-preview.png) | ![The Stack, apartment curtain wall](docs/images/stack-facade.png) |
+| ![The Stack, whole building](the_stack/images/stack-preview.png) | ![The Stack, apartment curtain wall](the_stack/images/stack-facade.png) |
 
 | Apartment void | Refuge sky garden |
 | --- | --- |
-| ![The Stack, apartment void](docs/images/stack-void.png) | ![The Stack, refuge sky garden](docs/images/stack-refuge-garden.png) |
+| ![The Stack, apartment void](the_stack/images/stack-void.png) | ![The Stack, refuge sky garden](the_stack/images/stack-refuge-garden.png) |
 
 | Retail base |
 | --- |
-| ![The Stack, retail base](docs/images/stack-base.png) |
+| ![The Stack, retail base](the_stack/images/stack-base.png) |
 
 ### Reference
 
@@ -73,15 +73,15 @@ is kept here for comparison:
 
 | MVRDV reference — aerial (photo 16064) | MVRDV reference — atrium escalators |
 | --- | --- |
-| ![The Stack reference, aerial](docs/images/stack-mvrdv-aerial.jpg) | ![The Stack reference, atrium escalators](docs/images/stack-mvrdv-atrium.jpg) |
+| ![The Stack reference, aerial](the_stack/images/stack-mvrdv-aerial.jpg) | ![The Stack reference, atrium escalators](the_stack/images/stack-mvrdv-atrium.jpg) |
 
 Build, render the review views and validate it with:
 
 ```bash
-blender --background --factory-startup --python-exit-code 1 --python build_the_stack.py
-blender --background --factory-startup --python-exit-code 1 --python build_the_stack.py -- --views preview facade garden void base
-blender --background --factory-startup --python-exit-code 1 --python verify_the_stack.py -- out/the_stack.blend
-blender --background --factory-startup --python-exit-code 1 --python check_stack_zfight.py -- out/the_stack.blend
+blender --background --factory-startup --python-exit-code 1 --python the_stack/build_the_stack.py
+blender --background --factory-startup --python-exit-code 1 --python the_stack/build_the_stack.py -- --views preview facade garden void base
+blender --background --factory-startup --python-exit-code 1 --python the_stack/verify_the_stack.py -- the_stack/out/the_stack.blend
+blender --background --factory-startup --python-exit-code 1 --python shared/check_stack_zfight.py -- the_stack/out/the_stack.blend
 ```
 
 ### Export The Stack for the Browser
@@ -90,11 +90,11 @@ The web viewer loads a binary glTF file (`.glb`), not the editable Blender file 
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 \
-  --python export_the_stack.py -- \
+  --python the_stack/export_the_stack.py -- \
   --profile architectural \
   --compression meshopt \
-  --report out/the_stack_web_report.json \
-  --source out/the_stack.blend \
+  --report the_stack/out/the_stack_web_report.json \
+  --source the_stack/out/the_stack.blend \
   --output web/assets/the_stack.glb
 
 npm run optimize:web -- \
@@ -106,7 +106,7 @@ npm run optimize:web -- \
 The browser loads `web/assets/the_stack.optimized.glb`. Material merging is enabled by default because browser performance is more sensitive to draw calls than to this model's triangle count. It preserves the geometry, floor slabs, and triangle count; it only reduces the number of independent mesh primitives. Blender EEVEE glass node graphs are translated on the in-memory export copy to glTF transmission/IOR/specular/clearcoat properties so the browser keeps the source glass's transparency and reflection semantics. The `.blend` file is never saved by the exporter. To export without this web optimization:
 
 ```bash
-blender --background --factory-startup --python export_the_stack.py -- \
+blender --background --factory-startup --python the_stack/export_the_stack.py -- \
   --no-merge-materials
 ```
 
@@ -179,7 +179,7 @@ Triangles:           198,860
 Meshopt:             EXT_meshopt_compression
 ```
 
-The original editable scene remains `out/the_stack.blend`. The web asset is loaded by `web/index.html` through Three.js's `GLTFLoader` with `MeshoptDecoder`. The exporter supports `--profile static`, `--profile animated`, and `--profile architectural`; animated exports do not merge meshes. It also accepts `--compression draco`, `--compression meshopt`, `--compression none`, `--report`, `--no-merge-materials`, and `--preserve-materials`. LOD is intentionally not applied automatically because generic geometric decimation can damage glass, floors, instances, and animation semantics; runtime resolution and on-demand rendering are enabled in the viewer instead.
+The original editable scene remains `the_stack/out/the_stack.blend`. The web asset is loaded by `web/index.html` through Three.js's `GLTFLoader` with `MeshoptDecoder`. The exporter supports `--profile static`, `--profile animated`, and `--profile architectural`; animated exports do not merge meshes. It also accepts `--compression draco`, `--compression meshopt`, `--compression none`, `--report`, `--no-merge-materials`, and `--preserve-materials`. LOD is intentionally not applied automatically because generic geometric decimation can damage glass, floors, instances, and animation semantics; runtime resolution and on-demand rendering are enabled in the viewer instead.
 
 ## The Stack 2
 
@@ -204,22 +204,22 @@ massing and the public escalator route but reworks the envelope and the program:
 
 | Whole building | Apartment curtain wall |
 | --- | --- |
-| ![The Stack 2, whole building](docs/images/stack2-preview.png) | ![The Stack 2, apartment curtain wall](docs/images/stack2-facade.png) |
+| ![The Stack 2, whole building](the_stack2/images/stack2-preview.png) | ![The Stack 2, apartment curtain wall](the_stack2/images/stack2-facade.png) |
 
 | Apartment void (glazed reveal) | Refuge sky garden |
 | --- | --- |
-| ![The Stack 2, apartment void](docs/images/stack2-void.png) | ![The Stack 2, refuge sky garden](docs/images/stack2-refuge-garden.png) |
+| ![The Stack 2, apartment void](the_stack2/images/stack2-void.png) | ![The Stack 2, refuge sky garden](the_stack2/images/stack2-refuge-garden.png) |
 
 | Retail base |
 | --- |
-| ![The Stack 2, retail base](docs/images/stack2-base.png) |
+| ![The Stack 2, retail base](the_stack2/images/stack2-base.png) |
 
 Build and render the review views with:
 
 ```bash
-blender --background --factory-startup --python-exit-code 1 --python build_stack2.py
-blender --background --factory-startup --python-exit-code 1 --python build_stack2.py -- --views preview facade garden void base
-blender --background --factory-startup --python-exit-code 1 --python check_stack_zfight.py -- out/the_stack2.blend
+blender --background --factory-startup --python-exit-code 1 --python the_stack2/build_stack2.py
+blender --background --factory-startup --python-exit-code 1 --python the_stack2/build_stack2.py -- --views preview facade garden void base
+blender --background --factory-startup --python-exit-code 1 --python shared/check_stack_zfight.py -- the_stack2/out/the_stack2.blend
 ```
 
 ## The Stack 3
@@ -280,22 +280,22 @@ dome.
 
 | Whole building | Elevation |
 | --- | --- |
-| ![The Stack 3, whole building](docs/images/stack3-preview.png) | ![The Stack 3, elevation](docs/images/stack3-elevation.png) |
+| ![The Stack 3, whole building](the_stack3/images/stack3-preview.png) | ![The Stack 3, elevation](the_stack3/images/stack3-elevation.png) |
 
 | Retail base | Glazed apartment bays |
 | --- | --- |
-| ![The Stack 3, retail base](docs/images/stack3-base.png) | ![The Stack 3, brick apartments](docs/images/stack3-detail.png) |
+| ![The Stack 3, retail base](the_stack3/images/stack3-base.png) | ![The Stack 3, brick apartments](the_stack3/images/stack3-detail.png) |
 
 | Narrow face |
 | --- |
-| ![The Stack 3, narrow face](docs/images/stack3-side.png) |
+| ![The Stack 3, narrow face](the_stack3/images/stack3-side.png) |
 
 Build, render and verify with:
 
 ```bash
-blender --background --factory-startup --python-exit-code 1 --python build_stack3.py
-blender --background --factory-startup --python-exit-code 1 --python build_stack3.py -- --views preview elevation base detail side
-blender --background --factory-startup --python-exit-code 1 --python verify_stack3.py -- out/the_stack3.blend
+blender --background --factory-startup --python-exit-code 1 --python the_stack3/build_stack3.py
+blender --background --factory-startup --python-exit-code 1 --python the_stack3/build_stack3.py -- --views preview elevation base detail side
+blender --background --factory-startup --python-exit-code 1 --python the_stack3/verify_stack3.py -- the_stack3/out/the_stack3.blend
 ```
 
 The saved `.blend` opens with an exterior viewport view baked in: about 200 m
@@ -306,25 +306,21 @@ whole-building render camera.
 
 ## Repository Structure
 
+Each work has its own directory with its scripts, `PROGRESS.md`, reference
+`images/` and a Git-ignored `out/` for build products.
+
 ```text
-build_house.py       # Procedural generation of the residential towers and podium
-build_office.py      # Separate procedural office-tower study
-build_the_stack.py   # The Stack study, first generation
-build_stack2.py      # The Stack study, second generation
-build_stack3.py      # The Stack study, third generation (stacked bands)
-verify_the_stack.py  # Validation for the first-generation Stack scene
-verify_stack3.py     # Envelope, band and mesh checks for the third generation
-materials.py         # Stone, glass, metal, lighting, and planting materials
-render_views.py      # Batch rendering of presentation views
-verify_house.py      # Geometry, facade-module, and scene validation
-floor_plan.py        # Floor-plan output
-open_in_blender.py   # Opens the scene in Material Preview
-export_the_stack.py  # Browser-oriented GLB export and optimization report
-package.json         # glTF Transform post-processing command
-view.sh              # Convenience command for opening the saved Blender scene
-out/                 # Local build products; ignored by Git
-web/                 # Three.js viewer and web assets
-docs/images/         # Images displayed in this README
+highrise_house/   # Twin residential towers and podium (build_house.py, verify, render_views, update_*)
+office_tower/     # Separate procedural office-tower study
+centre_pompidou/  # Centre Pompidou model
+abeno_harukas/    # Approximate Abeno Harukas model and reference figures
+the_stack/        # The Stack, first generation, plus the web GLB exporter
+the_stack2/       # The Stack, second generation
+the_stack3/       # The Stack, third generation (stacked bands)
+ship/             # Purple liner imported from longtest 25.skp
+shared/           # materials.py, open_in_blender.py, check_stack_zfight.py
+web/              # Three.js viewer and web assets
+package.json      # glTF Transform post-processing command
 ```
 
 ## Usage
@@ -334,10 +330,10 @@ Blender 5.x is required. The project is currently developed with Blender 5.2.0 L
 ### Build the Scene
 
 ```bash
-blender --background --factory-startup --python build_house.py
+blender --background --factory-startup --python highrise_house/build_house.py
 ```
 
-The build writes the following files to `out/`:
+The build writes the following files to `highrise_house/out/`:
 
 - `highrise_house.blend`: the complete editable scene
 - `highrise_house.glb`: a glTF export for web and other DCC viewers
@@ -348,23 +344,23 @@ Append `--no-render` to generate the model without rendering the preview.
 ### Open the Scene
 
 ```bash
-./view.sh
+./highrise_house/view.sh
 ```
 
-This opens `out/highrise_house.blend` and switches the 3D viewport to Material Preview. Blender's default Solid mode ignores the project materials and otherwise displays the model as a flat grey mass.
+This opens `highrise_house/out/highrise_house.blend` and switches the 3D viewport to Material Preview. Blender's default Solid mode ignores the project materials and otherwise displays the model as a flat grey mass.
 
 ### Render Presentation Views
 
 ```bash
-blender --background --factory-startup --python render_views.py -- out/highrise_house.blend
+blender --background --factory-startup --python highrise_house/render_views.py -- highrise_house/out/highrise_house.blend
 ```
 
-The renderer writes all views to `out/`, including two reproducible ground-level upward views. The README images are repository snapshots stored in `docs/images/`, allowing GitHub to display the project without relying on external release assets.
+The renderer writes all views to `highrise_house/out/`, including two reproducible ground-level upward views. The README images are repository snapshots stored in each work's `images/` directory, allowing GitHub to display the project without relying on external release assets.
 
 ### Run Validation
 
 ```bash
-blender --background --factory-startup --python verify_house.py -- out/highrise_house.blend
+blender --background --factory-startup --python highrise_house/verify_house.py -- highrise_house/out/highrise_house.blend
 ```
 
 The verifier checks tower dimensions, floor and window modules, glazing, service cores, sky gardens, podium continuity, pilotis clearance, and saved viewport settings. The current saved scene includes later three-level podium and truss-height adjustments, so several older assertions still report baseline mismatches and need to be synchronized with the latest design.
@@ -384,4 +380,4 @@ Materials are centralized in `materials.py`. The default palette combines warm p
 
 ## Current Status
 
-The current scene is saved as `out/highrise_house.blend`. The README imagery has been captured and rendered from that scene, including the two ground-level upward views. Scene building and batch rendering are reproducible; validation runs successfully but still contains several podium and truss assertions based on an earlier scene baseline.
+The current scene is saved as `highrise_house/out/highrise_house.blend`. The README imagery has been captured and rendered from that scene, including the two ground-level upward views. Scene building and batch rendering are reproducible; validation runs successfully but still contains several podium and truss assertions based on an earlier scene baseline.
