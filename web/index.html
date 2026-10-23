@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Interactive Three.js viewer for The Stack architectural study." />
+    <title>The Stack / Interactive Model</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="./">
+          <span class="brand-mark">TS</span>
+          <span>The Stack <em>/</em> 3D study</span>
+        </a>
+        <div class="topbar-meta">
+          <span class="live-dot"></span>
+          <span id="load-status">Loading model</span>
+        </div>
+      </header>
+
+      <section class="viewer-shell" aria-label="Interactive 3D building viewer">
+        <div id="viewer" class="viewer"></div>
+        <div class="viewer-wash"></div>
+        <div class="sun-dial" id="sun-dial" role="slider" aria-label="Time of day" aria-valuemin="0" aria-valuemax="24" aria-valuenow="10" tabindex="0">
+          <svg viewBox="0 0 140 140" aria-hidden="true">
+            <circle class="sun-track" cx="70" cy="70" r="54" />
+            <g id="sun-ticks"></g>
+            <g id="sun-labels"></g>
+            <circle id="sun-handle" class="sun-handle" r="6.5" />
+          </svg>
+          <div class="sun-readout">
+            <strong id="sun-time">10:00</strong>
+            <span id="sun-phase">morning</span>
+          </div>
+        </div>
+        <div class="viewer-label">
+          <span>01</span>
+          <strong>Vertical neighbourhood</strong>
+          <small>Orbit to inspect the public route, gardens and stacked programs.</small>
+        </div>
+        <div class="axis-key" aria-hidden="true">
+          <span class="axis-z">Z</span>
+          <span class="axis-x">X</span>
+          <span class="axis-y">Y</span>
+        </div>
+        <div class="loading-card" id="loading-card">
+          <span class="spinner"></span>
+          <span>Preparing the building</span>
+        </div>
+      </section>
+
+      <aside class="info-panel">
+        <div class="eyebrow" id="model-eyebrow">MVRDV competition proposal / web conversion</div>
+        <h1 id="model-title">A vertical city,<br /><i>stacked in public.</i></h1>
+        <p class="intro" id="model-intro">A procedural architectural study translated from Blender into a browser-native model. Move through the tower as a sequence of retail, garden, work and living bands.</p>
+
+        <div class="metrics">
+          <div><strong id="metric-height">301.8</strong><span>metres high</span></div>
+          <div><strong id="metric-storeys">64</strong><span>storeys</span></div>
+          <div><strong id="metric-footprint">115 × 40</strong><span>metre footprint</span></div>
+        </div>
+
+        <div class="controls-block model-selector">
+          <div class="section-heading"><span>Models</span><span class="hint">select asset</span></div>
+          <div class="model-list" id="model-list"></div>
+        </div>
+
+        <div class="controls-block">
+          <div class="section-heading"><span>View</span><span class="hint">drag · scroll · keys</span></div>
+          <div class="view-buttons">
+            <button class="view-button is-active" data-view="overview">Overview <span>01</span></button>
+            <button class="view-button" data-view="garden">Garden band <span>02</span></button>
+            <button class="view-button" data-view="base">Retail base <span>03</span></button>
+          </div>
+          <button id="reset-view" class="reset-button">Reset orbit <span>R</span></button>
+          <button id="ceiling-glow" class="view-button is-active">Ceiling glow <span>on</span></button>
+        </div>
+
+        <div class="legend">
+          <div class="section-heading"><span>Program bands</span><span>scroll to explore</span></div>
+          <div class="legend-row"><span class="legend-swatch retail"></span><span>Retail / public hall</span><b>00—10</b></div>
+          <div class="legend-row"><span class="legend-swatch office"></span><span>Office / garden</span><b>11—35</b></div>
+          <div class="legend-row"><span class="legend-swatch living"></span><span>Apartment / refuge</span><b>36—64</b></div>
+        </div>
+
+        <footer class="panel-footer"><span>Procedural model · 2026</span><span>Three.js / glTF</span></footer>
+      </aside>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js",
+          "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js",
+          "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.tsl.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
