@@ -174,6 +174,33 @@ def _load_ship_triangles():
     return np.concatenate(tris), np.concatenate(uvs), np.concatenate(mats)
 
 
+# Midship curved glass bay, two storeys (z 17.95-22.45-26.95): the SKP has
+# it on the -y side only; mirror its glass walls and roof to +y (that side
+# already has the 22.45 m deck in between).
+ARC_BAY_X = (-17.6, 38.6)
+ARC_BAY_Z = (17.8, 27.3)
+ARC_BAY_Y = (21.9, 27.3)
+ARC_BAY_MATS = (11, 18)   # Window_Glass wall, Glass_Ribbed_Back roof
+
+
+def _mirror_arc_bay(T, UV, M):
+    """Copy the -y midship arc bay to +y so the ship is Y-symmetric."""
+    x = T[:, :, 0] - SHIP_CENTER[0]
+    y = T[:, :, 1] - SHIP_CENTER[1]
+    sel = (np.isin(M, ARC_BAY_MATS)
+           & (x.min(1) >= ARC_BAY_X[0]) & (x.max(1) <= ARC_BAY_X[1])
+           & (-y.max(1) >= ARC_BAY_Y[0]) & (-y.min(1) <= ARC_BAY_Y[1])
+           & (T[:, :, 2].min(1) >= ARC_BAY_Z[0])
+           & (T[:, :, 2].max(1) <= ARC_BAY_Z[1]))
+    Tm = T[sel].copy()
+    Tm[:, :, 1] = 2 * SHIP_CENTER[1] - Tm[:, :, 1]
+    Tm = Tm[:, ::-1]                 # mirroring flips the winding
+    UVm = UV[sel][:, ::-1]
+    print(f"[ship] arc bay: {int(sel.sum())} tris mirrored to +y")
+    return (np.concatenate([T, Tm]), np.concatenate([UV, UVm]),
+            np.concatenate([M, M[sel]]))
+
+
 def _hull_porthole_band(T, UV, M):
     """Keep only the circular ports as glass on the porthole storey.
 
@@ -689,6 +716,7 @@ def _add_glass_frames(coll, root):
 
 def build_ship() -> dict:
     T, UV, M = _load_ship_triangles()
+    T, UV, M = _mirror_arc_bay(T, UV, M)
     T, UV, M = _hull_porthole_band(T, UV, M)
     T, UV, M = _fix_coplanar(T, UV, M)
     T = T - np.array(
