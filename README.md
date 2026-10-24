@@ -128,13 +128,14 @@ glass arrives in the browser opaque or wrong.
 
 `translate_glass_materials()` therefore rewrites the glass on the in-memory export
 copy only. It detects a glass-like shader by structure (`_is_glass_like`) and rebuilds
-a single `Principled BSDF` (`_make_web_glass`) carrying transmission, IOR, specular,
-coat, and alpha. The exporter then writes these as standard extensions —
-`KHR_materials_transmission`, `KHR_materials_ior`, `KHR_materials_specular` — which the
-browser renders with Three.js's `MeshPhysicalMaterial` (`transmission`, `ior`,
-`clearcoat`, alpha blending). The result is an approximation, not true refraction: it
-looks right mainly with an environment map, and alpha-blended panes depend on correct
-transparency sorting. With `--preserve-materials` the graph is left untouched and the
+a single `Principled BSDF` (`_make_web_glass`) with transmission 0 and alpha
+`WEB_GLASS_ALPHA` (0.25; frosted panes keep their own alpha). The exporter writes it as
+core glTF `alphaMode: BLEND`, with no transmission extension. Real-time viewers support
+`KHR_materials_transmission` unevenly (Filament may draw it opaque, Three.js turns it
+into a mirror at grazing angles), while alpha blending renders the same in Three.js,
+Filament and Bevy. The result is an approximation of the EEVEE preview's
+transparent/reflection mix, not true refraction, and alpha-blended panes depend on
+correct transparency sorting. With `--preserve-materials` the graph is left untouched and the
 browser loses the glass semantics. The exporter never writes back to the source `.blend`.
 
 #### Ceiling lights in the viewer

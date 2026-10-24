@@ -9,6 +9,9 @@ import bpy
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+# Opacity of clear web glass: low enough to read the lit rooms behind the
+# facade, high enough that the tint and sky reflection still show.
+WEB_GLASS_ALPHA = 0.25
 
 
 def _input_value(bsdf, name, fallback):
@@ -66,27 +69,29 @@ def _make_web_glass(material):
     bsdf.inputs["Metallic"].default_value = 0.0
     source_roughness = float(_input_value(source_bsdf, "Roughness", 0.03))
     bsdf.inputs["Roughness"].default_value = (
-        source_roughness if frosted or source_transmission > 0.05 else 0.03
+        source_roughness if frosted else min(source_roughness, 0.05)
     )
     bsdf.inputs["IOR"].default_value = float(
         _input_value(source_bsdf, "IOR", 1.52)
     )
+    # Real-time viewers (three.js, Filament, Bevy) support KHR_materials_
+    # transmission unevenly: some draw it opaque, three.js turns it into a
+    # mirror at grazing angles. Plain alpha blending (glTF alphaMode BLEND)
+    # renders the same everywhere, so the web copy expresses glass that way and
+    # mirrors the EEVEE preview's transparent/reflection mix.
     if "Transmission Weight" in bsdf.inputs:
-        bsdf.inputs["Transmission Weight"].default_value = (
-            0.18 if frosted else max(source_transmission, 0.48)
-        )
+        bsdf.inputs["Transmission Weight"].default_value = 0.0
     if "Specular IOR Level" in bsdf.inputs:
-        bsdf.inputs["Specular IOR Level"].default_value = 1.0
-    if "Coat Weight" in bsdf.inputs:
-        bsdf.inputs["Coat Weight"].default_value = 0.25 if frosted else 0.6
-    if "Coat Roughness" in bsdf.inputs:
-        bsdf.inputs["Coat Roughness"].default_value = 0.03
+        bsdf.inputs["Specular IOR Level"].default_value = 0.5
     if "Alpha" in bsdf.inputs:
-        bsdf.inputs["Alpha"].default_value = source_alpha if frosted else 1.0
+        bsdf.inputs["Alpha"].default_value = (
+            source_alpha if frosted else WEB_GLASS_ALPHA
+        )
 
-    web_material.diffuse_color = base_color
-    if frosted and hasattr(web_material, "surface_render_method"):
-        web_material.surface_render_method = "DITHERED"
+    web_material.diffuse_color = (*base_color[:3], bsdf.inputs["Alpha"].default_value)
+    if hasattr(web_material, "surface_render_method"):
+        web_material.surface_render_method = "BLENDED"
+    web_material.use_backface_culling = False
     return web_material
 
 
@@ -162,7 +167,7 @@ def merge_meshes_by_material():
     return {"before": before, "after": after}
 
 DEFAULT_SOURCE = os.path.join(ROOT, "out", "the_stack.blend")
-DEFAULT_OUTPUT = os.path.join(os.path.dirname(ROOT), "web", "assets", "the_stack.glb")
+DEFAULT_OUTPUT = os.path.join(ROOT, "out", "the_stack.glb")
 
 
 def main():
